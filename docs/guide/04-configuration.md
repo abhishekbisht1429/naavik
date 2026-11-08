@@ -202,7 +202,9 @@ clip_gradients: {max_norm: 3.0}
   naming both files and the setting, so reordering or adding a fragment
   can never change a setting without anyone noticing. Set it in one of
   them, or override it in the file that includes them. An empty value
-  (`ddp:`) merges with a mapping, as everywhere.
+  (`ddp:`) or an empty mapping (`ddp: {}`) merges with a mapping, as
+  everywhere, but not with a plain value: `model: {}` in one fragment and
+  `model: 3` in another is the same error.
 - A missing file, a fragment that is not a mapping, a fragment with
   `sessions`, and includes that form a cycle are errors naming the chain
   of files. `includes` belongs in a session entry, not at the top of the

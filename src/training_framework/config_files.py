@@ -269,6 +269,8 @@ def _merge_fragments(layers: list[tuple[str, dict]], file: str) -> dict:
                     earlier = _get(merged, prefix)
                     if earlier == value and type(earlier) is type(value):
                         break
+                    if _merges(earlier, value):
+                        break
                     clash = (
                         f"{_dotted(prefix)} is {earlier!r} in {origin[prefix]} and "
                         f"{value!r} in {path}"
@@ -278,7 +280,7 @@ def _merge_fragments(layers: list[tuple[str, dict]], file: str) -> dict:
                     "Set it in one of them, or override it in the including file"
                 )
             mapping_prefix = _mapping_leaf_under(origin, leaf)
-            if mapping_prefix is not None and value is not None:
+            if mapping_prefix is not None and not _merges({}, value):
                 raise ConfigFileError(
                     f"{file}: two included files set the same value: "
                     f"{_dotted(leaf)} is a mapping in {origin[mapping_prefix]} and "
@@ -288,6 +290,15 @@ def _merge_fragments(layers: list[tuple[str, dict]], file: str) -> dict:
             origin[leaf] = path
         merged = _overlay(merged, layer)
     return merged
+
+
+def _merges(earlier: Any, value: Any) -> bool:
+    """Whether two fragments' values at one path merge rather than clash:
+    both a mapping or null, a null entry being the same as an empty one."""
+    return (
+        (earlier is None or isinstance(earlier, dict))
+        and (value is None or isinstance(value, dict))
+    )
 
 
 def _mapping_leaf_under(origin, leaf):
@@ -312,9 +323,10 @@ def _overlay(base: Any, top: Any) -> Any:
 
 
 def _leaves(value: Any, path: tuple):
-    """(path, value) of every value that is not a mapping; an empty
-    mapping has none."""
-    if isinstance(value, dict):
+    """(path, value) of every value that is not a mapping, and of every
+    empty mapping below the top: `model: {}` sets `model` as much as
+    `model: 3` does, so a fragment giving it either is recorded."""
+    if isinstance(value, dict) and (value or not path):
         for key, item in value.items():
             yield from _leaves(item, (*path, key))
     else:

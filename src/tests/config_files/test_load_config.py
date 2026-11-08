@@ -279,3 +279,37 @@ def test_a_repository_include_may_not_leave_the_repository(path):
 
     with pytest.raises(ConfigFileError, match="files of the repository"):
         load_config("configs/train.yaml", reader=reader)
+
+
+@pytest.mark.parametrize("first, second", [
+    ({"model": {}}, {"model": 3}),
+    ({"model": 3}, {"model": {}}),
+    ({"model": {"part": {}}}, {"model": {"part": 1}}),
+    ({"model": {"part": 1}}, {"model": {"part": {}}}),
+])
+def test_an_empty_mapping_and_a_value_are_an_error_in_either_order(tmp_path, first, second):
+    # `model: {}` sets `model` as much as `model: 3` does; the include order
+    # must not decide which one wins.
+    with pytest.raises(ConfigFileError, match="two included files set the same value"):
+        _session(tmp_path, {
+            "train.yaml": {"sessions": [{"includes": ["a.yaml", "b.yaml"]}]},
+            "a.yaml": first,
+            "b.yaml": second,
+        })
+
+
+@pytest.mark.parametrize("first, second, merged", [
+    ({"ddp": {}}, {"ddp": {"world_size": 2}}, {"ddp": {"world_size": 2}}),
+    ({"ddp": {"world_size": 2}}, {"ddp": {}}, {"ddp": {"world_size": 2}}),
+    ({"ddp": {}}, "ddp:\n", {"ddp": {}}),
+    ("ddp:\n", {"ddp": {}}, {"ddp": {}}),
+    ({"ddp": {}}, {"ddp": {}}, {"ddp": {}}),
+])
+def test_an_empty_mapping_merges_with_a_mapping_or_a_null(tmp_path, first, second, merged):
+    session = _session(tmp_path, {
+        "train.yaml": {"sessions": [{"includes": ["a.yaml", "b.yaml"]}]},
+        "a.yaml": first,
+        "b.yaml": second,
+    })
+
+    assert session == merged
