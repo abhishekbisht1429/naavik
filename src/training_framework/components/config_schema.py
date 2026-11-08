@@ -44,6 +44,30 @@ def _accepted_keys(schema: type) -> list[str]:
     return [field.name for field in fields(schema)]
 
 
+def _check_no_reserved_fields(component_class: type, schema: type) -> None:
+    """Refuse a schema field named like a component's wiring key: the session
+    takes that key out of the entry as wiring, so the field could never be
+    given, and would quietly keep its default."""
+    # Imported here: `config` is the session-configuration module, which this
+    # module otherwise has no need of.
+    from training_framework.components.config import (
+        DEPENDENCY_BINDINGS_KEY,
+        LEGACY_DEPENDENCY_BINDINGS_KEY,
+    )
+
+    reserved = {DEPENDENCY_BINDINGS_KEY, LEGACY_DEPENDENCY_BINDINGS_KEY}
+    clashing = sorted(reserved & set(_accepted_keys(schema)))
+    if clashing:
+        raise TypeError(
+            f"{_name(component_class)} config_schema declares "
+            f"{', '.join(repr(name) for name in clashing)}, which is reserved: "
+            "in a component's entry it holds the component's own wiring "
+            f"('{DEPENDENCY_BINDINGS_KEY}', formerly "
+            f"'{LEGACY_DEPENDENCY_BINDINGS_KEY}') and never reaches the "
+            "component. Rename the field."
+        )
+
+
 def parse_component_config(
         component_class: type,
         config: Mapping | None,
@@ -60,6 +84,8 @@ def parse_component_config(
             f"{_name(component_class)} config_schema must be a dataclass; "
             f"got {schema!r}"
         )
+
+    _check_no_reserved_fields(component_class, schema)
 
     if config is None:
         config = {}

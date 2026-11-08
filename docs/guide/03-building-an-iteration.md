@@ -242,7 +242,7 @@ keeps it out of the graph:
 role_bindings:
   model: student_model
 forward#student: {args: [inputs], outputs: student_logits}
-forward#teacher: {dependencies_role_bindings: {model: teacher_model},
+forward#teacher: {dependency_bindings: {model: teacher_model},
                   args: [inputs], outputs: teacher_logits, no_grad: true}
 compute#loss: {function: my_project.losses.distill,
                args: [student_logits, teacher_logits, targets], outputs: loss}

@@ -33,11 +33,14 @@ from training_framework.components.edges import (
     writers_of,
 )
 from training_framework.components.config import (
+    DEPENDENCY_BINDINGS_KEY,
     SessionConfigView,
     parse_session_config,
 )
 from training_framework.components.diagnostics import (
     explain_missing_component,
+    explain_scope_finding,
+    missing_dependency_message,
     with_explanation,
 )
 from training_framework.components.naming import (
@@ -51,9 +54,8 @@ from training_framework.components.registry import (
     RoleBindings,
     _coalesce_role_bindings,
     _component_type,
-    _missing_role_message,
     component_registry,
-    role_registry,
+    declared_roles,
     topological_sort_of_components,
 )
 from training_framework.session.checkpoint_format import IMPORTED_INTO_NAMESPACE_KEY
@@ -190,7 +192,7 @@ class SessionComponents:
         # only once nothing more is activated by hand.
         self._binding_check_pending = False
         self.registry = component_registry(self.session_type)
-        self.roles = role_registry(self.session_type)
+        self.roles = declared_roles(self.session_type)
         self.components: dict[str, Component] = {}
         self._merge_components(resources, Resource)
         self._merge_components(hooks, Hook)
@@ -927,23 +929,20 @@ class SessionComponents:
                     f"'{resolved_name}'!",
                     explanation(),
                 ))
-            declared_role = self.roles.get(resolved_name)
-            if declared_role is not None and declared_role.category is expected_type:
-                # The role message already carries its own fix; add the reason.
+            described = missing_dependency_message(
+                category=expected_type,
+                name=name,
+                resolved_name=resolved_name,
+                roles=self.roles,
+                consumer=consumer,
+            )
+            if described is not None:
+                # The message already carries its own fix; add the reason.
                 reason = "\n".join(
                     line for line in explanation().splitlines()
                     if not line.lstrip().startswith(("Fix:", "Required by:"))
                 )
-                raise RuntimeError(with_explanation(
-                    _missing_role_message(
-                        category=expected_type,
-                        name=name,
-                        resolved_name=resolved_name,
-                        declared_role=declared_role,
-                        consumer=consumer,
-                    ),
-                    reason,
-                ))
+                raise RuntimeError(with_explanation(described, reason))
             raise RuntimeError(with_explanation(
                 f"unmet prerequisite! {expected_type.__name__} '{name}' "
                 f"resolves to '{resolved_name}', which is not registered as a "
@@ -1097,17 +1096,37 @@ class SessionComponents:
         return resolved_name
 
     def check_role_bindings(self) -> None:
-        """Refuse a per-consumer binding for a component this session does
-        not hold, once, for a session built from configuration.
+        """Check the bindings against the components this session holds,
+        once, for a session built from configuration: refuse a per-consumer
+        binding for a component it does not hold, and warn about a
+        session-wide binding that reaches a local dependency.
 
         Checked when the session is first entered, and by the engine before it
         starts the ranks -- after anything activated by hand -- and never on a
-        restored session: a rank holds only part of the components.
+        restored session: a rank holds only part of the components, and a
+        checkpoint's configuration cannot be changed.
         """
         if not self._binding_check_pending:
             return
         self._check_binding_consumers(set(self.components), suffixed=False)
+        self._warn_scope_findings()
         self._binding_check_pending = False
+
+    def _warn_scope_findings(self) -> None:
+        for finding in self.role_bindings.scope_findings(self.components):
+            instance = self.import_bindings.get(finding.role)
+            origin = (
+                "top-level role_bindings" if instance is None
+                # `imported` names each import by its configuration path.
+                else f"{self.imported.get(instance, 'import_components')}.role"
+            )
+            warnings.warn(
+                explain_scope_finding(
+                    finding, origin, from_import=instance is not None,
+                ),
+                DeprecationWarning,
+                stacklevel=4,
+            )
 
     def component_edges(self) -> dict[str, list[Edge]]:
         """Every held component's edges, resolved as this session resolved
@@ -1428,7 +1447,7 @@ class SessionComponents:
                         "and bind the suffixed name."
                     )
                 how = (
-                    f"{name}: {{dependencies_role_bindings: {{{asked}: {instance}}}}}"
+                    f"{name}: {{{DEPENDENCY_BINDINGS_KEY}: {{{asked}: {instance}}}}}"
                     if is_instance_name(instance)
                     else "or give the import a `suffix` and bind the suffixed name"
                 )

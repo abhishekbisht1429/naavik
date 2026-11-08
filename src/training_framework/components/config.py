@@ -7,8 +7,15 @@ from typing import Any
 ROLE_BINDINGS_KEY = "role_bindings"
 """Session-wide bindings, at the top level of a session."""
 
-DEPENDENCIES_BINDINGS_KEY = "dependencies_role_bindings"
+DEPENDENCY_BINDINGS_KEY = "dependency_bindings"
 """The bindings of one component's dependencies, inside its own entry."""
+
+LEGACY_DEPENDENCY_BINDINGS_KEY = "dependencies_role_bindings"
+"""The deprecated name of `DEPENDENCY_BINDINGS_KEY`."""
+
+_WIRING_KEYS = (DEPENDENCY_BINDINGS_KEY, LEGACY_DEPENDENCY_BINDINGS_KEY)
+"""The keys a component's entry may hold its wiring under; neither ever
+reaches its constructor, so neither can be one of its own options."""
 
 LEGACY_BINDINGS_KEY = "component_bindings"
 LEGACY_ALIASES_KEY = "aliases"
@@ -77,14 +84,32 @@ class ComponentEntry:
     """One configured component, as a session configuration lists it."""
 
     config: dict[str, Any]
-    """What the constructor receives: the entry without
-    `dependencies_role_bindings`."""
+    """What the constructor receives: the entry without its wiring."""
     group: str | None
     """The group it is listed under, or None when listed at the top level."""
     written: dict[str, Any]
-    """The entry as written (an empty value read as `{}`),
-    `dependencies_role_bindings` included; what a session extension
-    compares."""
+    """The entry as written (an empty value read as `{}`), its wiring
+    included under whichever key it was written with."""
+    wiring_key: str | None = None
+    """The key its wiring is written under: `dependency_bindings`, the
+    deprecated `dependencies_role_bindings`, or None when it has none."""
+
+    @property
+    def wiring(self) -> Any:
+        """The component's own wiring as written, or None."""
+        return None if self.wiring_key is None else self.written[self.wiring_key]
+
+    @property
+    def comparable(self) -> dict[str, Any]:
+        """The entry with its wiring under `dependency_bindings`, whichever
+        key it was written with: what a session extension compares, so
+        renaming the key alone changes nothing."""
+        if self.wiring_key in (None, DEPENDENCY_BINDINGS_KEY):
+            return self.written
+        return {
+            (DEPENDENCY_BINDINGS_KEY if key == self.wiring_key else key): value
+            for key, value in self.written.items()
+        }
 
 
 @dataclass(frozen=True)
@@ -113,7 +138,7 @@ class SessionConfigView:
         component, so two layouts of the same run compare equal."""
         return {
             **self.framework,
-            **{name: entry.written for name, entry in self.components.items()},
+            **{name: entry.comparable for name, entry in self.components.items()},
         }
 
     def where(self, name: str) -> str:
@@ -130,9 +155,10 @@ def parse_session_config(
 ) -> SessionConfigView:
     """Read a session configuration's components and bindings.
 
-    `warn_legacy` warns about a top-level `component_bindings`; it is set
-    when a session is built from a configuration someone wrote, and left off
-    when one is read back from a checkpoint, which cannot be changed.
+    `warn_legacy` warns about a top-level `component_bindings` and a
+    component's `dependencies_role_bindings`; it is set when a session is
+    built from a configuration someone wrote, and left off when one is read
+    back from a checkpoint, which cannot be changed.
     """
     reject_legacy_components_entry(config)
     reject_unresolved_includes(config)
@@ -156,32 +182,44 @@ def parse_session_config(
             _add_entry(components, key, value, group=None, reserved=reserved)
 
     wiring: dict[str, dict] = {}
+    legacy_keyed: list[str] = []
     for name, entry in components.items():
-        own = entry.written.get(DEPENDENCIES_BINDINGS_KEY)
+        own = entry.wiring
         if own is None:
             continue
         place = f"'{name}'" if entry.group is None else f"'{entry.group}.{name}'"
+        key = entry.wiring_key
+        if key == LEGACY_DEPENDENCY_BINDINGS_KEY:
+            legacy_keyed.append(place)
         if not isinstance(own, Mapping):
             raise TypeError(
-                f"{place} dependencies_role_bindings must be a mapping of role "
-                "names to the components they are bound to"
+                f"{place} {key} must be a mapping of role names to the "
+                "components they are bound to"
             )
         for role_name, target in own.items():
             if isinstance(target, Mapping):
                 raise ValueError(
-                    f"{place} dependencies_role_bindings binds '{role_name}' to "
-                    "a mapping. A component's dependencies_role_bindings name "
-                    "the component each of its own roles is bound to; wire "
-                    "another component in that component's own entry."
+                    f"{place} {key} binds '{role_name}' to a mapping. A "
+                    f"component's {key} name the component each of its own "
+                    "roles is bound to; wire another component in that "
+                    "component's own entry."
                 )
         if name in legacy_wiring:
             raise ValueError(
-                f"'{name}' is wired both by its own dependencies_role_bindings "
-                f"and by the deprecated top-level component_bindings entry "
-                f"'{name}'. Keep only its dependencies_role_bindings."
+                f"'{name}' is wired both by its own {key} and by the "
+                f"deprecated top-level component_bindings entry '{name}'. "
+                f"Keep only its {DEPENDENCY_BINDINGS_KEY}."
             )
         if own:
             wiring[name] = dict(own)
+    if legacy_keyed and warn_legacy:
+        warnings.warn(
+            f"{', '.join(legacy_keyed)}: '{LEGACY_DEPENDENCY_BINDINGS_KEY}' is "
+            f"deprecated; rename it to '{DEPENDENCY_BINDINGS_KEY}', which "
+            "takes the same wiring",
+            DeprecationWarning,
+            stacklevel=3,
+        )
 
     framework = {
         key: value for key, value in config.items()
@@ -223,7 +261,7 @@ def _top_level_bindings(
         warnings.warn(
             "The top-level 'component_bindings' entry is deprecated; use "
             "'role_bindings' for session-wide bindings and a component's own "
-            "'dependencies_role_bindings' entry for its wiring",
+            f"'{DEPENDENCY_BINDINGS_KEY}' entry for its wiring",
             DeprecationWarning,
             stacklevel=3,
         )
@@ -242,7 +280,7 @@ def _top_level_bindings(
                 f"Top-level 'role_bindings' holds session-wide bindings "
                 f"(role: implementation) only, but '{name}' maps to a "
                 f"mapping. Wire one component in its own entry: "
-                f"{name}: {{dependencies_role_bindings: {{...}}}}"
+                f"{name}: {{{DEPENDENCY_BINDINGS_KEY}: {{...}}}}"
             )
         else:
             legacy_wiring[name] = value
@@ -282,11 +320,23 @@ def _add_entry(
         written = dict(entry)
     else:
         raise ValueError(f"The value corresponding to the key {place} is not a mapping")
+    wiring_keys = [key for key in _WIRING_KEYS if key in written]
+    if len(wiring_keys) > 1:
+        raise ValueError(
+            f"{place} is wired under both '{DEPENDENCY_BINDINGS_KEY}' and its "
+            f"deprecated name '{LEGACY_DEPENDENCY_BINDINGS_KEY}'. Keep only "
+            f"'{DEPENDENCY_BINDINGS_KEY}'."
+        )
     config = {
         key: value for key, value in written.items()
-        if key != DEPENDENCIES_BINDINGS_KEY
+        if key not in _WIRING_KEYS
     }
-    components[name] = ComponentEntry(config=config, group=group, written=written)
+    components[name] = ComponentEntry(
+        config=config,
+        group=group,
+        written=written,
+        wiring_key=wiring_keys[0] if wiring_keys else None,
+    )
 
 
 def find_component_entry(config: Mapping, name: str) -> tuple[str, ...] | None:
@@ -315,6 +365,42 @@ def component_entry(config: Mapping, name: str) -> Any:
     for key in path:
         value = value[key]
     return value
+
+
+def align_wiring_keys(update: Mapping, written: Mapping) -> dict:
+    """`update`, an overlay onto the configuration `written`, with each
+    component's wiring written under the key that component's entry in
+    `written` uses.
+
+    The wiring key has two names (`dependency_bindings` and the deprecated
+    `dependencies_role_bindings`). Overlaid as written, an update under one
+    name onto an entry under the other would give the entry both, which is
+    refused; aligned, it changes the entry's wiring exactly as the same
+    update under the entry's own name would. An entry with no wiring, or an
+    update giving both names, is left as it is.
+    """
+    def aligned(name, entry):
+        if not isinstance(entry, Mapping):
+            return entry
+        target = component_entry(written, name)
+        if not isinstance(target, Mapping):
+            return entry
+        own = [key for key in _WIRING_KEYS if key in target]
+        given = [key for key in _WIRING_KEYS if key in entry]
+        if len(own) != 1 or len(given) != 1 or own == given:
+            return entry
+        return {
+            (own[0] if key == given[0] else key): value
+            for key, value in entry.items()
+        }
+
+    result = {}
+    for key, value in update.items():
+        if key in COMPONENT_GROUPS and isinstance(value, Mapping):
+            result[key] = {name: aligned(name, entry) for name, entry in value.items()}
+        else:
+            result[key] = aligned(key, value)
+    return result
 
 
 def with_component_entry(config: Mapping, name: str, entry: Any) -> dict:

@@ -48,7 +48,7 @@ load_batch -> forward#student -> forward#teacher -> dino_distillation_loss | com
 ## The teacher is a second instance
 
 The teacher is configured, not copied: the same blocks again under another
-suffix (`#teacher`), bound to the `teacher` role. A component that declares
+suffix (`#teacher`), wired as `ema_teacher`'s `teacher`. A component that declares
 prerequisites cannot be copied privately, because every tensor is saved by
 the component that created it ([`ModuleResource`](../concepts/module-resource.md)).
 YAML anchors keep the two configurations from drifting apart, and
@@ -96,7 +96,7 @@ torch_transformer_encoder#student: &encoder
   final_norm: true
 patch_transformer#student:
   class_token: true
-  dependencies_role_bindings:
+  dependency_bindings:
     patch_embedding: conv_patch_embedding#student
     positional_embedding: learned_positional_embedding_2d#student
     sequence_encoder: torch_transformer_encoder#student
@@ -108,11 +108,11 @@ projection_head#student: &head
   prototypes: {num: 65536}
 backbone_with_head#student:
   pool: cls
-  dependencies_role_bindings:
+  dependency_bindings:
     backbone: patch_transformer#student
     head: projection_head#student
 multi_view#student:
-  dependencies_role_bindings: {network: backbone_with_head#student}
+  dependency_bindings: {network: backbone_with_head#student}
 
 # The teacher: the same, configured again; it sees the two global crops.
 conv_patch_embedding#teacher: *patch
@@ -120,22 +120,22 @@ learned_positional_embedding_2d#teacher: *positions
 torch_transformer_encoder#teacher: *encoder
 patch_transformer#teacher:
   class_token: true
-  dependencies_role_bindings:
+  dependency_bindings:
     patch_embedding: conv_patch_embedding#teacher
     positional_embedding: learned_positional_embedding_2d#teacher
     sequence_encoder: torch_transformer_encoder#teacher
 projection_head#teacher: *head
 backbone_with_head#teacher:
   pool: cls
-  dependencies_role_bindings:
+  dependency_bindings:
     backbone: patch_transformer#teacher
     head: projection_head#teacher
 multi_view#teacher:
   views: 2
-  dependencies_role_bindings: {network: backbone_with_head#teacher}
+  dependency_bindings: {network: backbone_with_head#teacher}
 
 ema_teacher:
-  dependencies_role_bindings:
+  dependency_bindings:
     student: multi_view#student
     teacher: multi_view#teacher
 
@@ -211,7 +211,7 @@ torch_transformer_encoder#online: &encoder
   final_norm: true
 patch_transformer#online:
   class_token: true
-  dependencies_role_bindings:
+  dependency_bindings:
     patch_embedding: conv_patch_embedding#online
     positional_embedding: learned_positional_embedding_2d#online
     sequence_encoder: torch_transformer_encoder#online
@@ -233,38 +233,38 @@ projection_head#predictor:
   init_std: null
 backbone_with_head#online_projection:            # encoder + projector
   pool: cls
-  dependencies_role_bindings:
+  dependency_bindings:
     backbone: patch_transformer#online
     head: projection_head#online
 backbone_with_head#online:                       # ... + predictor
-  dependencies_role_bindings:
+  dependency_bindings:
     backbone: backbone_with_head#online_projection
     head: projection_head#predictor
 multi_view#online:
-  dependencies_role_bindings: {network: backbone_with_head#online}
+  dependency_bindings: {network: backbone_with_head#online}
 
 conv_patch_embedding#target: *patch
 learned_positional_embedding_2d#target: *positions
 torch_transformer_encoder#target: *encoder
 patch_transformer#target:
   class_token: true
-  dependencies_role_bindings:
+  dependency_bindings:
     patch_embedding: conv_patch_embedding#target
     positional_embedding: learned_positional_embedding_2d#target
     sequence_encoder: torch_transformer_encoder#target
 projection_head#target: *projector
 backbone_with_head#target:
   pool: cls
-  dependencies_role_bindings:
+  dependency_bindings:
     backbone: patch_transformer#target
     head: projection_head#target
 multi_view#target:
-  dependencies_role_bindings: {network: backbone_with_head#target}
+  dependency_bindings: {network: backbone_with_head#target}
 
 ema_teacher:
   student_part: network.backbone
   teacher_part: network
-  dependencies_role_bindings:
+  dependency_bindings:
     student: multi_view#online
     teacher: multi_view#target
 
@@ -318,7 +318,9 @@ with [`backbone_with_head`](fine-tuning.md#backbone_with_head)'s `pool`.
 |---|---|---|
 | `views` | all | Use only the first `views` views |
 
-Requires the `network` role. Called with a list of `(B, ...)` view batches,
+Requires `network`, a [local
+dependency](../guide/02-wiring-components.md#global-roles-and-local-dependencies)
+wired in its own `dependency_bindings`. Called with a list of `(B, ...)` view batches,
 it concatenates each run of consecutive same-shaped views, calls the network
 once per run, and returns the outputs concatenated in view order: `(V * B,
 ...)`, view `v` in rows `v*B` to `(v+1)*B`. One call per resolution keeps
@@ -333,14 +335,15 @@ BYOL projector) therefore normalizes same-sized views together.
 | `student_part` | `""` | Attribute path of the part of the student the teacher mirrors; `""` is the whole student |
 | `teacher_part` | `""` | Attribute path of the part of the teacher that mirrors it |
 
-Requires the `student` and `teacher` roles; bind `model` to it. Its
+Requires `student` and `teacher`, both local dependencies wired in its own
+`dependency_bindings`; bind `model` to it. Its
 `forward` is the student's; `teacher_forward` runs the teacher without
 gradients; `update_teacher(momentum)` sets every mirrored teacher parameter
 to `momentum * teacher + (1 - momentum) * student`. Buffers -- BatchNorm
 statistics -- are copied once at construction and are the teacher's own
 after that, kept up to date by its forward passes.
 
-Refused when the session is built: the same instance for both roles, a
+Refused when the session is built: the same instance for both, a
 teacher that shares a parameter with the student, mirrored parts whose
 parameter or buffer names or shapes differ (the error names the first), and
 a part path that does not exist.

@@ -437,7 +437,8 @@ class StoredBindings(NamedTuple):
     (`import_components.<name>.role`), which the configuration does not
     hold: they name the imported instance, which only the import knew."""
     dependencies: dict[str, dict[str, Any]]
-    """Each component's own wiring (`dependencies_role_bindings`)."""
+    """Each component's own wiring (`dependency_bindings`, or its
+    deprecated name `dependencies_role_bindings`)."""
 
 
 def stored_bindings(state: Mapping[str, Any]) -> StoredBindings:

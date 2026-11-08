@@ -24,8 +24,10 @@ import_components:
 
 role_bindings:
   model: backbone_with_head
-  backbone: pooled_patch_transformer#imported  # the imported instance
-  head: cifar_head
+backbone_with_head:
+  dependency_bindings:
+    backbone: pooled_patch_transformer#imported  # the imported instance
+    head: cifar_head
 ```
 
 If the pretraining run's `pooled_patch_transformer` was wired to five blocks,
@@ -97,7 +99,7 @@ in, is an error naming both. Two ways out:
 
 **Without `instance_name`**, an imported instance fills a dependency only
 when something names it: a binding (`role_bindings`, or a component's own
-`dependencies_role_bindings`) or an `overwritten_dependencies` target. It is
+`dependency_bindings`) or an `overwritten_dependencies` target. It is
 never handed over as the only instance of its implementation: a component
 asking for `data_manager` while the import brought `data_manager#imported`
 gets a `data_manager` of its own, built as usual, or an error if one cannot
@@ -208,6 +210,13 @@ import_components:
 
 Unlike the keyed form, a labelled import without `suffix` keeps the source's
 names.
+
+An import's `role` binds the name for the whole session, like a top-level
+`role_bindings` entry. A component that takes that name as a [local
+dependency](../guide/02-wiring-components.md#global-roles-and-local-dependencies)
+-- `backbone` of `backbone_with_head`, above -- still gets it, with a
+`DeprecationWarning`: key the import instead, and name its instance in that
+component's own `dependency_bindings`, as in the [example](#example).
 
 An entry is labelled when it has `resource`, `role` or `suffix`. An entry
 with none of them whose key the source holds neither as an instance nor as a

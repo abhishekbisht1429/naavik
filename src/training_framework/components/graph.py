@@ -27,32 +27,6 @@ if TYPE_CHECKING:
     from training_framework.components.registry import RoleDeclaration
 
 
-_ROLE_DECORATOR_NAMES = {Resource: "resource", Hook: "hook", Step: "step"}
-
-
-def _missing_role_message(
-        *,
-        category: type[Component],
-        name: str,
-        resolved_name: str,
-        declared_role: "RoleDeclaration",
-        consumer: Component | type[Component],
-) -> str:
-    consumer_class = consumer if isinstance(consumer, type) else type(consumer)
-    description = (
-        f": {declared_role.description}" if declared_role.description else ""
-    )
-    decorator_name = _ROLE_DECORATOR_NAMES[category]
-    return (
-        f"Role '{resolved_name}' ({category.__name__}{description}) is "
-        f"required by {consumer_class.__name__} but has no implementation "
-        f"registered. Implement a {category.__name__} subclass and register "
-        f"it via @{decorator_name}('{resolved_name}', ...), or bind an "
-        "existing implementation via role_bindings: "
-        f"{{'{name}': '<implementation_name>'}}."
-    )
-
-
 def _resolve_to_node(binding_resolver, nodes_by_name, consumer, name):
     """Return the node satisfying `name` for `consumer`, and the name tried.
 
@@ -148,6 +122,7 @@ def topological_sort_components(
     # Imported lazily: diagnostics imports the registry, which imports graph.
     from training_framework.components.diagnostics import (
         explain_missing_component,
+        missing_dependency_message,
         with_explanation,
     )
 
@@ -217,22 +192,18 @@ def topological_sort_components(
                     registered_class is None
                     or not issubclass(registered_class, required_type)
             ):
-                declared_role = (
-                    roles.get(resolved_name) if registered_class is None else None
-                )
-                if (
-                        declared_role is not None
-                        and declared_role.category is required_type
-                ):
-                    raise RuntimeError(
-                        _missing_role_message(
-                            category=required_type,
-                            name=edge.asked,
-                            resolved_name=resolved_name,
-                            declared_role=declared_role,
-                            consumer=component,
-                        )
+                described = (
+                    missing_dependency_message(
+                        category=required_type,
+                        name=edge.asked,
+                        resolved_name=resolved_name,
+                        roles=roles,
+                        consumer=component,
                     )
+                    if registered_class is None else None
+                )
+                if described is not None:
+                    raise RuntimeError(described)
                 raise RuntimeError(with_explanation(
                     (
                         f"invalid wraps target! Hook '{edge.asked}' resolves "
@@ -582,9 +553,19 @@ def render_execution_graph(
         ),
     ]
     if binding_resolver:
+        # A session-wide binding that reaches local dependencies is marked
+        # as the session's check warns about it, from the same findings.
+        reaches_local = {
+            finding.role: finding.consumers
+            for finding in binding_resolver.scope_findings(nodes_by_name)
+        }
         lines.extend(["", "ROLE BINDINGS"])
         lines.extend(
             f"  {role_name} -> {implementation_name}"
+            + (
+                f" (deprecated: local to {', '.join(reaches_local[role_name])})"
+                if role_name in reaches_local else ""
+            )
             for role_name, implementation_name
             in binding_resolver.bindings.items()
         )

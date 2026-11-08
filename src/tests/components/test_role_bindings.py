@@ -92,7 +92,7 @@ def test_top_level_role_bindings_bind_a_role_for_the_whole_session(tmp_path):
 def test_top_level_role_bindings_refuse_per_component_wiring(tmp_path):
     declare_components()
 
-    with pytest.raises(ValueError, match=r"rb_consumer: \{dependencies_role_bindings"):
+    with pytest.raises(ValueError, match=r"rb_consumer: \{dependency_bindings"):
         TrainingSession(_config(tmp_path, {
             "role_bindings": {"rb_consumer": {"rb_role": "rb_impl"}},
             "rb_consumer": {},

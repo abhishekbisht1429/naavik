@@ -9,14 +9,18 @@ it:
 
 - **`module_part`** takes a part of a module resource -- the encoder of a whole
   pretrained model, say -- and calls one of its methods.
-- **`backbone_with_head`** composes the `backbone` and `head` roles, freezes part
+- **`backbone_with_head`** composes its `backbone` and `head`, freezes part
   of the backbone, and computes `head(backbone(x))`. Bind it as `model` and
   `ddp`, `forward` and `optimizer` use it like any other model. It was called
   `fine_tuned_model`; see [the former name](#fine_tuned_model-the-former-name).
 
-The head is always yours: a `ModuleResource` bound to the `head` role. The
+The head is always yours: a `ModuleResource` wired as the `head`. The
 backbone is usually the imported model, or a `module_part` of it, but any
-`nn.Module` resource can fill the role.
+`nn.Module` resource can be wired as it. `source`, `backbone` and `head` are
+[local dependencies](../guide/02-wiring-components.md#global-roles-and-local-dependencies):
+each is wired in its component's own `dependency_bindings`. Bound in the
+top-level `role_bindings`, as earlier versions documented, they still work,
+with a `DeprecationWarning`.
 
 ## Example
 
@@ -28,17 +32,19 @@ import_components:
   pretrain_model:                                # that run's model instance
     checkpoint: runs/pretrain/checkpoints/last   # a checkpoint directory
 
-role_bindings:
+role_bindings:                                   # roles the session shares
   model: backbone_with_head
-  source: pretrain_model#imported                # what module_part takes a part of
-  backbone: module_part
-  head: cifar_head
   dataset: cifar10
 
 module_part:
+  dependency_bindings:
+    source: pretrain_model#imported              # what module_part takes a part of
   submodule: transformer_backbone                # a part of the imported model
 
 backbone_with_head:
+  dependency_bindings:
+    backbone: module_part
+    head: cifar_head
   frozen: ["module._transformer_encoder.layers.[0-5].*"]
 
 cifar_head: {embed_dim: 384, dropout: 0.1}
@@ -90,8 +96,8 @@ wired to its blocks, say -- skip `module_part` and bind it directly
 | `submodule` | `""` | Attribute path inside the `source`, e.g. `encoder.blocks`; `""` keeps the whole source |
 | `method` | `forward` | The method of the part that calling this resource calls, e.g. `forward_features` |
 
-It requires the `source` role: an `nn.Module` resource, usually an imported
-one (`source: <impl>#imported` in `role_bindings`). The part is held under the attribute
+It requires `source`, a local dependency: an `nn.Module` resource, usually
+an imported one (`dependency_bindings: {source: <impl>#imported}`). The part is held under the attribute
 `module` (as `DistributedDataParallel` does), so its parameter names start with
 `module.`.
 
@@ -114,9 +120,9 @@ the submodules that exist), something that is not an `nn.Module`, a missing
 | `backbone_output` | `null` | Which part of the backbone's output the head gets |
 | `pool` | `null` | `cls` or `mean`: reduce `(B, N, D)` tokens to `(B, D)` before the head |
 
-It requires the `backbone` and `head` roles; either one filled by something
-that is not an `nn.Module` is an error. Both are attached as submodules named
-after their role, so the model's parameter names are `backbone.<...>` and
+It requires `backbone` and `head`, both local dependencies; either one
+filled by something that is not an `nn.Module` is an error. Both are
+attached as submodules named after them, so the model's parameter names are `backbone.<...>` and
 `head.<...>`. Each part checkpoints its own weights; `backbone_with_head` owns
 none.
 
@@ -162,9 +168,10 @@ With `pool`, a linear probe or a fine-tuned classifier on a
 ```yaml
 role_bindings:
   model: backbone_with_head
-  backbone: patch_transformer#imported
-  head: projection_head          # num_layers: 1 is a linear layer
 backbone_with_head:
+  dependency_bindings:
+    backbone: patch_transformer#imported
+    head: projection_head        # num_layers: 1 is a linear layer
   pool: cls
   frozen: ["*"]                  # a linear probe: only the head trains
 projection_head: {in_dim: 384, out_dim: 1000, num_layers: 1}
@@ -202,9 +209,8 @@ class TimmBackbone(ModuleResource):
 ```
 
 ```yaml
-role_bindings:
-  backbone: timm_backbone
 backbone_with_head:
+  dependency_bindings: {backbone: timm_backbone, head: cifar_head}
   frozen: ["net.patch_embed.*", "net.blocks.[0-5].*"]
 ```
 

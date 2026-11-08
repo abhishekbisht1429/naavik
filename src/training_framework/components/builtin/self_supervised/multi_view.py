@@ -27,14 +27,19 @@ from training_framework.components import (
     resource,
     role,
 )
+from training_framework.components.dependencies import local_role_deprecation
 from training_framework.components.builtin.transformer.modules import (
     _positive_int,
 )
 
+_NETWORK = "an nn.Module resource that multi_view runs every view through"
+# Deprecated: `network` is now a local dependency of `multi_view`. Kept, for
+# one release, for code that reads it from `role_registry()`.
 role(
     "network",
     Resource,
-    description="an nn.Module resource that multi_view runs every view through",
+    description=_NETWORK,
+    deprecated=local_role_deprecation("network", ("multi_view",)),
 )
 
 
@@ -50,7 +55,7 @@ class MultiViewConfig:
             self.views = _positive_int(self.views, "views")
 
 
-@requires_resource("network")
+@requires_resource("network", local=True, description=_NETWORK)
 @resource("multi_view", session_type=TRAINING_SESSION_TYPE)
 @resource("multi_view", session_type=ANALYSIS_SESSION_TYPE)
 class MultiView(ModuleResource):

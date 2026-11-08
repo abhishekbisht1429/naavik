@@ -24,6 +24,7 @@ from training_framework.components.base import (
     Step,
     _given_prerequisites,
 )
+from training_framework.components.config import DEPENDENCY_BINDINGS_KEY
 from training_framework.components.naming import (
     has_imported_suffix,
     implementation_of,
@@ -206,7 +207,7 @@ def resolve_component_name(
         f"active components implement: {candidates}.",
         "Fix: name the one that is meant in the consumer's own entry, "
         f"{consumer if consumer is not None else '<component>'}: "
-        f"{{dependencies_role_bindings: {{{name}: {candidates[0]}}}}}.",
+        f"{{{DEPENDENCY_BINDINGS_KEY}: {{{name}: {candidates[0]}}}}}.",
     ))
 
 

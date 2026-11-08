@@ -40,6 +40,7 @@ from training_framework.components import (
     resource,
     step,
 )
+from training_framework.components.config import DEPENDENCY_BINDINGS_KEY
 from training_framework.components.builtin.parameter_patterns import (
     check_patterns_match,
     matches_any,
@@ -1092,7 +1093,7 @@ class OptimizerResource(StatefulResource, ExtendableComponent):
                 f"Gradient processors {late} had not run when optimizer_step "
                 "was about to step. Put each in the chain by binding "
                 "optimizer_step to it, e.g. optimizer_step: "
-                f"{{dependencies_role_bindings: {{clip_gradients: {late[0]}}}}}, "
+                f"{{{DEPENDENCY_BINDINGS_KEY}: {{clip_gradients: {late[0]}}}}}, "
                 "and have it require the stage it follows."
             )
 

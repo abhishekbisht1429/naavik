@@ -353,7 +353,7 @@ def test_a_consumers_own_binding_reaches_an_imported_instance(tmp_path):
 
     session = importing(
         tmp_path, composite_import(path), {"model": "kimp_block_user"},
-        kimp_block_user={"dependencies_role_bindings": {"kimp_block": "kimp_block#imported"}},
+        kimp_block_user={"dependency_bindings": {"kimp_block": "kimp_block#imported"}},
     )
 
     assert resource_named(session, "kimp_block_user").block is (

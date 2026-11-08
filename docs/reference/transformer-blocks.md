@@ -19,7 +19,7 @@ component. `transformer/modules.py` keeps only what is not a component --
 `ClassToken`, whose weights belong to the composite that prepends it, and
 `TokenReduction`, which wraps a user-supplied encoder.
 
-| Block | Config keys | Fills role |
+| Block | Config keys | Fills block |
 |---|---|---|
 | `conv_patch_embedding` | `in_channels, patch_size, embed_dim, bias=True` | `patch_embedding` |
 | `learned_positional_embedding_2d` | `grid_size, embed_dim, init="zeros", init_std=0.02, interpolation_mode="bilinear"` | `positional_embedding` |
@@ -37,7 +37,12 @@ when the component is constructed -- before any worker starts.
 positional table is resized for inputs whose patch grid differs from
 `grid_size`.
 
-The role contracts are also declared as `typing.Protocol`s
+The blocks a composite is built from are its *local dependencies*
+([Global roles and local dependencies](../guide/02-wiring-components.md#global-roles-and-local-dependencies)):
+each composite is wired to its blocks in its own entry, under
+`dependency_bindings`, never through the top-level `role_bindings`.
+
+The block contracts are also declared as `typing.Protocol`s
 (`PatchEmbeddingBlock`, `PositionalEmbeddingBlock`, `SequenceEncoderBlock`,
 `PoolingBlock`, `PoolingQueryBlock`), so a type checker can verify your own
 block against the role it fills.
@@ -117,19 +122,23 @@ for `attention_pooled_encoder`, which takes its tokens through
 ```yaml
 role_bindings:
   model: attention_pooled_encoder
-  patch_transformer: pooled_patch_transformer
-  pooling: attention_pooling
-  pooling_query: learned_pooling_query
-  # ... patch_embedding, positional_embedding, sequence_encoder as below
-attention_pooled_encoder: {}
-pooled_patch_transformer: {}
+attention_pooled_encoder:
+  dependency_bindings:
+    patch_transformer: pooled_patch_transformer
+    pooling: attention_pooling
+    pooling_query: learned_pooling_query
+pooled_patch_transformer:
+  dependency_bindings:
+    pooling: attention_pooling
+    pooling_query: learned_pooling_query
+    # ... patch_embedding, positional_embedding, sequence_encoder as below
 ```
 
-It still requires its own `pooling` and `pooling_query`. Bound for the whole
-session as above, both composites share one instance of each, so nothing is
-duplicated. With different instances (per-consumer bindings), its pooling
-weights are never used and get no gradient, which DDP rejects (`ddp` does
-not enable `find_unused_parameters`). Role binding checks only that the
+It still requires its own `pooling` and `pooling_query`. Wired to the same
+instances as above, both composites share one instance of each, so nothing
+is duplicated. With different instances, its pooling weights are never used
+and get no gradient, which DDP rejects (`ddp` does not enable
+`find_unused_parameters`). Role binding checks only that the
 bound component is a resource, not what its `forward` returns. A consumer of
 your own that calls `forward` on a bound `pooled_patch_transformer` gets
 pooled `(B, Q, embed_dim)` output, not tokens. Use `encode` or
@@ -155,19 +164,21 @@ patch_transformer:
   class_token: true
 ```
 
-Bind the model and each role through `role_bindings`, and configure the
-blocks by name. This example reproduces an image encoder whose output is
-pooled by a query built from an object crop and its 2D location:
+Bind the model through `role_bindings`, wire the composite to its blocks in
+its own entry, and configure the blocks by name. This example reproduces an
+image encoder whose output is pooled by a query built from an object crop
+and its 2D location:
 
 ```yaml
 role_bindings:
   model: pooled_patch_transformer
-  patch_embedding: conv_patch_embedding
-  positional_embedding: learned_positional_embedding_2d
-  sequence_encoder: torch_transformer_encoder
-  pooling: attention_pooling
-  pooling_query: conditioned_pooling_query
-pooled_patch_transformer: {}
+pooled_patch_transformer:
+  dependency_bindings:
+    patch_embedding: conv_patch_embedding
+    positional_embedding: learned_positional_embedding_2d
+    sequence_encoder: torch_transformer_encoder
+    pooling: attention_pooling
+    pooling_query: conditioned_pooling_query
 conv_patch_embedding: {in_channels: 3, patch_size: 16, embed_dim: 256}
 learned_positional_embedding_2d: {grid_size: [14, 14], embed_dim: 256}
 torch_transformer_encoder: {embed_dim: 256, num_heads: 8, num_layers: 6}
@@ -192,13 +203,14 @@ conditioned_pooling_query:
 pooled = model(images, obj_patch=crops, obj_patch_location=locations)  # (B, 1, 256)
 ```
 
-To use a learned (CLS-style) query instead, bind
+To use a learned (CLS-style) query instead, wire
 `pooling_query: learned_pooling_query` and configure it. To use fixed
-positions, bind `positional_embedding: sinusoidal_positional_embedding_2d`.
+positions, wire `positional_embedding: sinusoidal_positional_embedding_2d`.
 To add your own block, subclass `ModuleResource`, create its weights in
-`__init__`, register it with `@resource(...)`, and bind it to the role. The
-block must follow the call signature in the role's description and expose
-`embed_dim`.
+`__init__`, register it with `@resource(...)`, and wire the composite to it.
+The block must follow the call signature in the block's description (the
+`BLOCK_DESCRIPTIONS` of `transformer/components.py`, also shown when a block
+is missing) and expose `embed_dim`.
 
 ---
 

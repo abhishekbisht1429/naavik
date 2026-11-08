@@ -518,8 +518,9 @@ class Session(Stateful, metaclass=CaptureInitMeta):
 
     def check_role_bindings(self) -> None:
         """Refuse a per-consumer binding for a component this session does
-        not hold. Runs once, on a session built from configuration; entering
-        the session runs it, so call it only to check earlier."""
+        not hold, and warn about a session-wide binding that reaches a local
+        dependency. Runs once, on a session built from configuration;
+        entering the session runs it, so call it only to check earlier."""
         self._components.check_role_bindings()
 
     @context_entry

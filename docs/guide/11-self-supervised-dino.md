@@ -153,7 +153,7 @@ here has the suffix `#student`, because the teacher will need its own:
       final_norm: true
     patch_transformer#student:
       class_token: true
-      dependencies_role_bindings:
+      dependency_bindings:
         patch_embedding: conv_patch_embedding#student
         positional_embedding: learned_positional_embedding_2d#student
         sequence_encoder: torch_transformer_encoder#student
@@ -173,7 +173,7 @@ The head sits on the class token:
       prototypes: {num: 65536}
     backbone_with_head#student:
       pool: cls
-      dependencies_role_bindings:
+      dependency_bindings:
         backbone: patch_transformer#student
         head: projection_head#student
 ```
@@ -192,7 +192,7 @@ concatenates each run of same-sized views -- the 2 global, then the 8 local
 
 ```yaml
     multi_view#student:
-      dependencies_role_bindings: {network: backbone_with_head#student}
+      dependency_bindings: {network: backbone_with_head#student}
 ```
 
 ## 3. The teacher
@@ -209,19 +209,19 @@ one, so they cannot drift apart:
     torch_transformer_encoder#teacher: *encoder
     patch_transformer#teacher:
       class_token: true
-      dependencies_role_bindings:
+      dependency_bindings:
         patch_embedding: conv_patch_embedding#teacher
         positional_embedding: learned_positional_embedding_2d#teacher
         sequence_encoder: torch_transformer_encoder#teacher
     projection_head#teacher: *head
     backbone_with_head#teacher:
       pool: cls
-      dependencies_role_bindings:
+      dependency_bindings:
         backbone: patch_transformer#teacher
         head: projection_head#teacher
     multi_view#teacher:
       views: 2
-      dependencies_role_bindings: {network: backbone_with_head#teacher}
+      dependency_bindings: {network: backbone_with_head#teacher}
 ```
 
 `views: 2` is the only difference: the teacher sees the two global crops.
@@ -230,7 +230,7 @@ one, so they cannot drift apart:
 
 ```yaml
     ema_teacher:
-      dependencies_role_bindings:
+      dependency_bindings:
         student: multi_view#student
         teacher: multi_view#teacher
 ```
@@ -453,7 +453,7 @@ train one linear layer:
     backbone_with_head:
       pool: cls
       frozen: ["*"]
-      dependencies_role_bindings:
+      dependency_bindings:
         backbone: patch_transformer#imported_teacher
         head: projection_head#probe
     projection_head#probe: {in_dim: 384, out_dim: 1000, num_layers: 1}
@@ -538,7 +538,7 @@ sessions:
       final_norm: true
     patch_transformer#student:
       class_token: true
-      dependencies_role_bindings:
+      dependency_bindings:
         patch_embedding: conv_patch_embedding#student
         positional_embedding: learned_positional_embedding_2d#student
         sequence_encoder: torch_transformer_encoder#student
@@ -550,33 +550,33 @@ sessions:
       prototypes: {num: 65536}
     backbone_with_head#student:
       pool: cls
-      dependencies_role_bindings:
+      dependency_bindings:
         backbone: patch_transformer#student
         head: projection_head#student
     multi_view#student:
-      dependencies_role_bindings: {network: backbone_with_head#student}
+      dependency_bindings: {network: backbone_with_head#student}
 
     conv_patch_embedding#teacher: *patch
     learned_positional_embedding_2d#teacher: *positions
     torch_transformer_encoder#teacher: *encoder
     patch_transformer#teacher:
       class_token: true
-      dependencies_role_bindings:
+      dependency_bindings:
         patch_embedding: conv_patch_embedding#teacher
         positional_embedding: learned_positional_embedding_2d#teacher
         sequence_encoder: torch_transformer_encoder#teacher
     projection_head#teacher: *head
     backbone_with_head#teacher:
       pool: cls
-      dependencies_role_bindings:
+      dependency_bindings:
         backbone: patch_transformer#teacher
         head: projection_head#teacher
     multi_view#teacher:
       views: 2
-      dependencies_role_bindings: {network: backbone_with_head#teacher}
+      dependency_bindings: {network: backbone_with_head#teacher}
 
     ema_teacher:
-      dependencies_role_bindings:
+      dependency_bindings:
         student: multi_view#student
         teacher: multi_view#teacher
 

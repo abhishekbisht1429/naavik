@@ -36,6 +36,17 @@ and configuring the class twice would be pointless. Which instance fills the
 role is decided by the session — see
 [Configuring a component more than once](../guide/02-wiring-components.md#configuring-a-component-more-than-once).
 
+The decorator also says whether the name is a role the session shares or a
+part of this component alone: `@requires_resource("source", local=True,
+description=...)` declares a *local dependency*, wired only in the
+component's own `dependency_bindings` -- see
+[Global roles and local dependencies](../guide/02-wiring-components.md#global-roles-and-local-dependencies).
+Declaring a dependency, deciding whether a binding may reach it, wording
+what the user is told, and checking a session are kept apart:
+`components/dependencies.py` records declarations, `RoleBindings` decides
+(`scope_findings`, which only returns findings), `diagnostics.py` words them,
+and the session warns once, when it is first entered.
+
 `linked_components` records the *instance* a component was handed, not merely
 the class, so a consumer rewired between two instances of one component is
 caught when its state is restored rather than silently loading the other
@@ -49,7 +60,7 @@ point in the component's life -- in `__init__`, in `setup`, in a hook callback,
 in a running step.
 
 The session resolves each declared name **for the component that declared
-it**, honouring the `dependencies_role_bindings` in that component's own entry, and
+it**, honouring the `dependency_bindings` in that component's own entry, and
 hands the results to the component *before* its
 `__init__` runs. So construction, `setup` and every later call see the same
 instance, and a component wired to `dataset#b` is given `dataset#b` even when a

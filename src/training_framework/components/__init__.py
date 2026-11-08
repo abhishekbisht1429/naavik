@@ -19,6 +19,11 @@ from training_framework.components.base import (
     Step,
 )
 from training_framework.components.config_schema import parse_component_config
+from training_framework.components.dependencies import (
+    DependencyDeclaration,
+    dependency_declaration,
+    local_dependencies,
+)
 from training_framework.components.epochs import EpochSource
 from training_framework.components.module import ModuleResource
 from training_framework.components.registry import (
@@ -27,6 +32,7 @@ from training_framework.components.registry import (
     ComponentAliases,
     RoleBindings,
     RoleDeclaration,
+    RoleRegistry,
     activates,
     component_registry,
     format_execution_graph,
@@ -52,6 +58,7 @@ __all__ = [
     "Component",
     "ComponentAliases",
     "ComponentDependencyError",
+    "DependencyDeclaration",
     "EpochSource",
     "ExtendableComponent",
     "Hook",
@@ -62,6 +69,7 @@ __all__ = [
     "Resource",
     "RoleBindings",
     "RoleDeclaration",
+    "RoleRegistry",
     "SessionHook",
     "Stateful",
     "StatefulIterationHook",
@@ -73,8 +81,10 @@ __all__ = [
     "Step",
     "activates",
     "component_registry",
+    "dependency_declaration",
     "format_execution_graph",
     "hook",
+    "local_dependencies",
     "rank_zero_only",
     "reads",
     "singleton",

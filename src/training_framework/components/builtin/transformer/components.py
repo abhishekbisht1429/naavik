@@ -29,6 +29,7 @@ from training_framework.components import (
     role,
 )
 from training_framework.components.importing import import_module_class
+from training_framework.components.dependencies import local_role_deprecation
 from training_framework.components.builtin.transformer.modules import (
     _ACTIVATIONS,
     _MODULE_DICT_ATTRIBUTES,
@@ -114,46 +115,56 @@ class TokenEncoderBlock(SizedBlock, Protocol):
     ) -> tuple[torch.Tensor, torch.Tensor | None]: ...
 
 
-role(
-    "patch_embedding",
-    Resource,
-    description=(
+BLOCK_DESCRIPTIONS = {
+    "patch_embedding": (
         "a ModuleResource mapping (B, C, H, W) images to (B, N, embed_dim) "
         "tokens and providing grid_size(height, width)"
     ),
-)
-role(
-    "positional_embedding",
-    Resource,
-    description=(
+    "positional_embedding": (
         "a ModuleResource called as module(tokens, grid_size) that returns "
         "tokens with positions added"
     ),
-)
-role(
-    "sequence_encoder",
-    Resource,
-    description=(
+    "sequence_encoder": (
         "a ModuleResource called as module(tokens, key_padding_mask=None) "
         "that returns encoded tokens"
     ),
-)
-role(
-    "pooling",
-    Resource,
-    description=(
+    "pooling": (
         "a ModuleResource called as module(tokens, query, "
         "key_padding_mask=None) that returns (B, Q, embed_dim)"
     ),
-)
-role(
-    "pooling_query",
-    Resource,
-    description=(
+    "pooling_query": (
         "a ModuleResource called as module(batch_size, **conditioning) that "
         "returns a (B, Q, embed_dim) query"
     ),
-)
+}
+"""What each block a composite is built from must be: the `description`
+of the composites' local dependencies."""
+
+_BLOCK_CONSUMERS = {
+    "patch_embedding": ("patch_transformer", "pooled_patch_transformer"),
+    "positional_embedding": ("patch_transformer", "pooled_patch_transformer"),
+    "sequence_encoder": ("patch_transformer", "pooled_patch_transformer"),
+    "pooling": ("pooled_patch_transformer", "attention_pooled_encoder"),
+    "pooling_query": ("pooled_patch_transformer", "attention_pooled_encoder"),
+}
+# Deprecated: each block is now a local dependency of the composites built
+# from it. Kept, for one release, for code that reads them from
+# `role_registry()`.
+for _name, _description in BLOCK_DESCRIPTIONS.items():
+    role(
+        _name,
+        Resource,
+        description=_description,
+        deprecated=local_role_deprecation(_name, _BLOCK_CONSUMERS[_name]),
+    )
+
+
+def _block(name: str):
+    """Declare the block `name` a composite is built from: a local
+    dependency, wired in the composite's own entry."""
+    return requires_resource(
+        name, local=True, description=BLOCK_DESCRIPTIONS[name],
+    )
 
 
 # -- patch embedding ----------------------------------------------------
@@ -863,9 +874,9 @@ class PatchTransformerConfig:
 # Composites depend on roles with no default implementation, so, like the other
 # role-consuming built-ins, they are registered per session type rather than
 # in the shared scope.
-@requires_resource("patch_embedding")
-@requires_resource("positional_embedding")
-@requires_resource("sequence_encoder")
+@_block("patch_embedding")
+@_block("positional_embedding")
+@_block("sequence_encoder")
 @resource("patch_transformer", session_type=TRAINING_SESSION_TYPE)
 @resource("patch_transformer", session_type=ANALYSIS_SESSION_TYPE)
 class PatchTransformer(_BlockComposite):
@@ -953,8 +964,8 @@ class PatchTransformer(_BlockComposite):
         return self.encode(images, key_padding_mask=key_padding_mask)
 
 
-@requires_resource("pooling")
-@requires_resource("pooling_query")
+@_block("pooling")
+@_block("pooling_query")
 @resource("pooled_patch_transformer", session_type=TRAINING_SESSION_TYPE)
 @resource("pooled_patch_transformer", session_type=ANALYSIS_SESSION_TYPE)
 class PooledPatchTransformer(PatchTransformer):
@@ -989,8 +1000,8 @@ class AttentionPooledEncoderConfig:
     Declared so an unknown key is refused rather than ignored."""
 
 
-@requires_resource("pooling")
-@requires_resource("pooling_query")
+@_block("pooling")
+@_block("pooling_query")
 @requires_resource("patch_transformer")
 @resource("attention_pooled_encoder", session_type=TRAINING_SESSION_TYPE)
 @resource("attention_pooled_encoder", session_type=ANALYSIS_SESSION_TYPE)

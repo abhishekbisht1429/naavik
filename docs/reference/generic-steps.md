@@ -106,7 +106,7 @@ names:
 
 ```yaml
 forward#teacher:
-  dependencies_role_bindings: {model: teacher_model}
+  dependency_bindings: {model: teacher_model}
   args: [inputs]
   outputs: teacher_logits
 ```

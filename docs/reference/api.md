@@ -215,9 +215,13 @@ documented in [`ModuleResource`](../concepts/module-resource.md#members).
 | `@resource(name, session_type=None)` | Register a shared Resource, or scope it to one session type |
 | `@hook(name, session_type=None)` | Register a shared Hook, or scope it to one session type |
 | `@step(name, session_type=None)` | Register a shared Step, or scope it to one session type |
-| `@requires_resource(name)` | Declare a resource prerequisite |
-| `@requires_hook(name)` | Declare a Hook prerequisite for a Step |
-| `@requires_step(name)` | Declare a Step prerequisite for a Step |
+| `@requires_resource(name, *, local=False, description=None)` | Declare a resource prerequisite; `local=True` makes it a [local dependency](../guide/02-wiring-components.md#global-roles-and-local-dependencies), wired only in the component's own `dependency_bindings`; `description` is shown when nothing implements it |
+| `@requires_hook(name, *, local=False, description=None)` | Declare a Hook prerequisite for a Step |
+| `@requires_step(name, *, local=False, description=None)` | Declare a Step prerequisite for a Step |
+| `dependency_declaration(component, name, category=Resource)` | The `DependencyDeclaration` (`name`, `category`, `local`, `description`) a component's decorator recorded; a name it did not declare that way reads as a global dependency with no description |
+| `local_dependencies(component)` | The names a component declares local |
+| `role(name, category, *, description=None, session_type=None, overwrite=False, deprecated=None)` | Declare an abstract role; `deprecated` keeps it only for compatibility, and reading it from `role_registry()` warns with that text |
+| `role_registry(session_type=None)` | The declared roles a session type sees, as a read-only `RoleRegistry` of `RoleDeclaration`s |
 | `@wraps(name)` | Declare that a Hook wraps another Hook |
 | `@reads(*keys)` / `@writes(*keys)` | Declare the `iteration_context` keys a Step or IterationHook reads (passed to `run` / `post_iteration_callback` as keyword arguments) / writes (returned from `run` / `pre_iteration_callback`); steps are [ordered and checked by them](../guide/02-wiring-components.md#ordering-by-dataflow) |
 | `@activates(name)` | Declare a [companion](../guide/02-wiring-components.md#companions): activating this component activates `name` too, with no ordering or injection |
@@ -226,7 +230,7 @@ documented in [`ModuleResource`](../concepts/module-resource.md#members).
 | `component_registry(session_type)` | Return shared components overlaid by the matching scoped registry |
 | `topological_sort_of_components(role_bindings, *, components, session_type)` | Validate and order the selected session type's component graph |
 | `format_execution_graph(*, ..., role_bindings, session_type)` | Render a session's components as its execution graph |
-| `RoleBindings(bindings, *, session_type)` | Role bindings as a session holds them: `role: implementation`, and `consumer: {role: target}` for one component. `ComponentBindings` is its deprecated name; the `component_bindings=` and `aliases=` keywords of the functions above and of `SessionComponents` are deprecated names for `role_bindings=` |
+| `RoleBindings(bindings, *, session_type)` | Role bindings as a session holds them: `role: implementation`, and `consumer: {role: target}` for one component. `scope_findings(consumers)` lists the session-wide bindings that reach a local dependency. `ComponentBindings` is its deprecated name; the `component_bindings=` and `aliases=` keywords of the functions above and of `SessionComponents` are deprecated names for `role_bindings=` |
 | `@register_session_type(name)` | Register a concrete Session subclass for engine and checkpoint dispatch |
 
 ---

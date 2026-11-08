@@ -37,6 +37,7 @@ from training_framework.components import (
     role,
     step,
 )
+from training_framework.components.dependencies import local_role_deprecation
 from training_framework.components.builtin.self_supervised.schedules import (
     Schedule,
     check_range,
@@ -47,19 +48,22 @@ if TYPE_CHECKING:
     from training_framework.session import Session
 
 
-role(
-    "student",
-    Resource,
-    description="the nn.Module resource ema_teacher trains through DDP",
-)
-role(
-    "teacher",
-    Resource,
-    description=(
+_DESCRIPTIONS = {
+    "student": "the nn.Module resource ema_teacher trains through DDP",
+    "teacher": (
         "an nn.Module resource with the student's architecture, kept as a "
         "moving average of it"
     ),
-)
+}
+# Deprecated: both are now local dependencies of `ema_teacher`. Kept, for one
+# release, for code that reads them from `role_registry()`.
+for _name, _description in _DESCRIPTIONS.items():
+    role(
+        _name,
+        Resource,
+        description=_description,
+        deprecated=local_role_deprecation(_name, ("ema_teacher",)),
+    )
 
 
 def _attribute_path(value: Any, name: str) -> str:
@@ -90,8 +94,8 @@ class EMATeacherConfig:
         self.teacher_part = _attribute_path(self.teacher_part, "teacher_part")
 
 
-@requires_resource("student")
-@requires_resource("teacher")
+@requires_resource("student", local=True, description=_DESCRIPTIONS["student"])
+@requires_resource("teacher", local=True, description=_DESCRIPTIONS["teacher"])
 @resource("ema_teacher", session_type=TRAINING_SESSION_TYPE)
 @resource("ema_teacher", session_type=ANALYSIS_SESSION_TYPE)
 class EMATeacher(ModuleResource):

@@ -40,29 +40,34 @@ from training_framework.components.builtin.parameter_patterns import (
     matches_any,
     parameter_patterns,
 )
+from training_framework.components.dependencies import local_role_deprecation
 
 if TYPE_CHECKING:
     from training_framework.session import Session
 
 
-role(
-    "backbone",
-    Resource,
-    description=(
+_DESCRIPTIONS = {
+    "backbone": (
         "an nn.Module resource whose output the head reads, e.g. an imported "
         "model or a module_part of one"
     ),
-)
-role(
-    "head",
-    Resource,
-    description="an nn.Module resource applied to the backbone's output",
-)
-role(
-    "source",
-    Resource,
-    description="the nn.Module resource a module_part takes a part of",
-)
+    "head": "an nn.Module resource applied to the backbone's output",
+    "source": "the nn.Module resource a module_part takes a part of",
+}
+_CONSUMERS = {
+    "backbone": ("backbone_with_head",),
+    "head": ("backbone_with_head",),
+    "source": ("module_part",),
+}
+# Deprecated: each is now a local dependency of its consumer. Kept, for one
+# release, for code that reads them from `role_registry()`.
+for _name, _description in _DESCRIPTIONS.items():
+    role(
+        _name,
+        Resource,
+        description=_description,
+        deprecated=local_role_deprecation(_name, _CONSUMERS[_name]),
+    )
 
 
 _MISSING = object()
@@ -96,7 +101,7 @@ class ModulePartConfig:
         self.method = _non_empty_string(self.method, "method")
 
 
-@requires_resource("source")
+@requires_resource("source", local=True, description=_DESCRIPTIONS["source"])
 @resource("module_part", session_type=TRAINING_SESSION_TYPE)
 @resource("module_part", session_type=ANALYSIS_SESSION_TYPE)
 class ModulePart(ModuleResource):
@@ -226,8 +231,8 @@ class BackboneWithHeadConfig(FineTunedModelConfig):
             )
 
 
-@requires_resource("backbone")
-@requires_resource("head")
+@requires_resource("backbone", local=True, description=_DESCRIPTIONS["backbone"])
+@requires_resource("head", local=True, description=_DESCRIPTIONS["head"])
 @resource("backbone_with_head", session_type=TRAINING_SESSION_TYPE)
 @resource("backbone_with_head", session_type=ANALYSIS_SESSION_TYPE)
 class BackboneWithHead(ModuleResource):

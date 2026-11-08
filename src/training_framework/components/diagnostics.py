@@ -7,12 +7,16 @@ category mismatch, and a registered component that is not active in the
 session.
 """
 
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 from difflib import get_close_matches
 
 from training_framework.components.base import Component
+from training_framework.components.config import DEPENDENCY_BINDINGS_KEY
+from training_framework.components.dependencies import dependency_declaration
 from training_framework.components.registry import (
     _ROLE_DECORATOR_NAMES,
+    RoleDeclaration,
+    ScopeFinding,
     _SESSION_COMPONENT_REGISTRIES,
     _SESSION_ROLE_REGISTRIES,
     _SHARED_COMPONENT_REGISTRY,
@@ -292,3 +296,99 @@ def explain_missing_component(
 
 def with_explanation(headline: str, explanation: str) -> str:
     return f"{headline}\n{explanation}" if explanation else headline
+
+
+def missing_dependency_message(
+        *,
+        category: type[Component],
+        name: str,
+        resolved_name: str,
+        roles: Mapping[str, RoleDeclaration],
+        consumer: Component | type[Component] | None = None,
+) -> str | None:
+    """The message for a dependency nothing implements, when something says
+    what it should be: the consumer's own declaration of it (its
+    `description`, or that it is local), else a declared `category` role of
+    that name. None when neither does; the caller then reports an unmet
+    prerequisite.
+    """
+    consumer_class = (
+        None if consumer is None
+        else consumer if isinstance(consumer, type) else type(consumer)
+    )
+    declared = (
+        dependency_declaration(consumer_class, name, category)
+        if consumer_class is not None else None
+    )
+    role = roles.get(resolved_name)
+    if role is not None and role.category is not category:
+        role = None
+    described = declared is not None and (
+        declared.local or declared.description is not None
+    )
+    if not described and role is None:
+        return None
+
+    description = (
+        declared.description if described and declared.description is not None
+        else role.description if role is not None
+        else None
+    )
+    what = f"{category.__name__}: {description}" if description else category.__name__
+    decorator = _ROLE_DECORATOR_NAMES[category]
+    implement = (
+        f"Implement a {category.__name__} subclass and register it via "
+        f"@{decorator}('{resolved_name}', ...)"
+    )
+    if described and declared.local:
+        owner = getattr(consumer_class, "name", None) or "<component>"
+        return (
+            f"Local dependency '{resolved_name}' ({what}) of "
+            f"{consumer_class.__name__} has no implementation registered. "
+            f"{implement}, or wire an existing implementation in the "
+            f"component's own entry: {owner}: {{{DEPENDENCY_BINDINGS_KEY}: "
+            f"{{{name}: <implementation_name>}}}}."
+        )
+    consumer_clause = (
+        f" by {consumer_class.__name__}" if consumer_class is not None else ""
+    )
+    return (
+        f"Role '{resolved_name}' ({what}) is required{consumer_clause} but has "
+        f"no implementation registered. {implement}, or bind an existing "
+        "implementation via role_bindings: "
+        f"{{'{name}': '<implementation_name>'}}."
+    )
+
+
+def explain_scope_finding(
+        finding: ScopeFinding,
+        origin: str,
+        *,
+        from_import: bool = False,
+) -> str:
+    """The deprecation of a session-wide binding that reaches local
+    dependencies, with the wiring that replaces it. `origin` says where the
+    binding was written: the top-level bindings, or (`from_import`) an
+    import's `role`, whose instance needs a name of its own to be wired."""
+    one = len(finding.consumers) == 1
+    fixes = "\n".join(
+        f"    {consumer}: {{{DEPENDENCY_BINDINGS_KEY}: "
+        f"{{{finding.role}: {finding.target}}}}}"
+        for consumer in finding.consumers
+    )
+    return (
+        f"'{finding.role}' is bound for the whole session ({origin}), but "
+        f"{', '.join(finding.consumers)} take{'s' if one else ''} it as "
+        f"{'a local dependency' if one else 'local dependencies'}. A "
+        "session-wide binding of a local dependency is deprecated and still "
+        "applies for now; wire it in the component's own entry instead:\n"
+        f"{fixes}"
+        + (
+            "\n  The import's instance is reached that way only by a name of "
+            "its own: drop the import's `role`, key the import by the "
+            "source's instance name (its instances then get the suffix "
+            "`imported`, or the import's `instance_name`), and name that "
+            "instance above."
+            if from_import else ""
+        )
+    )

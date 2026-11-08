@@ -133,7 +133,7 @@ sessions:
     hooks:
       logger: {log_every: 10}
       evaluator:                  # wired to the validation data
-        dependencies_role_bindings: {data_manager: data_manager#validation}
+        dependency_bindings: {data_manager: data_manager#validation}
         every: 100
 ```
 

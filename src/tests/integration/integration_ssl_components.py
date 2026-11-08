@@ -112,7 +112,7 @@ def vit(suffix: str, *, dropout: float = 0.0) -> dict[str, Any]:
         },
         f"patch_transformer#{suffix}": {
             "class_token": True,
-            "dependencies_role_bindings": {
+            "dependency_bindings": {
                 "patch_embedding": f"conv_patch_embedding#{suffix}",
                 "positional_embedding": f"learned_positional_embedding_2d#{suffix}",
                 "sequence_encoder": f"torch_transformer_encoder#{suffix}",

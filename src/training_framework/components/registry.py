@@ -5,6 +5,10 @@ from dataclasses import dataclass
 
 from training_framework.components.base import Component, Hook, Resource, Step
 from training_framework.components.config import reserved_config_names
+from training_framework.components.dependencies import (
+    dependency_decorator,
+    local_dependencies,
+)
 from training_framework.components.edges import takes_part_in_iterations
 from training_framework.components.graph import (
     render_execution_graph,
@@ -36,35 +40,13 @@ class RoleDeclaration:
     name: str
     category: type[Component]
     description: str | None = None
+    deprecated: str | None = None
+    """Why the declaration is deprecated and what replaces it. Reading it
+    from `role_registry()` warns with this text."""
 
 
 _SHARED_ROLE_REGISTRY: dict[str, RoleDeclaration] = {}
 _SESSION_ROLE_REGISTRIES: dict[str, dict[str, RoleDeclaration]] = {}
-
-
-def _missing_role_message(
-        *,
-        category: type[Component],
-        name: str,
-        resolved_name: str,
-        declared_role: RoleDeclaration,
-        consumer: type[Component] | None = None,
-) -> str:
-    consumer_clause = (
-        f" by {consumer.__name__}" if consumer is not None else ""
-    )
-    description = (
-        f": {declared_role.description}" if declared_role.description else ""
-    )
-    decorator_name = _ROLE_DECORATOR_NAMES[category]
-    return (
-        f"Role '{resolved_name}' ({category.__name__}{description}) is "
-        f"required{consumer_clause} but has no implementation registered. "
-        f"Implement a {category.__name__} subclass and register it via "
-        f"@{decorator_name}('{resolved_name}', ...), or bind an existing "
-        "implementation via role_bindings: "
-        f"{{'{name}': '<implementation_name>'}}."
-    )
 
 
 def _normalize_component_session_type(session_type: str | None) -> str | None:
@@ -106,14 +88,61 @@ def _registration_role_registry(
     return _SESSION_ROLE_REGISTRIES.setdefault(normalized, {})
 
 
-def role_registry(
+def declared_roles(
         session_type: str | None = None,
 ) -> Mapping[str, RoleDeclaration]:
+    """The roles a session type sees, read without deprecation warnings:
+    what the framework itself consults. User code reads `role_registry`."""
     normalized = _normalize_component_session_type(session_type)
     if normalized is None:
         return _SHARED_ROLE_REGISTRY
     scoped = _SESSION_ROLE_REGISTRIES.setdefault(normalized, {})
     return ChainMap(scoped, _SHARED_ROLE_REGISTRY)
+
+
+class RoleRegistry(Mapping):
+    """The roles a session type sees, read-only and live.
+
+    Reading a deprecated declaration (`registry[name]`, `get`, `values`,
+    `items`) warns with its `deprecated` text; asking whether a name is
+    declared, iterating the names and `len` do not.
+    """
+
+    def __init__(self, roles: Mapping[str, RoleDeclaration]) -> None:
+        self._roles = roles
+
+    def __getitem__(self, name: str) -> RoleDeclaration:
+        declaration = self._roles[name]
+        if declaration.deprecated:
+            warnings.warn(declaration.deprecated, DeprecationWarning, stacklevel=2)
+        return declaration
+
+    def get(self, name, default=None):
+        if name not in self._roles:
+            return default
+        declaration = self._roles[name]
+        if declaration.deprecated:
+            warnings.warn(declaration.deprecated, DeprecationWarning, stacklevel=2)
+        return declaration
+
+    def __contains__(self, name) -> bool:
+        return name in self._roles
+
+    def __iter__(self):
+        return iter(self._roles)
+
+    def __len__(self) -> int:
+        return len(self._roles)
+
+    def __repr__(self) -> str:
+        return f"RoleRegistry({dict(self._roles)!r})"
+
+
+def role_registry(
+        session_type: str | None = None,
+) -> RoleRegistry:
+    """The roles a session type sees: its own and the shared ones."""
+    return RoleRegistry(declared_roles(session_type))
 
 
 def _component_type(component: Component | type[Component]) -> type[Component]:
@@ -167,7 +196,7 @@ def _component(
             )
 
         registered_type = _component_type(cls)
-        declared_role = role_registry(session_type).get(name)
+        declared_role = declared_roles(session_type).get(name)
         if declared_role is not None and declared_role.category is not registered_type:
             raise ValueError(
                 f"Cannot register {registered_type.__name__} '{name}'; "
@@ -245,6 +274,7 @@ def role(
         description: str | None = None,
         session_type: str | None = None,
         overwrite: bool = False,
+        deprecated: str | None = None,
 ) -> RoleDeclaration:
     """Declare `name` as an abstract role expecting a `category` implementation.
 
@@ -254,6 +284,10 @@ def role(
     under a different name bound via `role_bindings`. Declaring a role
     is optional: @requires_resource/@requires_hook/@requires_step accept any
     name whether or not it has been declared as a role.
+
+    `deprecated` marks a declaration kept only for compatibility: its text
+    says what replaces it, and is the warning a read of the declaration from
+    `role_registry()`, or an overwrite of it, gives.
     """
     validate_component_name(name, kind="Role name")
     if category not in _COMPONENT_TYPES:
@@ -262,10 +296,20 @@ def role(
             f"{getattr(category, '__name__', category)!r}"
         )
 
+    if deprecated is not None and (
+            not isinstance(deprecated, str) or not deprecated.strip()
+    ):
+        raise TypeError(
+            "role() deprecated must be a non-empty string saying what "
+            f"replaces the role, or None; got {deprecated!r}"
+        )
+
     registry = _registration_role_registry(session_type)
     if name in registry and not overwrite:
         scope = session_type or "shared"
         raise ValueError(f"Role '{name}' already declared in '{scope}' scope")
+    if name in registry and registry[name].deprecated:
+        warnings.warn(registry[name].deprecated, DeprecationWarning, stacklevel=2)
 
     registered_class = component_registry(session_type).get(name)
     if registered_class is not None:
@@ -276,9 +320,22 @@ def role(
                 f"'{name}' is already registered as a {registered_type.__name__}"
             )
 
-    declaration = RoleDeclaration(name, category, description)
+    declaration = RoleDeclaration(name, category, description, deprecated)
     registry[name] = declaration
     return declaration
+
+
+@dataclass(frozen=True)
+class ScopeFinding:
+    """A session-wide binding of a name that some components take as a local
+    dependency: deprecated, since such a dependency is wired in the
+    consumer's own entry. The binding still applies to them."""
+
+    role: str
+    target: str
+    consumers: tuple[str, ...]
+    """The held components that declare `role` local and do not wire it
+    themselves, so the session-wide binding is what reaches them."""
 
 
 class RoleBindings:
@@ -289,7 +346,7 @@ class RoleBindings:
     * ``role: implementation`` binds a role for the whole session: the
       top-level ``role_bindings`` entry of a session configuration.
     * ``consumer: {role: target}`` binds a role for one consumer only: the
-      ``dependencies_role_bindings`` entry inside that consumer's own
+      ``dependency_bindings`` entry inside that consumer's own
       configuration (or, deprecated, a nested entry of a top-level
       ``component_bindings``). It
       is how a session says which instance a component was wired to when
@@ -335,7 +392,7 @@ class RoleBindings:
         normalized = _normalize_component_session_type(session_type)
         self._session_type = normalized
         self._registry = component_registry(normalized)
-        self._roles = role_registry(normalized)
+        self._roles = declared_roles(normalized)
         self._bindings: dict[str, str] = {}
         self._instance_bindings: dict[str, dict[str, str]] = {}
         for key, value in dict(bindings).items():
@@ -505,6 +562,30 @@ class RoleBindings:
                     f"role name '{role_name}'."
                 )
 
+    def scope_findings(
+            self,
+            consumers: Mapping[str, Component | type[Component]],
+    ) -> list[ScopeFinding]:
+        """The session-wide bindings that reach a local dependency of one of
+        `consumers` (instance name -> component), one finding per binding.
+
+        Nothing is warned or changed: a session decides what to do with them.
+        """
+        locals_of = {
+            name: local_dependencies(component)
+            for name, component in consumers.items()
+        }
+        findings = []
+        for role_name, target in self._bindings.items():
+            reached = tuple(sorted(
+                name for name, local in locals_of.items()
+                if role_name in local
+                and role_name not in self._instance_bindings.get(name, {})
+            ))
+            if reached:
+                findings.append(ScopeFinding(role_name, target, reached))
+        return findings
+
     def resolve(self, name: str, *, consumer: str | None = None) -> str:
         """Return the name `name` is bound to, for `consumer` if it has wiring.
 
@@ -646,36 +727,36 @@ def _binding_resolver(
     )
 
 
-def requires_step(step_name: str):
-    validate_component_name(step_name, kind="Required Step name")
+def requires_step(
+        step_name: str,
+        *,
+        local: bool = False,
+        description: str | None = None,
+):
+    """Declare that a step requires the step `step_name`.
 
-    def wrapper(cls):
-        if not issubclass(cls, Step):
-            raise TypeError(
-                f"@requires_step can only be applied to Step subclasses. "
-                f"'{cls.__name__}' is not a Step."
-            )
-        if "required_steps" not in cls.__dict__:
-            cls.required_steps = []
-        cls.required_steps.append(step_name)
-        return cls
-    return wrapper
+    `local=True` makes it one of this component's own parts, wired only in
+    its own `dependency_bindings` entry; `description` says what it is for,
+    shown when nothing implements it (see `requires_resource`).
+    """
+    return dependency_decorator(
+        Step, step_name, local=local, description=description,
+    )
 
 
-def requires_hook(hook_name: str):
-    validate_component_name(hook_name, kind="Required Hook name")
+def requires_hook(
+        hook_name: str,
+        *,
+        local: bool = False,
+        description: str | None = None,
+):
+    """Declare that a step requires the hook `hook_name`.
 
-    def wrapper(cls):
-        if not issubclass(cls, Step):
-            raise TypeError(
-                f"@requires_hook can only be applied to Step subclasses. "
-                f"'{cls.__name__}' is not a Step."
-            )
-        if "required_hooks" not in cls.__dict__:
-            cls.required_hooks = list(getattr(cls, "required_hooks", ()))
-        cls.required_hooks.append(hook_name)
-        return cls
-    return wrapper
+    `local` and `description` are as for `requires_resource`.
+    """
+    return dependency_decorator(
+        Hook, hook_name, local=local, description=description,
+    )
 
 
 def wraps(hook_name: str):
@@ -833,22 +914,25 @@ def rank_zero_only(cls):
     return cls
 
 
-def requires_resource(resource_name: str):
-    validate_component_name(resource_name, kind="Required Resource name")
+def requires_resource(
+        resource_name: str,
+        *,
+        local: bool = False,
+        description: str | None = None,
+):
+    """Declare that a component requires the resource `resource_name`.
 
-    def wrapper(cls):
-        if not issubclass(cls, (Step, Hook, Resource)):
-            raise TypeError(
-                "@requires_resource can only be applied to Step, Hook, "
-                f"or Resource subclasses. '{cls.__name__}' is neither."
-            )
-        if "required_resources" not in cls.__dict__:
-            cls.required_resources = list(
-                getattr(cls, "required_resources", ())
-            )
-        cls.required_resources.append(resource_name)
-        return cls
-    return wrapper
+    By default the name is a role the session shares: the top-level
+    `role_bindings` may bind it for every component that asks for it.
+    `local=True` makes it a part of this component alone -- what a
+    composite is built from, say -- wired only in the component's own
+    `dependency_bindings` entry; a top-level binding of it still applies,
+    deprecated. `description` says what the dependency is for, and is what
+    the error shows when nothing implements it.
+    """
+    return dependency_decorator(
+        Resource, resource_name, local=local, description=description,
+    )
 
 
 def topological_sort_of_components(
@@ -870,7 +954,7 @@ def topological_sort_of_components(
         session_type=normalized,
     )
     registry = component_registry(normalized)
-    roles = role_registry(normalized)
+    roles = declared_roles(normalized)
     return topological_sort_components(
         binding_resolver=binding_resolver,
         registry=registry,

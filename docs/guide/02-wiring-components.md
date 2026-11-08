@@ -79,7 +79,7 @@ or implementation names; a bound DDP resource must support the same `config`
 and `rank` construction interface as the built-in resource.
 
 The top-level `role_bindings` holds session-wide bindings only; wiring for
-one component goes in that component's own `dependencies_role_bindings`
+one component goes in that component's own `dependency_bindings`
 ([below](#naming-the-instance-a-component-should-use)).
 
 `component_bindings` and the older `aliases` are deprecated names for the
@@ -132,14 +132,14 @@ make an already-wired consumer ambiguous or move it to another instance.
 
 ### Naming the instance a component should use
 
-Wiring for one consumer is a `dependencies_role_bindings` entry inside that
+Wiring for one consumer is a `dependency_bindings` entry inside that
 consumer's own configuration:
 
 ```yaml
 data_manager#train: {batch_size: 64}
 data_manager#validation: {batch_size: 256}
 evaluator:
-  dependencies_role_bindings:
+  dependency_bindings:
     data_manager: data_manager#validation
   every: 100
 ```
@@ -154,21 +154,29 @@ annotation names the instance that component is actually given.
 
 The session reads the wiring out of the entry before anything is constructed,
 and the constructor is given the rest: `evaluator` above is built with
-`{every: 100}`, and a `config_schema` never sees `dependencies_role_bindings`. The
+`{every: 100}`, and a `config_schema` never sees `dependency_bindings`. The
 configuration itself keeps it as written, so a checkpoint restores the same
 wiring. For that component its own wiring wins over a session-wide
 `role_bindings` entry; every other component is unaffected. An instance entry
-(`evaluator#fast: {dependencies_role_bindings: ...}`) wires that instance alone.
-A component's `dependencies_role_bindings` cannot be changed by
+(`evaluator#fast: {dependency_bindings: ...}`) wires that instance alone.
+A component's `dependency_bindings` cannot be changed by
 `--extend-session`.
+
+`dependency_bindings` was called `dependencies_role_bindings`. The old name
+still works, with a `DeprecationWarning` when a session is built from it; a
+checkpoint that stored it restores without one, and an extension that writes
+the same wiring under the new name changes nothing. One entry may not use
+both. Since the key never reaches the component, no `config_schema` may
+declare a field named `dependency_bindings` (or the old name): the
+component's construction refuses it.
 
 A component that is usually only pulled in as another's dependency -- such
 as `optimizer_step`, which `optimizer` activates -- is wired the same way,
-with an entry that holds only its `dependencies_role_bindings`:
+with an entry that holds only its `dependency_bindings`:
 
 ```yaml
 optimizer_step:
-  dependencies_role_bindings: {clip_gradients: scale_gradients}
+  dependency_bindings: {clip_gradients: scale_gradients}
 ```
 
 Such a component can be activated without an entry only because it needs no
@@ -231,6 +239,62 @@ single-instance path exactly where it was:
 `ddp.rank_zero_components` accepts an instance name, so one instance can be
 kept off the secondary ranks while its sibling runs on all of them.
 
+## Global roles and local dependencies
+
+A dependency is either a **role** the session shares or a **local
+dependency** of the one component that declares it.
+
+- A *role* -- `model`, `dataset`, `optimizer` -- is what many components ask
+  for and expect to be the same thing. The top-level `role_bindings` binds it
+  once, for all of them; a component's own `dependency_bindings` may still
+  point that one component elsewhere.
+- A *local dependency* is a part of one component: the blocks a
+  `patch_transformer` is built from, the `backbone` and `head` of a
+  `backbone_with_head`, the `source` of a `module_part`. It is wired in that
+  component's own entry, and only there:
+
+```yaml
+role_bindings:                     # roles the session shares
+  model: backbone_with_head
+backbone_with_head:
+  dependency_bindings:             # this component's own parts
+    backbone: module_part
+    head: cifar_head
+```
+
+The component declares which of its dependencies are local, where it
+declares them:
+
+```python
+@requires_resource(
+    "source",
+    local=True,
+    description="the nn.Module resource a module_part takes a part of",
+)
+@resource("module_part")
+class ModulePart(ModuleResource):
+    ...
+```
+
+`local` is per consumer: another component may ask for the same name as an
+ordinary role. Every dependency is a role unless its consumer says
+otherwise, so a component of your own keeps behaving as it did.
+
+A top-level `role_bindings` entry -- or an import's `role` -- that reaches a
+local dependency still applies to it, but is deprecated: when the session is
+first entered (or the engine starts the ranks), a `DeprecationWarning` names
+each component it reaches and the `dependency_bindings` entry that replaces
+it. A component that wires the name itself is not reached and not named. The
+execution graph marks such a binding `(deprecated: local to ...)`. A session
+restored from a checkpoint does not warn.
+
+The built-in local dependencies are `source` (`module_part`), `backbone` and
+`head` (`backbone_with_head`), `patch_embedding`, `positional_embedding`,
+`sequence_encoder`, `pooling` and `pooling_query` (the transformer
+composites), `network` (`multi_view`) and `student` and `teacher`
+(`ema_teacher`). Their former `role()` declarations are kept for this release
+only, marked deprecated (below).
+
 ## Declaring abstract roles
 
 Some component names, like `dataset` and `model`, are required by built-in
@@ -260,7 +324,18 @@ how to implement it (`@resource('name', ...)`, etc.) or bind an existing
 implementation (`role_bindings: {name: implementation}`). Redeclaring a
 name without `overwrite=True` raises `ValueError`, matching
 `@resource`/`@hook`/`@step`. `role_registry(session_type=None)` returns the
-roles declared and visible to a session type, mirroring `component_registry()`.
+roles declared and visible to a session type, mirroring `component_registry()`,
+as a read-only `RoleRegistry` that follows later declarations.
+
+A part of one component is not a role: declare it on the component, with
+`@requires_resource(name, local=True, description=...)`
+([above](#global-roles-and-local-dependencies)); its `description` improves
+the error the same way. `role(..., deprecated="<what replaces it>")` keeps a
+declaration only for compatibility: reading it from `role_registry()`
+(`registry[name]`, `get`, `values`, `items`) or overwriting it warns with
+that text, while `name in registry`, iterating the names and `len` do not.
+The built-in roles that became local dependencies are kept this way, and are
+removed in the next release.
 
 ## Component dependencies
 
@@ -286,6 +361,13 @@ from training_framework.components import (
 class OptimizerStep(Step):
     ...
 ```
+
+Each decorator also takes `local=True`, for a [local
+dependency](#global-roles-and-local-dependencies), and `description`, shown
+when nothing implements it. A subclass inherits its parent's declarations
+and may redeclare one; declaring the same name twice, differently, on one
+class is an error. `dependency_declaration(component, name, category)` and
+`local_dependencies(component)` read them back.
 
 Supported dependency directions are:
 
@@ -356,8 +438,8 @@ ordering edge -- so it may require the component that activates it, as
 may activate each other.
 
 The companion name is resolved like a dependency, so the activating
-component's own `dependencies_role_bindings` redirect it
-(`optimizer: {dependencies_role_bindings: {optimizer_step: my_step}, ...}`).
+component's own `dependency_bindings` redirect it
+(`optimizer: {dependency_bindings: {optimizer_step: my_step}, ...}`).
 It is kept on every rank that keeps the component activating it. A session
 that holds a component without its companion -- for instance one registered by
 hand -- is rejected when it orders its components, and the execution graph

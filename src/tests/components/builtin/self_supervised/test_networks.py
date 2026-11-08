@@ -147,7 +147,7 @@ def _pooled_model(tmp_path, *, pool, class_token=True, name="backbone_with_head"
         "projection_head": {"in_dim": EMBED_DIM, "out_dim": 4, "num_layers": 1},
         name: {
             **({"pool": pool} if pool is not None else {}),
-            "dependencies_role_bindings": {
+            "dependency_bindings": {
                 "backbone": "patch_transformer#x", "head": "projection_head",
             },
         },

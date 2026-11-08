@@ -141,7 +141,7 @@ class ModelDiagram(SessionHook):
 
     Another model than the one bound to `model` -- a teacher, say -- is drawn
     by a second instance wired to it:
-    `model_diagram#teacher: {dependencies_role_bindings: {model: teacher}}`.
+    `model_diagram#teacher: {dependency_bindings: {model: teacher}}`.
 
     Nothing that goes wrong while recording or drawing stops the run: it is
     reported as a warning. The recording adds a little Python work to that

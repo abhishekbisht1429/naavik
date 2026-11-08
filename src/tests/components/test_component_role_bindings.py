@@ -296,7 +296,7 @@ def test_extension_refuses_to_change_a_components_wiring(tmp_path):
             ValueError,
             match=(
                 r"does not allow changes to: "
-                r"crb_consumer\.dependencies_role_bindings\.crb_dep"
+                r"crb_consumer\.dependency_bindings\.crb_dep"
             ),
     ):
         session.apply_extension_overrides(

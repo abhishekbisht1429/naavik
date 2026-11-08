@@ -5,8 +5,9 @@ from omegaconf import OmegaConf
 
 from training_framework.components.config import (
     COMPONENT_GROUPS,
-    DEPENDENCIES_BINDINGS_KEY,
+    DEPENDENCY_BINDINGS_KEY,
     ROLE_BINDINGS_KEY,
+    align_wiring_keys,
 )
 from training_framework.session.components import read_session_config
 from training_framework.session.base import Session
@@ -133,6 +134,9 @@ class TrainingSession(Session):
 
         current_config = deepcopy(self._config)
         self._fill_extended_entries(current_config, update_config)
+        # Written under the other name of an entry's wiring key, the update
+        # still means that entry's wiring.
+        update_config = align_wiring_keys(update_config, current_config)
 
         effective = OmegaConf.to_container(
             OmegaConf.merge(
@@ -195,7 +199,7 @@ class TrainingSession(Session):
         reserved_changes = {
             path for path in changed_paths
             if path[0] in reserved_names
-            or (len(path) > 1 and path[1] == DEPENDENCIES_BINDINGS_KEY)
+            or (len(path) > 1 and path[1] == DEPENDENCY_BINDINGS_KEY)
         }
         if reserved_changes:
             names = ", ".join(

@@ -328,7 +328,7 @@ the run: it is reported as a `RuntimeWarning`.
 
 It draws the module bound to `model`. For another one -- a teacher, say --
 wire a second instance to it:
-`model_diagram#teacher: {dependencies_role_bindings: {model: teacher_model}}`.
+`model_diagram#teacher: {dependency_bindings: {model: teacher_model}}`.
 
 Limits: only what runs inside the model's `forward` is drawn (a loss outside
 it is not); the diagram shows the path the first call took; a
