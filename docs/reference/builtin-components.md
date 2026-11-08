@@ -28,7 +28,7 @@ which registers all built-ins. Their classes are also importable from
 | `freeze_gradients` | Step | Drops the gradients of matching parameters until an iteration; does nothing unless configured; [chain](optimization.md#freeze_gradients) |
 | `clip_gradients` | Step | Clips or measures the total gradient norm; does nothing unless configured; [chain](optimization.md#clip_gradients) |
 | `optimizer_step` | Step | Steps the optimizer and its schedule on iterations that end an accumulation group; [chain](optimization.md#the-chain) |
-| `module_part` | Resource | A part of the module resource bound to `source` (e.g. an imported model), and one method of it; owns no weights; [fine-tuning](fine-tuning.md#module_part) |
+| `module_part` | Resource | A part of the module resource bound to `source` (e.g. an imported model), and one method of it, optionally partly frozen (`frozen`, `frozen_eval`); owns no weights; [fine-tuning](fine-tuning.md#module_part) |
 | `backbone_with_head` | Resource | `head(pool(backbone(x)))` with part of the backbone frozen; requires `backbone` and `head`; [fine-tuning](fine-tuning.md#backbone_with_head) |
 | `fine_tuned_model` | Resource | Deprecated former name of `backbone_with_head`, kept for old configurations and checkpoints; [fine-tuning](fine-tuning.md#fine_tuned_model-the-former-name) |
 | `projection_head` | Resource | MLP head on pooled features, optionally ending in DINO's weight-normalized prototypes; [self-supervised](self-supervised.md#projection_head) |

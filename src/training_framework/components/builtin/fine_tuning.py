@@ -3,12 +3,12 @@
 A pretrained model comes in through `import_components`, which makes it --
 and everything it was wired to -- components of this session. Two resources
 build on that. `module_part` takes a part of a module resource (an encoder
-out of a whole pretrained model, say) and calls one of its methods.
-`backbone_with_head` composes whatever fills the `backbone` and `head`
-roles, freezes part of the backbone, and runs `head(backbone(x))`; bound as
+out of a whole pretrained model, say), calls one of its methods, and may
+freeze part of it. `backbone_with_head` composes whatever fills the `backbone` and `head`
+roles, may freeze part of the backbone, and runs `head(backbone(x))`; bound as
 `model`, `ddp`, `forward` and `optimizer` use it like any other model.
 `fine_tuned_model` is its deprecated former name, kept for old
-configurations and checkpoints.
+configurations and checkpoints. Both freeze through `builtin/freezing.py`.
 
 The backbone need not come from another run -- any resource that is an
 `nn.Module` can fill the role -- and the head is always the user's own
@@ -35,10 +35,10 @@ from training_framework.components import (
     resource,
     role,
 )
-from training_framework.components.builtin.parameter_patterns import (
-    check_patterns_match,
-    matches_any,
-    parameter_patterns,
+from training_framework.components.builtin.freezing import (
+    freeze,
+    freeze_options,
+    keep_frozen_in_eval,
 )
 from training_framework.components.dependencies import local_role_deprecation
 
@@ -86,6 +86,8 @@ def _non_empty_string(value: Any, name: str) -> str:
 class ModulePartConfig:
     submodule: Any = ""
     method: Any = "forward"
+    frozen: Any = ()
+    frozen_eval: Any = None
 
     def __post_init__(self):
         if not isinstance(self.submodule, str):
@@ -99,6 +101,7 @@ class ModulePartConfig:
                 f"submodule {self.submodule!r} has an empty attribute name"
             )
         self.method = _non_empty_string(self.method, "method")
+        self.frozen, self.frozen_eval = freeze_options(self.frozen, self.frozen_eval)
 
 
 @requires_resource("source", local=True, description=_DESCRIPTIONS["source"])
@@ -116,6 +119,12 @@ class ModulePart(ModuleResource):
     weights, and this component owns none. What the source holds outside
     the part stays in the session, unused by anything that only calls this
     component.
+
+    `frozen` and `frozen_eval` freeze part of the part, as
+    `backbone_with_head` freezes its backbone (`builtin/freezing.py`): the
+    patterns match this component's own parameter names, `module.<...>`.
+    The parameters are the source's, so they are frozen for everything that
+    uses the source.
     """
 
     config_schema = ModulePartConfig
@@ -135,6 +144,19 @@ class ModulePart(ModuleResource):
                 f"{name}.method: {type(self.module).__name__} has no method "
                 f"{self._cfg.method!r}"
             )
+        self._frozen_module_names = freeze(self, self._cfg.frozen, f"{name}.frozen")
+        self.train(self.training)
+
+    def train(self, mode: bool = True) -> "ModulePart":
+        super().train(mode)
+        if mode and self._cfg.frozen_eval:
+            keep_frozen_in_eval(self, self._frozen_module_names)
+        return self
+
+    def setup(self, session: "Session") -> None:
+        super().setup(session)
+        # A prerequisite's own setup may have changed modes; settle them.
+        self.train(self.training)
 
     def _select_submodule(self, source: nn.Module) -> nn.Module:
         name = self._component_name()
@@ -176,26 +198,7 @@ class FineTunedModelConfig:
     backbone_output: Any = None
 
     def __post_init__(self):
-        # Only an empty list means "nothing frozen": `false`, `0` or a key
-        # left without a value is a mistake, not a request to train it all.
-        if isinstance(self.frozen, (list, tuple)) and not self.frozen:
-            self.frozen = ()
-        else:
-            self.frozen = tuple(parameter_patterns(self.frozen, "frozen"))
-        if self.frozen_eval is not None and not isinstance(self.frozen_eval, bool):
-            raise ValueError(
-                f"frozen_eval must be true or false; got {self.frozen_eval!r}"
-            )
-        if self.frozen_eval and not self.frozen:
-            raise ValueError(
-                "frozen_eval is true but nothing is frozen; list the frozen "
-                "parameters under `frozen`"
-            )
-        if self.frozen_eval is None:
-            # Frozen means frozen: BatchNorm statistics and dropout in a
-            # frozen block change nothing about its weights, but they do
-            # change what it computes.
-            self.frozen_eval = bool(self.frozen)
+        self.frozen, self.frozen_eval = freeze_options(self.frozen, self.frozen_eval)
         selector = self.backbone_output
         if not (
                 selector is None
@@ -309,47 +312,14 @@ class BackboneWithHead(ModuleResource):
     def _freeze(self) -> tuple[str, ...]:
         """Freeze the matching backbone parameters; return the backbone
         submodules left with no trainable parameter, outermost only."""
-        patterns = self._cfg.frozen
-        if not patterns:
-            return ()
-        named = list(self.backbone.named_parameters())
-        check_patterns_match(
-            patterns,
-            [parameter_name for parameter_name, _ in named],
-            f"{self._component_name()}.frozen",
+        return freeze(
+            self.backbone, self._cfg.frozen, f"{self._component_name()}.frozen",
         )
-        frozen = set()
-        for parameter_name, parameter in named:
-            if matches_any(parameter_name, patterns):
-                parameter.requires_grad_(False)
-                frozen.add(id(parameter))
-
-        def fully_frozen(module: nn.Module) -> bool:
-            parameters = list(module.parameters())
-            return bool(parameters) and all(
-                id(parameter) in frozen for parameter in parameters
-            )
-
-        if fully_frozen(self.backbone):
-            return ("",)
-        names: list[str] = []
-
-        def visit(module: nn.Module, prefix: str) -> None:
-            for child_name, child in module.named_children():
-                path = f"{prefix}{child_name}"
-                if fully_frozen(child):
-                    names.append(path)
-                else:
-                    visit(child, f"{path}.")
-
-        visit(self.backbone, "")
-        return tuple(names)
 
     def train(self, mode: bool = True) -> "BackboneWithHead":
         super().train(mode)
         if mode and self._cfg.frozen_eval:
-            for module_name in self._frozen_module_names:
-                self.backbone.get_submodule(module_name).eval()
+            keep_frozen_in_eval(self.backbone, self._frozen_module_names)
         return self
 
     def setup(self, session: "Session") -> None:

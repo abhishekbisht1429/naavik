@@ -95,6 +95,8 @@ wired to its blocks, say -- skip `module_part` and bind it directly
 |---|---|---|
 | `submodule` | `""` | Attribute path inside the `source`, e.g. `encoder.blocks`; `""` keeps the whole source |
 | `method` | `forward` | The method of the part that calling this resource calls, e.g. `forward_features` |
+| `frozen` | `[]` | Glob patterns over this component's parameter names (`module.<...>`); each must match. `[]` or omitted: nothing frozen |
+| `frozen_eval` | `true` when `frozen` is set | Keep frozen blocks of the part in eval mode |
 
 It requires `source`, a local dependency: an `nn.Module` resource, usually
 an imported one (`dependency_bindings: {source: <impl>#imported}`). The part is held under the attribute
@@ -107,9 +109,34 @@ weights, and `module_part` owns none. What the source holds outside the part
 anything that only calls `module_part`. To avoid that for a wired model,
 import just the component you want (key the import by its instance).
 
+### Freezing part of the part
+
+`frozen` and `frozen_eval` work exactly as they do on
+[`backbone_with_head`](#backbone_with_head) -- the same patterns, the same
+errors, frozen before `ddp` wraps the model, re-applied on every build --
+but on the part `module_part` holds, wherever it is used, not only as a
+backbone. The patterns match `module_part`'s own names, so they read the
+same here as in `backbone_with_head.frozen` with a `module_part` backbone:
+
+```yaml
+module_part:
+  dependency_bindings: {source: pretrain_model#imported}
+  submodule: encoder
+  frozen: ["module.layers.[0-5].*"]     # the first six layers
+```
+
+The parameters are the source's, so they are frozen for everything that
+uses the source -- another `module_part` of it included. Frozen blocks stay
+in eval mode when the model's mode is set through `module_part` (as
+`model.train()` does); a component holding the same source module directly
+sets its mode itself. Freezing in both `module_part` and
+`backbone_with_head` freezes both sets of parameters; each keeps its own
+frozen blocks in eval mode.
+
 Errors, all when the session is built: a missing attribute (the error lists
 the submodules that exist), something that is not an `nn.Module`, a missing
-`method`, and a `source` that is not an `nn.Module`.
+`method`, a `source` that is not an `nn.Module`, and a `frozen` pattern
+that matches nothing.
 
 ## `backbone_with_head`
 
