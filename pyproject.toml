@@ -34,7 +34,8 @@ vision = [
     "torchvision==0.28.0",
     "scipy",
 ]
-# Batch submission to HPC clusters (training_framework.hpc); packaging
+# Launching batches (training_framework.launcher; Slurm in
+# training_framework.hpc); packaging
 # evaluates pinned requirements and requires-python. 22.0 removed the
 # legacy (non-PEP 440) versions and specifiers the strict checks rely on.
 hpc = [
