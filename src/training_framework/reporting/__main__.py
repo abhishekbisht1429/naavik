@@ -21,8 +21,8 @@ EXIT_PROBLEMS = 1
 EXIT_ERROR = 2
 
 
-def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="python -m training_framework.reporting")
+def _parser(prog: str = "python -m training_framework.reporting") -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog=prog)
     commands = parser.add_subparsers(dest="command", required=True)
     summarize = commands.add_parser(
         "summarize",
@@ -123,8 +123,9 @@ def _summarize(args) -> int:
     return 0
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
+def main(argv: list[str] | None = None, prog: str | None = None) -> int:
+    """`prog`: the name shown in usage lines (`naavik` passes its own)."""
+    args = (_parser(prog) if prog else _parser()).parse_args(argv)
     try:
         return _summarize(args)
     except ReportError as error:

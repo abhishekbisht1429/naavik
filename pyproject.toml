@@ -27,6 +27,12 @@ dependencies = [
     "tensorboard>=2.20.0"
 ]
 
+[project.scripts]
+# One command for launching experiments and reading their results;
+# `navik` is the same command under its other common spelling.
+naavik = "training_framework.cli:main"
+navik = "training_framework.cli:main"
+
 [project.optional-dependencies]
 # Image datasets (training_framework.components.builtin.datasets); scipy
 # reads the Flowers102 and Stanford Cars annotations.

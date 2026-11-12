@@ -203,14 +203,22 @@ class Profile:
 
 
 def parse_profiles(raw: Any, selected: str | None, source: str) -> Profile:
-    """Select a profile from a profile file: `{default: <name>, profiles:
-    {<name>: {...}}}`; `selected` (from `--profile`) wins over `default`."""
+    """Select a profile from a target file: `{default: <name>, targets:
+    {<name>: {...}}}` (`profiles:` is the earlier name of `targets:`; a file
+    has exactly one of them); `selected` (from `--target`) wins over
+    `default`."""
     problems = Problems()
-    top = _Reader(raw, source, problems, {"default", "profiles"})
-    profiles = top.get("profiles", required=True)
+    top = _Reader(raw, source, problems, {"default", "profiles", "targets"})
+    keys = [key for key in ("targets", "profiles") if key in top.raw]
+    if len(keys) == 2:
+        problems.add(f"{source}: has both 'targets' and 'profiles' ('profiles' is the "
+                     "earlier name of 'targets'); keep one")
+        problems.raise_if_any()
+    entries_key = keys[0] if keys else "targets"
+    profiles = top.get(entries_key, required=True)
     if not isinstance(profiles, Mapping) or not profiles:
         if profiles is not None:
-            problems.add(f"{source}.profiles must be a non-empty mapping")
+            problems.add(f"{source}.{entries_key} must be a non-empty mapping")
         problems.raise_if_any()
     name = selected or top.string("default")
     if name is None:

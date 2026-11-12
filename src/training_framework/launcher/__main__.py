@@ -1,4 +1,6 @@
-"""`python -m training_framework.hpc <command>`."""
+"""The launcher's command line: `naavik <command>` (`training_framework.cli`),
+also `python -m training_framework.hpc <command>` and
+`python -m training_framework.launcher <command>`."""
 
 from __future__ import annotations
 
@@ -21,9 +23,30 @@ from training_framework.launcher.ports.repository import GitRepository
 from training_framework.launcher.ports.ssh import SSH_HINT, TransportError
 
 
-def default_profiles_path() -> Path:
+TARGETS_FILE = "targets.yaml"
+#: The target file's earlier name, still read when `targets.yaml` is absent.
+LEGACY_TARGETS_FILE = "hpc.yaml"
+
+
+def _config_dir() -> Path:
     base = os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
-    return Path(base) / "training-framework" / "hpc.yaml"
+    return Path(base) / "training-framework"
+
+
+def default_profiles_path() -> Path:
+    """The target file: `targets.yaml`, else the earlier `hpc.yaml` if only
+    that exists (with a note on stderr), else `targets.yaml` (to create)."""
+    directory = _config_dir()
+    current, legacy = directory / TARGETS_FILE, directory / LEGACY_TARGETS_FILE
+    if current.exists():
+        if legacy.exists():
+            print(f"note: {legacy} is ignored; targets are read from {current}", file=sys.stderr)
+        return current
+    if legacy.exists():
+        print(f"note: reading targets from {legacy}; rename it to {current} "
+              f"({LEGACY_TARGETS_FILE} is the earlier name)", file=sys.stderr)
+        return legacy
+    return current
 
 
 class HashProgress:
@@ -98,21 +121,29 @@ class WorkstationFacts:
         return self._summaries[path]
 
 
-def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="python -m training_framework.hpc")
+#: Command names kept as aliases, and the command they run.
+COMMAND_ALIASES = {"submit": "launch"}
+
+
+def _parser(prog: str = "python -m training_framework.hpc") -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog=prog)
     commands = parser.add_subparsers(dest="command", required=True)
 
     def profile_options(command):
-        command.add_argument("--profile", help="profile name (default: the file's 'default')")
-        command.add_argument("--profiles", type=Path,
-                             help="profile file (default: $XDG_CONFIG_HOME/training-framework/hpc.yaml)")
+        command.add_argument("--target", "--profile", dest="profile",
+                             help="target name (default: the target file's 'default'); "
+                                  "--profile is its earlier name")
+        command.add_argument("--targets", "--profiles", dest="profiles", type=Path,
+                             help="target file (default: $XDG_CONFIG_HOME/training-framework/"
+                                  "targets.yaml); --profiles is its earlier name")
 
     for name, help_text in (
             ("validate", "compile the batch and report every offline problem"),
             ("render", "write a preview of the batch directory"),
-            ("submit", "stage the batch on the cluster and submit its jobs"),
+            ("launch", "stage the batch on its target and start its jobs"),
     ):
-        command = commands.add_parser(name, help=help_text)
+        aliases = [old for old, new in COMMAND_ALIASES.items() if new == name]
+        command = commands.add_parser(name, help=help_text, aliases=aliases)
         command.add_argument("batch", help="path to the committed batch manifest")
         profile_options(command)
         if name == "validate":
@@ -204,7 +235,11 @@ def _parser() -> argparse.ArgumentParser:
 def _profile(args):
     path = args.profiles or default_profiles_path()
     if not path.exists():
-        raise HpcError(f"profile file {path} does not exist")
+        if args.profiles is None:
+            legacy = _config_dir() / LEGACY_TARGETS_FILE
+            raise HpcError(f"no target file: {path} does not exist (and the earlier "
+                           f"{legacy} does not exist either)")
+        raise HpcError(f"target file {path} does not exist")
     return parse_profiles(yaml.safe_load(path.read_text()), args.profile, str(path))
 
 
@@ -672,8 +707,11 @@ def _probe_python(profile) -> int:
     return 0
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
+def main(argv: list[str] | None = None, prog: str | None = None) -> int:
+    """`prog`: the name shown in usage lines (`naavik` passes its own)."""
+    args = (_parser(prog) if prog else _parser()).parse_args(argv)
+    # Dispatch on one name whichever was typed (`submit` is `launch`).
+    args.command = COMMAND_ALIASES.get(args.command, args.command)
     try:
         if args.command == "batches":
             return _batches(args)
@@ -688,7 +726,7 @@ def main(argv: list[str] | None = None) -> int:
             _require_tools("ssh")
         if args.command == "probe-python":
             return _probe_python(profile)
-        if args.command == "submit":
+        if args.command == "launch":
             return _submit(args, profile)
         compiled, _ = _compile(args, profile)
     except HpcError as error:  # includes PlanError, with every problem
