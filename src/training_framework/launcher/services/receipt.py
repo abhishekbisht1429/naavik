@@ -141,6 +141,14 @@ class Receipt:
         node["cancel"] = {"ok": ok, "detail": detail}
         self.save()
 
+    def task_cancelled(self, task: str, attempt: int | None, ok: bool, detail: str) -> None:
+        """One task's job element cancelled by `cancel --task` (its job, the
+        group's array, keeps running for the other tasks)."""
+        self.data.setdefault("cancelled_tasks", {})[task] = {
+            "attempt": attempt, "ok": ok, "detail": detail, "at": _now(),
+        }
+        self.save()
+
     def finish(self, status: str, error: str | None = None) -> None:
         if status not in FINAL_STATUSES:
             raise ValueError(status)

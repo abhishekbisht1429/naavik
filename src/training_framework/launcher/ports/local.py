@@ -33,6 +33,12 @@ class LocalExecutor:
         return ExecResult(result.returncode, result.stdout, result.stderr)
 
 
+    def stream(self, argv: list[str]) -> int:
+        """Run with the output going straight to this process's (`logs
+        --follow`); returns the exit status."""
+        return subprocess.run(list(argv), check=False).returncode
+
+
 class LocalFilesystem(StdlibFilesystem):
     """`RemoteFilesystem` on this machine (the stdlib implementation the
     bootstrap also uses), plus `stat`."""

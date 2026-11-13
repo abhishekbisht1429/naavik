@@ -31,7 +31,10 @@ from training_framework.launcher.remote.runtime import interpreter_identity
 SUPPORTED_PROTOCOL_VERSIONS = (EXECUTION_PROTOCOL_VERSION,)
 INTERRUPTED_EXIT = 75
 #: What this remote side can do beyond the protocol; `resume` checks for it.
-CAPABILITIES = ("resume",)
+CAPABILITIES = ("resume", "restart")
+#: `--resume` value of a later attempt that starts again from the config
+#: (the task had no checkpoint; `resume --restart`).
+RESTART = "-"
 
 
 def interpreter_facts() -> dict:
@@ -164,7 +167,11 @@ def run_task(config_path: str, record_path: str, plan_path: str,
     log(f"batch {plan['batch_id']} | commit {plan['sha'][:12]} | host {socket.gethostname()} | "
         f"GPUs {os.environ.get('CUDA_VISIBLE_DEVICES', 'not set')}")
     log(f"config {config_path}")
-    if resume:
+    restart = resume == RESTART
+    if restart:
+        log(f"attempt {attempt}: restarting from the config (no checkpoint to resume from)")
+        resume = None
+    elif resume:
         log(f"attempt {attempt}: resuming from {resume}")
     started = datetime.now(timezone.utc).isoformat()
     status, error = 0, None
@@ -199,6 +206,9 @@ def run_task(config_path: str, record_path: str, plan_path: str,
     }
     if resume:
         record["resumed_from"] = resume
+    if restart:
+        record["restarted"] = True
+    if resume or restart:
         record["previous_attempts"] = _previous_attempts(record_path)
     _write_atomic(record_path, record)
     outcome = "interrupted" if interrupted else ("ok" if status == 0 else "failed")

@@ -25,6 +25,9 @@ class RemoteExecutor(Protocol):
     def run(self, argv: list[str], context: ExecutionContext | None = None,
             timeout: float | None = None) -> ExecResult: ...
 
+    def stream(self, argv: list[str]) -> int:
+        """Run with the output going straight to this process's; the exit status."""
+
 
 @dataclass(frozen=True)
 class Stat:

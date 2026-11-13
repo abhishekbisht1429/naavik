@@ -24,6 +24,30 @@ DEFAULT_PROCESS_TIMEOUT_ON_JOIN = 30.0
 
 
 def check_topology(session: Mapping, resources: Resources) -> list[str]:
+    return _device_problems(session, resources) + _ddp_problems(session, resources)
+
+
+def _device_problems(session: Mapping, resources: Resources) -> list[str]:
+    """`session_config.device` against the GPUs the task will see: its
+    group's, renumbered from 0 (so `cuda:N` needs N < gpus), and none in a
+    group that asks for none. Caught here, not in the running task."""
+    config = session.get("session_config")
+    device = config.get("device") if isinstance(config, Mapping) else None
+    if not isinstance(device, str) or not device.startswith("cuda"):
+        return []
+    gpus = resources.gpus
+    if gpus == 0:
+        return [f"session_config.device is {device!r} but the group requests no GPUs"]
+    _, _, index = device.partition(":")
+    if index.isdigit() and int(index) >= gpus:
+        return [
+            f"session_config.device is {device!r} but the task sees only its group's "
+            f"{gpus} GPU(s), numbered from 0; use 'cuda' (or cuda:0..cuda:{gpus - 1})"
+        ]
+    return []
+
+
+def _ddp_problems(session: Mapping, resources: Resources) -> list[str]:
     gpus = resources.gpus
     if not framework.is_listed_component(session, "ddp"):
         if gpus > 1:

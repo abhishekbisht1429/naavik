@@ -191,6 +191,9 @@ def _parser(prog: str = "python -m training_framework.hpc") -> argparse.Argument
                              "and every task that ended without a record")
     resume.add_argument("--include-failed", action="store_true",
                         help="also resume failed tasks (fix the cause first)")
+    resume.add_argument("--restart", action="store_true",
+                        help="run tasks that have no checkpoint again from their config "
+                             "(default: skip them)")
     resume.add_argument("--checkpoint", action="append", default=[], metavar="NAME=PATH",
                         help="resume task NAME from this checkpoint instead of its latest")
     resume.add_argument("--walltime", help="walltime of the resumed tasks ([D-]HH:MM:SS)")
@@ -227,6 +230,31 @@ def _parser(prog: str = "python -m training_framework.hpc") -> argparse.Argument
     fetch.add_argument("--receipts", type=Path, help="receipt directory "
                        "(default: $XDG_STATE_HOME/training-framework/submissions)")
     profile_options(fetch)
+    cancel = commands.add_parser(
+        "cancel", help="stop a batch's queued and running jobs, or some of its tasks",
+        description="Cancel every job of a batch that is still queued or running, or (with "
+                    "--task) only those tasks' jobs. Running tasks get the scheduler's stop "
+                    "signal first; the receipt records what was cancelled.")
+    cancel.add_argument("batch_id", help="a batch id, or the path to its receipt")
+    cancel.add_argument("--task", action="append", default=[], metavar="NAME",
+                        help="cancel only this task (repeatable)")
+    cancel.add_argument("--yes", action="store_true", help="do not ask")
+    cancel.add_argument("--receipts", type=Path, help="receipt directory "
+                        "(default: $XDG_STATE_HOME/training-framework/submissions)")
+    profile_options(cancel)
+    logs = commands.add_parser(
+        "logs", help="show (or follow) the log of a task or step of a batch",
+        description="Print the job log of a task (<group>/<experiment>/<NNN>) or step (setup, "
+                    "prepare-...) of a batch, from its target; its latest attempt unless "
+                    "--attempt is given.")
+    logs.add_argument("batch_id", help="a batch id, or the path to its receipt")
+    logs.add_argument("task", help="a task name, or a step (setup, prepare-...)")
+    logs.add_argument("--attempt", type=int, help="this attempt's log (default: the latest)")
+    logs.add_argument("--follow", "-f", action="store_true",
+                      help="keep printing what is appended (Ctrl-C stops following, not the task)")
+    logs.add_argument("--receipts", type=Path, help="receipt directory "
+                      "(default: $XDG_STATE_HOME/training-framework/submissions)")
+    profile_options(logs)
     probe = commands.add_parser("probe-python",
                                 help="print the site interpreter's identity for the profile")
     profile_options(probe)
@@ -579,21 +607,28 @@ def _resume(args) -> int:
     checkpoints, configs = resuming.find_checkpoints(executor, batch_dir,
                                                      [c.task for c in candidates])
     resuming.choose_checkpoints(candidates, checkpoints, configs, explicit)
+    restarted = resuming.restart_without_checkpoint(candidates) if args.restart else []
     chosen = [c for c in candidates if c.reason is None]
     skipped = [c for c in candidates if c.reason is not None]
     for candidate in skipped:
         print(f"skip {candidate.task} ({candidate.state}): {candidate.reason}")
     if not chosen:
-        raise HpcError("nothing can be resumed (see above)")
+        hint = ("" if args.restart or not any(c.no_checkpoint for c in skipped) else
+                "; --restart runs tasks without a checkpoint again from their config")
+        raise HpcError(f"nothing can be resumed (see above){hint}")
     plan = resuming.read_plan(filesystem, batch_dir)
     dialect = resuming.plan_dialect(plan)
     attempt = resuming.build_attempt(plan, data, chosen, dialect, changes)
     attempt.skipped = skipped
     _progress("checking the batch's source, environment, and task entry point on the cluster")
-    resuming.check_cluster(plan, filesystem, executor)
+    resuming.check_cluster(plan, filesystem, executor, restart=bool(restarted))
 
     print(f"resume {data['batch_id']} as attempt {attempt.attempt}: {len(chosen)} task(s)")
     for candidate in chosen:
+        if candidate.restarts:
+            print(f"  {candidate.task:<30} {candidate.state:<24} restart from its config "
+                  "(no checkpoint)")
+            continue
         total = "?" if candidate.max_iterations is None else candidate.max_iterations
         relative = candidate.checkpoint.removeprefix(batch_dir + "/")
         print(f"  {candidate.task:<30} {candidate.state:<24} from iteration "
@@ -627,6 +662,79 @@ def _resume(args) -> int:
         raise
     print(f"resumed: attempt {entry['attempt']} of {data['batch_id']}")
     print(f"receipt: {path}")
+    return 0
+
+
+def _batch_files(args, receipt):
+    """(target, bundle, ports, files) of a launched batch, from where its
+    receipt says it went."""
+    from training_framework.launcher.ports.targets import ports_for
+    from training_framework.launcher.scheduler import get_scheduler
+    from training_framework.launcher.services.status import fetch_batches, missing_files
+
+    if not receipt.get("staged"):
+        raise HpcError(f"{receipt['batch_id']} never reached its target ({receipt.get('status')})")
+    host, scheduler, _ = _receipt_target(args, receipt)
+    _require_tools(*host.tools(transfer=False))
+    ports = ports_for(host)
+    files = fetch_batches(ports.executor, [receipt["batch_dir"]]).get(receipt["batch_dir"])
+    if problem := missing_files(receipt, files):
+        raise HpcError(f"{problem} on {host}")
+    return host, get_scheduler(scheduler), ports, files
+
+
+def _cancel(args) -> int:
+    from training_framework.launcher.services import control
+    from training_framework.launcher.services.receipt import Receipt
+
+    path, data = _load_receipt(args)
+    host, bundle, ports, files = _batch_files(args, data)
+    refs = [node["job_ref"] for node in data["nodes"].values() if node.get("job_ref")]
+    live = bundle.job_states(ports.executor)(refs) if bundle.job_states and refs else {}
+    chosen, notes = control.to_cancel(data, files.tables, args.task, live)
+    for note in notes:
+        print(f"skip {note}")
+    if not chosen:
+        print(f"nothing to cancel in {data['batch_id']}")
+        return 0
+    print(f"cancel in {data['batch_id']} on {host}:")
+    for item in chosen:
+        print(f"  {item.label:<30} job {item.job_ref}")
+    if not args.yes:
+        if not sys.stdin.isatty():
+            print("error: not interactive; pass --yes to cancel", file=sys.stderr)
+            return 1
+        if input("Cancel? [y/N] ").strip().lower() not in ("y", "yes"):
+            print("not cancelled")
+            return 1
+    receipt = Receipt(str(path), data)
+    receipt.mirror_to(ports.filesystem, f"{data['batch_dir']}/receipt.json")
+    submitter = bundle.submitter(ports.executor)
+    failed = 0
+    for item in chosen:
+        result = submitter.cancel(item.job_ref)
+        control.record_cancel(receipt, item, result.ok, result.detail)
+        print(f"{'cancelled' if result.ok else 'could not cancel'} {item.label}: {result.detail}")
+        failed += not result.ok
+    return 1 if failed else 0
+
+
+def _logs(args) -> int:
+    from training_framework.launcher.services import control
+
+    _, data = _load_receipt(args)
+    host, _, ports, files = _batch_files(args, data)
+    relative = control.log_path(data, files.tables, args.task, args.attempt)
+    path = f"{data['batch_dir']}/{relative}"
+    if args.follow:
+        try:
+            return ports.executor.stream(["tail", "-n", "+1", "-F", path])
+        except KeyboardInterrupt:
+            return 0                     # stops following; the task goes on
+    result = ports.executor.run(["cat", path])
+    if result.status != 0:
+        raise HpcError(f"no log at {host}:{path} yet ({result.stderr.strip()})")
+    sys.stdout.write(result.stdout)
     return 0
 
 
@@ -741,6 +849,10 @@ def main(argv: list[str] | None = None, prog: str | None = None) -> int:
             return _resume(args)
         if args.command == "fetch":
             return _fetch(args)
+        if args.command == "cancel":
+            return _cancel(args)
+        if args.command == "logs":
+            return _logs(args)
         profile = _profile(args)
         if args.command == "probe-python":
             from training_framework.launcher.ports.targets import target_of_profile

@@ -242,8 +242,8 @@ class Runner:
         os.makedirs(directory, exist_ok=True)
         log = open(self.directives["log"].format(job=self.ref, index=index), "ab")
         env = dict(os.environ, TF_HOST_TASK_INDEX=str(index), TF_HOST_JOB=self.ref)
-        if uuids is not None:
-            env["CUDA_VISIBLE_DEVICES"] = ",".join(uuids)
+        # Only its own GPUs: none at all for an element that asked for none.
+        env["CUDA_VISIBLE_DEVICES"] = ",".join(uuids or [])
         process = subprocess.Popen(["bash", self.script], stdin=subprocess.DEVNULL,
                                    stdout=log, stderr=subprocess.STDOUT, env=env,
                                    cwd=self.directives.get("chdir") or None,

@@ -65,6 +65,14 @@ class SshExecutor:
             raise TransportError(self.host, ssh_reason(stderr))
         return result.returncode, result.stdout, stderr
 
+    def stream(self, argv: list[str]) -> int:
+        """Run with the output going straight to this process's (`logs
+        --follow`); returns the exit status."""
+        status = subprocess.run(self._command(argv), check=False).returncode
+        if status == 255:
+            raise TransportError(self.host, "ssh exited 255")
+        return status
+
     def run(self, argv: list[str], context: ExecutionContext | None = None,
             timeout: float | None = None) -> ExecResult:
         if not argv:

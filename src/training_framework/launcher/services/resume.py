@@ -38,6 +38,8 @@ from training_framework.launcher.services.status import TERMINAL_STATES, Row, is
 
 #: Task states resumed by default; failed tasks only when named or asked for.
 DEFAULT_STATES = ("interrupted", "ended without a record")
+#: The checkpoint of a task that `--restart` runs again from its config.
+RESTART = "-"
 
 
 class ResumeError(HpcError):
@@ -54,6 +56,13 @@ class Candidate:
     iteration: int | None = None
     max_iterations: int | None = None
     reason: str | None = None           # why it cannot be resumed
+    #: True when the reason is only that there is no checkpoint to resume
+    #: from (`--restart` then runs the task again from its config).
+    no_checkpoint: bool = False
+
+    @property
+    def restarts(self) -> bool:
+        return self.checkpoint == RESTART
 
 
 @dataclass
@@ -158,6 +167,7 @@ def choose_checkpoints(candidates: list[Candidate], checkpoints, configs,
         else:
             found = newest(checkpoints.get(candidate.task, []))
             if found is None:
+                candidate.no_checkpoint = True
                 session = (config or {}).get("sessions", [{}])[0] if config else {}
                 if not _has_key(session, "checkpointer"):
                     candidate.reason = "no checkpoint: the task config has no checkpointer"
@@ -248,7 +258,16 @@ def plan_dialect(plan: dict):
     return bundle.dialect(settings)
 
 
-def check_cluster(plan: dict, filesystem, executor) -> None:
+def restart_without_checkpoint(candidates: list[Candidate]) -> list[Candidate]:
+    """`--restart`: the candidates with no checkpoint run again from their
+    config (a fresh session, as attempt N). Returns them."""
+    restarted = [candidate for candidate in candidates if candidate.no_checkpoint]
+    for candidate in restarted:
+        candidate.checkpoint, candidate.iteration, candidate.reason = RESTART, 0, None
+    return restarted
+
+
+def check_cluster(plan: dict, filesystem, executor, *, restart: bool = False) -> None:
     """The source, the environment, and a remote side that can resume."""
     batch_dir = plan["batch_dir"]
     if not filesystem.exists(f"{batch_dir}/source"):
@@ -272,9 +291,14 @@ def check_cluster(plan: dict, filesystem, executor) -> None:
         raise ResumeError("the environment cannot run training_framework.hpc.task "
                           f"(exit {result.status}): {result.stderr.strip()[-2000:]}") from None
     problems = preflight.compare(facts, plan["preflight"], f"{batch_dir}/source")
-    if "resume" not in (facts.get("capabilities") or []):
+    capabilities = facts.get("capabilities") or []
+    if "resume" not in capabilities:
         problems.append("the batch's training_framework.hpc predates resume (its task entry "
                         "point has no --resume); submit a new batch with a newer framework")
+    elif restart and "restart" not in capabilities:
+        problems.append("the batch's framework predates restarting a task without a "
+                        "checkpoint (--restart); resume only tasks with checkpoints, or submit "
+                        "a new batch with a newer framework")
     if problems:
         raise ResumeError("the cluster cannot resume this batch:\n"
                           + "\n".join(f"- {problem}" for problem in problems))

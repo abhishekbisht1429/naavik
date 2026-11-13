@@ -155,7 +155,14 @@ def latest_attempts(receipt: dict) -> dict[tuple[str, int], tuple[int, dict]]:
     return latest
 
 
-def _attempt_row(task, values, group, index, attempt, node, record, live) -> Row:
+def _cancelled(receipt: dict, task: str, attempt: int) -> bool:
+    """`cancel --task` stopped this task's job element in this attempt."""
+    entry = (receipt.get("cancelled_tasks") or {}).get(task)
+    return bool(entry and entry.get("ok") and (entry.get("attempt") or 1) == attempt)
+
+
+def _attempt_row(task, values, group, index, attempt, node, record, live,
+                 cancelled: bool = False) -> Row:
     suffix = f" (attempt {attempt})"
     element = f"{node.get('job_ref')}_{index}"
     if record and record.get("attempt", 1) >= attempt:
@@ -163,6 +170,8 @@ def _attempt_row(task, values, group, index, attempt, node, record, live) -> Row
         return Row(task, values, state, detail + suffix if detail else suffix.strip(" ()"))
     if element in live:
         return Row(task, values, live[element], f"job {element}{suffix}", True)
+    if cancelled:      # its element left the queue; the job may run on for others
+        return Row(task, values, "cancelled", suffix.strip(" ()"))
     if node.get("job_ref") in live:
         return Row(task, values, live[node["job_ref"]], f"job {node['job_ref']}{suffix}", True)
     if node["status"] == "submitted":
@@ -207,7 +216,7 @@ def task_rows(receipt: dict, files: BatchFiles | None, live: dict) -> list[Row]:
             if (group, int(index)) in attempts:
                 attempt, attempt_node = attempts[(group, int(index))]
                 rows.append(_attempt_row(task, values, group, index, attempt, attempt_node,
-                                         record, live))
+                                         record, live, _cancelled(receipt, task, attempt)))
                 continue
             element = f"{node.get('job_ref')}_{index}"
             if record:
@@ -215,6 +224,9 @@ def task_rows(receipt: dict, files: BatchFiles | None, live: dict) -> list[Row]:
             elif element in live:
                 rows.append(Row(task, values, live[element], f"job {element}", True))
                 continue
+            elif _cancelled(receipt, task, 1):
+                # Its element left the queue; the job may run on for others.
+                state, detail = "cancelled", ""
             elif node.get("job_ref") in live:
                 rows.append(Row(task, values, live[node["job_ref"]], f"job {node['job_ref']}", True))
                 continue
