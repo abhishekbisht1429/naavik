@@ -98,7 +98,8 @@ def current_process_owner():
 def current_owner(scheduler="slurm"):
     """The owner to record for this process: its scheduler job when it runs
     in one (checkable from any host), else the process itself."""
-    job = os.environ.get(JOB_SCHEDULERS[scheduler][0])
+    variable = JOB_SCHEDULERS[scheduler][0]
+    job = os.environ.get(variable) if variable else None
     if job:
         return {"job_ref": job}
     return current_process_owner()
@@ -157,6 +158,16 @@ class OwnerProbeRouter:
         return self.process_probe.is_alive(owner)
 
 
+class NoJobProbe:
+    """For a scheduler whose jobs cannot be checked from another host (the
+    `host` scheduler's runners): its steps are owned by their processes, so
+    no owner is ever a job of it."""
+
+    def is_alive(self, owner):
+        return None
+
+
 #: The remote side of the scheduler composition point: per scheduler, the
-#: variable holding the current job's ID and the job-liveness probe.
-JOB_SCHEDULERS = {"slurm": ("SLURM_JOB_ID", SlurmJobProbe)}
+#: variable holding the current job's ID (None: owners are processes) and
+#: the job-liveness probe.
+JOB_SCHEDULERS = {"slurm": ("SLURM_JOB_ID", SlurmJobProbe), "host": (None, NoJobProbe)}

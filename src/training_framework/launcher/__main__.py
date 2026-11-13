@@ -341,6 +341,13 @@ def _submit(args, profile) -> int:
     for note in plan.notes:
         print(f"note: {note}")
     ports = _cluster(profile)
+    from training_framework.launcher.scheduler import get_scheduler
+
+    bundle = get_scheduler(profile.scheduler)
+    if bundle.target_check is not None:
+        problems = bundle.target_check(ports["executor"], profile.scheduler_settings)
+        if problems:
+            raise HpcError("the target cannot run this batch:\n  " + "\n  ".join(problems))
     manifest = compiled.manifest
     stager = SourceStager(repository, ports["executor"], ports["transfer"],
                           manifest.source_strategy, manifest.source_url)

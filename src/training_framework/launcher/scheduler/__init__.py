@@ -37,6 +37,9 @@ class SchedulerBundle:
     #: (RemoteExecutor, settings) -> problems found on the target itself
     #: before anything is staged (None: nothing to check).
     target_check: Callable[[Any, Any], list[str]] | None = None
+    #: ExecutionPlan -> {path relative to the batch directory: content} the
+    #: scheduler needs staged with the plan (None: nothing).
+    extra_files: Callable[[Any], dict[str, str]] | None = None
 
 
 #: The scheduler of receipts and plans written before they recorded theirs:
@@ -104,7 +107,24 @@ class _Registry(dict):
         return self._factories.keys()
 
 
-SCHEDULERS = _Registry({"slurm": _slurm})
+def _host() -> SchedulerBundle:
+    from training_framework.launcher.scheduler import host, host_submitter
+
+    return SchedulerBundle(
+        name="host",
+        parse_settings=host.parse_settings,
+        dialect=host.HostDialect,
+        submitter=host_submitter.HostSubmitter,
+        owner_probe=host_submitter.owner_probe,
+        job_states=host_submitter.job_states,
+        user_job_states=host_submitter.user_job_states,
+        reconcile_hint=host_submitter.reconcile_hint,
+        target_check=host_submitter.target_check,
+        extra_files=host_submitter.extra_files,
+    )
+
+
+SCHEDULERS = _Registry({"slurm": _slurm, "host": _host})
 
 
 def get_scheduler(name: str) -> SchedulerBundle:

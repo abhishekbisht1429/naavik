@@ -15,6 +15,7 @@ from training_framework.launcher.ports import (
     SubmissionFailed,
     SubmissionUncertain,
 )
+from training_framework.launcher.ports.remote_probe import RemoteProcessProbe
 from training_framework.launcher.ports.ssh import TransportError
 
 _JOB_REF = re.compile(r"\A(\d+)(?:;\S+)?\Z")
@@ -59,7 +60,7 @@ class _Completed:
 
 class RemoteOwnerProbe:
     """`LeaseOwnerProbe` on the cluster: Slurm jobs via `squeue` (any host);
-    processes only when SSH lands on the owner's own host."""
+    processes through `RemoteProcessProbe`."""
 
     def __init__(self, executor):
         self.executor = executor
@@ -70,16 +71,7 @@ class RemoteOwnerProbe:
         if owner.job_ref is not None:
             return SlurmJobProbe(lambda argv: _Completed(self.executor.run(argv))).is_alive(
                 owner.as_json())
-        if owner.pid is None:
-            return None
-        result = self.executor.run(
-            ["sh", "-c", 'hostname; cat "/proc/$1/stat" 2>/dev/null || true', "sh", str(owner.pid)])
-        lines = result.stdout.splitlines()
-        if not lines or lines[0].strip() != owner.host:
-            return None
-        if len(lines) < 2 or ")" not in lines[1]:
-            return False
-        return lines[1].rsplit(")", 1)[1].split()[19] == owner.start_time
+        return RemoteProcessProbe(self.executor).is_alive(owner)
 
 
 def job_states(executor):

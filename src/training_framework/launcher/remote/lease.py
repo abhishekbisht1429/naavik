@@ -103,6 +103,28 @@ class Lease:
             self.filesystem.delete(self.lock)
             self.took_over = True
 
+    def try_acquire(self):
+        """Take the lease if it is free, without waiting: True when taken (a
+        dead owner's lease is taken over, `took_over` is set), False while a
+        live owner, or one this host cannot check, holds it."""
+        parent = self.lock.rsplit("/", 1)[0]
+        if parent:
+            self.filesystem.makedirs(parent)
+        for _ in range(2):            # once more after removing a dead owner's lock
+            if self.filesystem.mkdir_atomic(self.lock):
+                self.filesystem.write(self.lock + "/owner.json",
+                                      json.dumps(self.owner).encode())
+                self.held = True
+                return True
+            holder = self._holder()
+            if holder is None or self.probe.is_alive(holder) is not False:
+                return False          # being created, alive, or not checkable here
+            self.notify("taking over the lease from {}, which is no longer running".format(
+                json.dumps(holder, sort_keys=True)))
+            self.filesystem.delete(self.lock)
+            self.took_over = True
+        return False
+
     def release(self):
         if self.held:
             self.filesystem.delete(self.lock)

@@ -53,6 +53,8 @@ def plan_files(plan: ExecutionPlan, manifest_raw: dict) -> dict[str, str]:
     bundle = get_scheduler(plan.scheduler)
     for node in plan.nodes:
         files[script_path(bundle, node)] = node.script
+    if bundle.extra_files is not None:
+        files.update(bundle.extra_files(plan))
     return files
 
 
