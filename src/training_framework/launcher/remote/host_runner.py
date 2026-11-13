@@ -115,9 +115,22 @@ def gpu_uuids(pool):
     return [by_index[index] for index in pool]
 
 
+#: Memory in use (MiB) from which a GPU counts as busy: above what an idle
+#: GPU shows, far below what any training process holds.
+BUSY_MEMORY_MIB = 256
+
+
 def busy_uuids():
-    """GPUs with any compute process (anyone's)."""
-    return {line.split(",")[0].strip() for line in _nvidia_smi("compute-apps=gpu_uuid")}
+    """GPUs someone else is using: any compute process `nvidia-smi` lists, or
+    memory in use. Inside a container other containers' processes are not
+    listed, but the memory they hold is."""
+    busy = {line.split(",")[0].strip() for line in _nvidia_smi("compute-apps=gpu_uuid")}
+    for line in _nvidia_smi("gpu=uuid,memory.used"):
+        uuid, _, used = line.partition(",")
+        amount = used.strip().split(" ")[0]
+        if amount.isdigit() and int(amount) >= BUSY_MEMORY_MIB:
+            busy.add(uuid.strip())
+    return busy
 
 
 class Slots:

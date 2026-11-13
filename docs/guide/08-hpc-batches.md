@@ -124,9 +124,10 @@ targets:
   holds their UUIDs, numbered from 0 inside the task, so use `device: cuda`
   in the config); a task of a group without GPUs sees none. The pool's GPUs
   are shared by every batch on the machine and never given to two tasks at
-  once. With `busy_gpus: wait` (default) a GPU on which anyone else runs a
-  compute process is skipped until it is free; `busy_gpus: use` ignores
-  other processes.
+  once. With `busy_gpus: wait` (default) a GPU someone else is using is
+  skipped until it is free: one with a compute process `nvidia-smi` lists,
+  or with memory in use (other containers' processes are not listed, but
+  their memory is); `busy_gpus: use` ignores other users.
 - **Not enforced on a host:** `cpus` and `memory` are recorded, not
   limited.
 - **Before staging,** `launch` checks the target: `python3` 3.8 or newer

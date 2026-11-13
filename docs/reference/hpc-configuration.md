@@ -78,7 +78,7 @@ no value can add an extra `#SBATCH` line.
 | Key | Default | Meaning |
 |---|---|---|
 | `gpus` | `[]` | GPU indices (as `nvidia-smi` numbers them) that jobs may use, in the order they are tried. A group may not request more GPUs than the pool has. Each GPU is given to one task at a time across every batch on the machine. |
-| `busy_gpus` | `wait` | `wait`: skip a pool GPU on which any compute process runs (anyone's) until it is free; `use`: only the pool decides. |
+| `busy_gpus` | `wait` | `wait`: skip a pool GPU someone else is using (a compute process `nvidia-smi` lists, or 256 MiB or more of memory in use, which also shows other containers' processes) until it is free; `use`: only the pool decides. |
 
 The host scheduler takes no `scheduler_options`. It runs a runner with the
 target's `python3` (3.8 or newer, checked by `launch`), keeps its job state

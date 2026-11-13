@@ -40,6 +40,10 @@ if query == "--query-gpu=index,uuid":
 elif query == "--query-gpu=index":
     for index, _ in gpus:
         print(index)
+elif query == "--query-gpu=uuid,memory.used":
+    used = dict(item.split(":") for item in os.environ.get("FAKE_MEMORY", "").split(",") if item)
+    for _, uuid in gpus:
+        print("%s, %s MiB" % (uuid, used.get(uuid, "0")))
 elif query == "--query-compute-apps=gpu_uuid":
     path = os.environ.get("FAKE_BUSY")
     if path and os.path.exists(path):
@@ -200,6 +204,14 @@ def test_a_busy_gpu_is_skipped_with_wait_and_used_with_use(host, tmp_path):
     found = intervals(batch)
     assert found[("waits", 0)][2] == "GPU-b"
     assert found[("uses", 0)][2] == "GPU-a"
+
+
+def test_a_gpu_whose_memory_is_in_use_counts_as_busy(host, monkeypatch):
+    # Another container's process: not listed by nvidia-smi, but its memory is.
+    batch, started = host
+    monkeypatch.setenv("FAKE_MEMORY", "GPU-a:18000")
+    wait_final(submit(batch, started, job(batch, "waits", "true", gpus=1, busy="wait")))
+    assert intervals(batch)[("waits", 0)][2] == "GPU-b"
 
 
 def test_a_slot_held_by_a_dead_runner_is_taken_over(host):
