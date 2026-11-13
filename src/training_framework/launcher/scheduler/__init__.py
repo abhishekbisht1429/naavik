@@ -29,6 +29,31 @@ class SchedulerBundle:
     #: RemoteExecutor -> {job or array element id: state} of all the user's
     #: queued and running jobs, in one call.
     user_job_states: Callable[[Any], dict] | None = None
+    #: File name suffix of the rendered job scripts (Slurm: `.sbatch`).
+    script_suffix: str = ".sh"
+    #: Job name -> how to look for a job whose submission had an uncertain
+    #: outcome (it may exist without the receipt knowing its reference).
+    reconcile_hint: Callable[[str], str] = lambda job_name: f"look for a job named {job_name}"
+    #: (RemoteExecutor, settings) -> problems found on the target itself
+    #: before anything is staged (None: nothing to check).
+    target_check: Callable[[Any, Any], list[str]] | None = None
+
+
+#: The scheduler of receipts and plans written before they recorded theirs:
+#: Slurm was the only one.
+LEGACY_SCHEDULER = "slurm"
+
+
+def scheduler_of(data) -> SchedulerBundle:
+    """The scheduler a receipt or plan (as a mapping) names."""
+    return get_scheduler(data.get("scheduler") or LEGACY_SCHEDULER)
+
+
+def script_path(bundle: SchedulerBundle, node) -> str:
+    """Where a job node's script lives, relative to the batch directory."""
+    if node.kind == "task_set":
+        return f"groups/{node.group}/{node.id}{bundle.script_suffix}"
+    return f"nodes/{node.id}/{node.id}{bundle.script_suffix}"
 
 
 def _slurm() -> SchedulerBundle:
@@ -42,6 +67,8 @@ def _slurm() -> SchedulerBundle:
         owner_probe=slurm_submitter.RemoteOwnerProbe,
         job_states=slurm_submitter.job_states,
         user_job_states=slurm_submitter.user_job_states,
+        script_suffix=".sbatch",
+        reconcile_hint=slurm_submitter.reconcile_hint,
     )
 
 

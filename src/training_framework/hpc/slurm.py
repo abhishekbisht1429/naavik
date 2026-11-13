@@ -13,6 +13,7 @@ from collections.abc import Mapping
 
 from training_framework.launcher.compile.plan import JobNode
 from training_framework.launcher.ports.shell import launched, render_context
+from training_framework.launcher.scheduler.common import task_body
 from dataclasses import dataclass
 
 from training_framework.launcher.config.schema import Resources
@@ -176,33 +177,5 @@ class SlurmDialect:
 
 def _task_body(batch_dir: str, group: str, command: list[str],
                resume_table: str | None = None) -> list[str]:
-    table = shlex.quote(f"{batch_dir}/groups/{group}/tasks.tsv")
-    run = shlex.join(command)
-    for name in ("config", "record", "checkpoint"):
-        run = run.replace(f"'{{{name}}}'", f'"${name}"').replace(f"{{{name}}}", f'"${name}"')
-    lookup = []
-    if resume_table:
-        lookup = [
-            f"checkpoint=$(awk -F'\\t' -v i=\"$SLURM_ARRAY_TASK_ID\" "
-            f"'NR > 1 && $1 == i {{print $3}}' {shlex.quote(resume_table)})",
-            '[ -n "$checkpoint" ] || { echo "no checkpoint for array index $SLURM_ARRAY_TASK_ID" >&2; exit 2; }',
-        ]
-    return [
-        f"config={shlex.quote(batch_dir)}/$(awk -F'\\t' -v i=\"$SLURM_ARRAY_TASK_ID\" "
-        f"'NR > 1 && $1 == i {{print $4}}' {table})",
-        'record="$(dirname "$config")/record.json"',
-        *lookup,
-        "interrupted=0",
-        "child=''",
-        'log() { echo "[hpc $(date -u +%Y-%m-%dT%H:%M:%SZ)] $*"; }',
-        'on_signal() { interrupted=1; log "received the scheduler advance signal; stopping the task cooperatively"; '
-        '[ -n "$child" ] && kill -INT "$child" 2>/dev/null || true; }',
-        "trap on_signal USR1",
-        "set +e",
-        f"{run} &",
-        "child=$!",
-        'while true; do wait "$child"; status=$?; kill -0 "$child" 2>/dev/null || break; done',
-        'log "task process exited with status $status"',
-        'if [ "$interrupted" -eq 1 ]; then exit 75; fi',
-        'exit "$status"',
-    ]
+    """A task-set element's lines, indexed by Slurm's array variable."""
+    return task_body(batch_dir, group, command, "SLURM_ARRAY_TASK_ID", resume_table)

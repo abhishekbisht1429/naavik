@@ -206,7 +206,7 @@ def _parser(prog: str = "python -m training_framework.hpc") -> argparse.Argument
     fetch = commands.add_parser(
         "fetch", help="download a batch's results (records, logs, run files, checkpoints)",
         description="Download the results of a batch's tasks to this machine: records, "
-                    "configs, run directories (TensorBoard events, outputs), Slurm logs, and "
+                    "configs, run directories (TensorBoard events, outputs), job logs, and "
                     "the latest complete checkpoint of each task. Running it again copies "
                     "only what is new.")
     fetch.add_argument("batch_id", help="a batch id, or the path to its receipt")
@@ -218,7 +218,7 @@ def _parser(prog: str = "python -m training_framework.hpc") -> argparse.Argument
                             "all: also tasks still queued or running")
     fetch.add_argument("--checkpoints", choices=("latest", "all", "none"), default="latest",
                        help="which checkpoints of each task (default: latest complete one)")
-    fetch.add_argument("--no-logs", action="store_true", help="skip the Slurm logs")
+    fetch.add_argument("--no-logs", action="store_true", help="skip the job logs")
     fetch.add_argument("--include", action="append", default=[], metavar="GLOB",
                        help="also fetch files matching GLOB, relative to the batch directory")
     fetch.add_argument("--yes", action="store_true", help="do not ask, even for large downloads")
@@ -263,19 +263,19 @@ def _compile(args, profile, fresh_env=False):
 
 def _cluster(profile):
     from training_framework.launcher.ports.local import LocalProcessProbe
-    from training_framework.launcher.ports.ssh import RsyncTransfer, SshExecutor, SshFilesystem
+    from training_framework.launcher.ports.targets import ports_for, target_of_profile
     from training_framework.launcher.scheduler import get_scheduler
     from training_framework.launcher.services.artifacts import WorkstationProbe
 
-    executor = SshExecutor(profile.ssh_host)
+    # A terminal shows the transfer's own live line; elsewhere (an IDE
+    # console, a log) a timestamped line every 30s, or a long upload looks hung.
+    ports = ports_for(target_of_profile(profile), progress=_progress)
+    executor = ports.executor
     scheduler = get_scheduler(profile.scheduler)
     return {
         "executor": executor,
-        "filesystem": SshFilesystem(executor),
-        # A terminal shows rsync's own live line; elsewhere (an IDE console,
-        # a log) a timestamped line every 30s, or a long upload looks hung.
-        "transfer": (RsyncTransfer(profile.ssh_host, show_progress=True) if sys.stderr.isatty()
-                     else RsyncTransfer(profile.ssh_host, report=_progress)),
+        "filesystem": ports.filesystem,
+        "transfer": ports.transfer,
         "submitter": scheduler.submitter(executor),
         "probe": WorkstationProbe(scheduler.owner_probe(executor), LocalProcessProbe()),
     }
@@ -332,7 +332,9 @@ def _submit(args, profile) -> int:
     from training_framework.launcher.services.staging import SourceStager
     from training_framework.launcher.services.submit import submit
 
-    _require_tools("ssh", "rsync")
+    from training_framework.launcher.ports.targets import target_of_profile
+
+    _require_tools(*target_of_profile(profile).tools(transfer=True))
     compiled, repository = _compile(args, profile, fresh_env=args.fresh_env)
     plan = compiled.plan
     for note in plan.notes:
@@ -395,26 +397,30 @@ def _load_receipt(args) -> tuple[Path, dict]:
     return path, receipt
 
 
-def _receipt_cluster(args, receipt: dict):
-    """(ssh host, scheduler, profile or None) for a receipt: the cluster it
-    went to. A profile is read only for older receipts that do not record
-    it, or when named; a named profile must point at the receipt's cluster."""
-    host, scheduler = receipt.get("ssh_host"), receipt.get("scheduler") or "slurm"
+def _receipt_target(args, receipt: dict):
+    """(target, scheduler, profile or None) for a receipt: where its batch
+    went. A profile is read only for older receipts that do not record it,
+    or when named; a named profile must point at the receipt's target."""
+    from training_framework.launcher.ports.targets import target_of_profile, target_of_receipt
+    from training_framework.launcher.scheduler import LEGACY_SCHEDULER
+
+    target, scheduler = target_of_receipt(receipt), receipt.get("scheduler") or LEGACY_SCHEDULER
     profile = None
-    if host is None or args.profile or args.profiles:
+    if target is None or args.profile or args.profiles:
         profile = _profile(args)
-        if host is None:
-            host, scheduler = profile.ssh_host, profile.scheduler
-        elif (profile.ssh_host, profile.scheduler) != (host, scheduler):
+        named = target_of_profile(profile)
+        if target is None:
+            target, scheduler = named, profile.scheduler
+        elif (named, profile.scheduler) != (target, scheduler):
             raise HpcError(
-                f"{receipt['batch_id']} was submitted to {host} ({scheduler}), but profile "
-                f"'{profile.name}' is {profile.ssh_host} ({profile.scheduler}); drop --profile "
+                f"{receipt['batch_id']} was submitted to {target} ({scheduler}), but profile "
+                f"'{profile.name}' is {named} ({profile.scheduler}); drop --profile "
                 "to use the receipt's cluster")
-    return host, scheduler, profile
+    return target, scheduler, profile
 
 
 def _status(args) -> int:
-    from training_framework.launcher.ports.ssh import SshExecutor
+    from training_framework.launcher.ports.targets import ports_for
     from training_framework.launcher.scheduler import get_scheduler
     from training_framework.launcher.services.status import (
         fetch_batches,
@@ -424,10 +430,10 @@ def _status(args) -> int:
     )
 
     _, receipt = _load_receipt(args)
-    # The batch went where its receipt says (see _receipt_cluster).
-    host, scheduler, _ = _receipt_cluster(args, receipt)
-    _require_tools("ssh")
-    executor = SshExecutor(host)
+    # The batch went where its receipt says (see _receipt_target).
+    host, scheduler, _ = _receipt_target(args, receipt)
+    _require_tools(*host.tools(transfer=False))
+    executor = ports_for(host).executor
     bundle = get_scheduler(scheduler)
     refs = [node["job_ref"] for node in receipt["nodes"].values() if node.get("job_ref")]
     live = bundle.job_states(executor)(refs) if bundle.job_states and refs else {}
@@ -440,7 +446,7 @@ def _status(args) -> int:
 
 
 def _batches(args) -> int:
-    from training_framework.launcher.ports.ssh import SshExecutor
+    from training_framework.launcher.ports.targets import Target, ports_for, target_of_profile
     from training_framework.launcher.scheduler import get_scheduler
     from training_framework.launcher.services import batches as listing
     from training_framework.launcher.services.receipt import default_receipts_dir
@@ -464,7 +470,7 @@ def _batches(args) -> int:
     views = listing.load_receipts(receipts_dir)
 
     def connect(ssh_host: str, scheduler: str):
-        executor = SshExecutor(ssh_host)
+        executor = ports_for(Target("ssh", ssh_host)).executor
         bundle = get_scheduler(scheduler)
         return executor, (lambda: bundle.user_job_states(executor)) if bundle.user_job_states else None
 
@@ -472,7 +478,7 @@ def _batches(args) -> int:
         if profile is None:
             raise HpcError("--remote needs a profile (it lists the profile's roots.batches)")
         known = {view.batch_id for view in views}
-        executor = SshExecutor(profile.ssh_host)
+        executor = ports_for(target_of_profile(profile)).executor
         for receipt in listing.remote_receipts(executor, profile.roots["batches"]):
             if receipt["batch_id"] not in known:
                 views.append(listing.BatchView(receipt, "cluster"))
@@ -496,7 +502,7 @@ def _batches(args) -> int:
         except HpcError:
             selected = None
         if selected is not None:
-            SshExecutor(selected.ssh_host).run(["true"])        # raises TransportError
+            ports_for(target_of_profile(selected)).executor.run(["true"])   # raises TransportError
     if args.json:
         print(json.dumps(listing.as_json(views, tasks=args.tasks), indent=2))
     else:
@@ -515,7 +521,7 @@ def _batches(args) -> int:
 
 
 def _resume(args) -> int:
-    from training_framework.launcher.ports.ssh import SshExecutor, SshFilesystem
+    from training_framework.launcher.ports.targets import ports_for
     from training_framework.launcher.scheduler import get_scheduler
     from training_framework.launcher.services import resume as resuming
     from training_framework.launcher.services.receipt import Receipt
@@ -535,12 +541,12 @@ def _resume(args) -> int:
                            f"{attempt.get('error')}; resolve it before resuming again")
     # The receipt names the cluster; the plan holds the scheduler settings the
     # batch was rendered with, so the current profile does not matter.
-    host, scheduler, _ = _receipt_cluster(args, data)
+    host, scheduler, _ = _receipt_target(args, data)
     changes = resuming.ResourceChanges(args.walltime, args.cpus, args.memory, args.max_parallel)
     changes.check()
-    _require_tools("ssh")
-    executor = SshExecutor(host)
-    filesystem = SshFilesystem(executor)
+    _require_tools(*host.tools(transfer=False))
+    ports = ports_for(host)
+    executor, filesystem = ports.executor, ports.filesystem
     bundle = get_scheduler(scheduler)
     batch_dir = data["batch_dir"]
 
@@ -616,7 +622,7 @@ def _resume(args) -> int:
 
 
 def _fetch(args) -> int:
-    from training_framework.launcher.ports.ssh import RsyncTransfer, SshExecutor
+    from training_framework.launcher.ports.targets import ports_for
     from training_framework.launcher.scheduler import get_scheduler
     from training_framework.launcher.services import fetch as fetching
     from training_framework.launcher.services.resume import task_index
@@ -626,9 +632,10 @@ def _fetch(args) -> int:
     if not receipt.get("staged"):
         raise HpcError(f"{receipt['batch_id']} never reached the cluster ({receipt.get('status')}); "
                        "there is nothing to fetch")
-    host, scheduler, _ = _receipt_cluster(args, receipt)
-    _require_tools("ssh", "rsync")
-    executor = SshExecutor(host)
+    host, scheduler, _ = _receipt_target(args, receipt)
+    _require_tools(*host.tools(transfer=True))
+    ports = ports_for(host, progress=_progress)
+    executor = ports.executor
     bundle = get_scheduler(scheduler)
     batch_dir = receipt["batch_dir"]
     live = bundle.user_job_states(executor) if bundle.user_job_states else {}
@@ -664,8 +671,7 @@ def _fetch(args) -> int:
         if input(f"Download {_size(to_fetch)}? [y/N] ").strip().lower() not in ("y", "yes"):
             print("not fetched")
             return 1
-    transfer = (RsyncTransfer(host, show_progress=True) if sys.stderr.isatty()
-                else RsyncTransfer(host, report=_progress))
+    transfer = ports.transfer
     summary = transfer.fetch(batch_dir, sorted(listing), str(local_root))
     verified = {}
     for task in tasks:
@@ -674,7 +680,7 @@ def _fetch(args) -> int:
             verified[relative] = problems
             for problem in problems:
                 print(f"warning: checkpoint {relative}: {problem}", file=sys.stderr)
-    index = fetching.write_index(str(local_root), receipt, host, tasks, verified, summary)
+    index = fetching.write_index(str(local_root), receipt, str(host), tasks, verified, summary)
     bad = sum(1 for problems in verified.values() if problems)
     print(f"fetched {summary.fetched} of {summary.files} file(s) ({_size(summary.bytes)}); "
           f"{summary.files - summary.fetched} were already here")
@@ -723,7 +729,9 @@ def main(argv: list[str] | None = None, prog: str | None = None) -> int:
             return _fetch(args)
         profile = _profile(args)
         if args.command == "probe-python":
-            _require_tools("ssh")
+            from training_framework.launcher.ports.targets import target_of_profile
+
+            _require_tools(*target_of_profile(profile).tools(transfer=False))
         if args.command == "probe-python":
             return _probe_python(profile)
         if args.command == "launch":

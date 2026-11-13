@@ -308,7 +308,7 @@ def summarize(receipt: dict, rows: list[Row]) -> str:
                     if not is_task(row, receipt) and _short(row.state) == "failed"]
     active = [row.state for row in rows if row.live and row.state not in TERMINAL_STATES]
     if status == "needs reconciliation":
-        # An sbatch had an uncertain outcome: never call this batch finished.
+        # A submission had an uncertain outcome: never call this batch finished.
         phase = "needs reconciliation"
     elif not active:
         phase = "finished"

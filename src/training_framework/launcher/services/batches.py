@@ -17,6 +17,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
+from training_framework.launcher.scheduler import LEGACY_SCHEDULER
 from training_framework.launcher.services.status import (
     Row,
     fetch_batches,
@@ -148,7 +149,7 @@ def add_live_state(views: list[BatchView], connect, fallback=None) -> None:
             view.problem = view.receipt.get("error")
             continue
         if view.receipt.get("ssh_host"):
-            cluster = (view.receipt["ssh_host"], view.receipt.get("scheduler") or "slurm")
+            cluster = (view.receipt["ssh_host"], view.receipt.get("scheduler") or LEGACY_SCHEDULER)
         else:
             cluster, error = fallback_cluster()
             if cluster is None:

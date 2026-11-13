@@ -48,11 +48,11 @@ def plan_files(plan: ExecutionPlan, manifest_raw: dict) -> dict[str, str]:
         files[f"{task.directory}/variant.json"] = json.dumps(list(task.variant), indent=2) + "\n"
     for group, rows in tables.items():
         files[f"groups/{group}/tasks.tsv"] = "\n".join(rows) + "\n"
+    from training_framework.launcher.scheduler import get_scheduler, script_path
+
+    bundle = get_scheduler(plan.scheduler)
     for node in plan.nodes:
-        if node.kind == "task_set":
-            files[f"groups/{node.group}/{node.id}.sbatch"] = node.script
-        else:
-            files[f"nodes/{node.id}/{node.id}.sbatch"] = node.script
+        files[script_path(bundle, node)] = node.script
     return files
 
 

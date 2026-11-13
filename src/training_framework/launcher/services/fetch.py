@@ -2,7 +2,7 @@
 
 For each selected task: its record, config, and matrix values, its run
 directory without checkpoints (TensorBoard events, dumped configs, component
-outputs), its chosen checkpoint(s), and the Slurm logs of every attempt;
+outputs), its chosen checkpoint(s), and the job logs of every attempt;
 plus the batch's plan, receipt, and task tables. Files keep their paths
 relative to the batch directory under `<dest>/<batch-id>/`. The file list
 is built in one remote command and copied with one resumable transfer, so
@@ -77,7 +77,7 @@ def select(receipt: dict, rows: list[Row], index: dict[str, tuple[str, int]],
 
 
 def logs_for(receipt: dict, group: str, index: int) -> list[str]:
-    """The Slurm log of the task in every attempt that ran it."""
+    """The job log of the task in every attempt that ran it."""
     logs = []
     for node_id, node in receipt["nodes"].items():
         ref = node.get("job_ref")
@@ -146,7 +146,7 @@ def plan_files(executor, batch_dir: str, tasks: list[FetchTask], checkpoints: st
 
 def add_logs(executor, batch_dir: str, receipt: dict, tasks: list[FetchTask],
              files: dict[str, int]) -> None:
-    """Add each task's Slurm logs (every attempt) that exist on the cluster."""
+    """Add each task's job logs (every attempt) that exist on the target."""
     wanted = {}
     for task in tasks:
         task.logs = logs_for(receipt, task.group, task.index)

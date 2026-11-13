@@ -20,6 +20,12 @@ from training_framework.launcher.ports.ssh import TransportError
 _JOB_REF = re.compile(r"\A(\d+)(?:;\S+)?\Z")
 
 
+def reconcile_hint(job_name: str) -> str:
+    """How to find a job whose `sbatch` had an uncertain outcome: job names
+    are deterministic (`<batch-id>.<node-id>`) for exactly this."""
+    return f"squeue --name={job_name}  (or sacct --name={job_name})"
+
+
 class SlurmSubmitter:
     def __init__(self, executor):
         self.executor = executor

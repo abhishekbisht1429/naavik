@@ -27,6 +27,7 @@ from training_framework.launcher.ports import (
     SubmissionUncertain,
 )
 from training_framework.launcher.remote import preflight
+from training_framework.launcher.scheduler import get_scheduler, scheduler_of, script_path
 from training_framework.launcher.services import receipt as receipts
 from training_framework.launcher.services.artifacts import DataPreparer, DataUploader, EnvironmentCache
 from training_framework.launcher.services.receipt import Receipt
@@ -138,8 +139,13 @@ def submit(
         raise
 
 
+def _reconcile_hint(receipt: Receipt, job_name: str) -> str:
+    """The receipt's scheduler's way of finding a job by name."""
+    return scheduler_of(receipt.data).reconcile_hint(job_name)
+
+
 def _record_interrupt(receipt: Receipt, submitter: SchedulerSubmitter) -> None:
-    """Ctrl-C: no partial batch is left running. An `sbatch` that was in
+    """Ctrl-C: no partial batch is left running. A submission that was in
     flight may or may not have been accepted, so it needs reconciliation."""
     if receipt.status in receipts.FINAL_STATUSES:
         return
@@ -152,7 +158,7 @@ def _record_interrupt(receipt: Receipt, submitter: SchedulerSubmitter) -> None:
         name = receipt.node(in_flight[0])["job_name"]
         receipt.finish(receipts.NEEDS_RECONCILIATION,
                        f"interrupted while submitting {in_flight[0]}; check with: "
-                       f"squeue --name={name}  (or sacct --name={name})")
+                       f"{_reconcile_hint(receipt, name)}")
     else:
         receipt.finish(receipts.FAILED, "interrupted (Ctrl-C); no jobs left submitted")
 
@@ -190,7 +196,7 @@ def _submit(plan, manifest_raw, receipt, environment, preparer, uploader, stager
         if not filesystem.mkdir_atomic(plan.batch_dir):
             raise HpcError(f"{plan.batch_dir} already exists; batch directories are never reused")
         receipt.mirror_to(filesystem, f"{plan.batch_dir}/receipt.json")
-        # Slurm does not create --output directories (only some versions do).
+        # Schedulers need not create their log directories (some Slurm versions do not).
         for node in plan.nodes:
             filesystem.makedirs(f"{plan.batch_dir}/logs/{node.group or node.id}")
         progress(f"staging commit {plan.sha[:12]} into {plan.batch_dir}")
@@ -250,9 +256,7 @@ def _submit(plan, manifest_raw, receipt, environment, preparer, uploader, stager
     for node in plan.nodes:
         if node.id in skipped:
             continue
-        script = (f"{plan.batch_dir}/groups/{node.group}/{node.id}.sbatch"
-                  if node.kind == "task_set" else
-                  f"{plan.batch_dir}/nodes/{node.id}/{node.id}.sbatch")
+        script = f"{plan.batch_dir}/{script_path(get_scheduler(plan.scheduler), node)}"
         receipt.node_submitting(node.id)
         try:
             job_ref = submitter.submit(
@@ -264,7 +268,7 @@ def _submit(plan, manifest_raw, receipt, environment, preparer, uploader, stager
             receipt.finish(
                 receipts.NEEDS_RECONCILIATION,
                 f"submitting {node.id} had an uncertain outcome ({error}); "
-                f"check with: squeue --name={name}  (or sacct --name={name})",
+                f"check with: {_reconcile_hint(receipt, name)}",
             )
             raise HpcError(receipt.data["error"]) from error
         except SubmissionFailed as error:

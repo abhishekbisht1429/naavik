@@ -1,5 +1,5 @@
 """Cluster adapters over the user's OpenSSH: executor, filesystem, and
-rsync transfer (Slurm-specific adapters live in `scheduler/`).
+rsync transfer (Slurm-specific adapters live in `training_framework.hpc`).
 
 SSH uses the user's own configuration, agent, host keys, and control
 connections; nothing is stored and MFA is never automated (`BatchMode=yes`

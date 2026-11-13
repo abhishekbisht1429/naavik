@@ -28,6 +28,7 @@ from training_framework.launcher.errors import HpcError
 from training_framework.launcher.ports import SubmissionFailed, SubmissionUncertain
 from training_framework.launcher.remote import preflight
 from training_framework.launcher.remote.lease import KeyMismatch, check_marker
+from training_framework.launcher.scheduler import get_scheduler, scheduler_of, script_path
 from training_framework.launcher.services.checkpoints import (
     FoundCheckpoint,
     find_checkpoints,
@@ -234,7 +235,6 @@ def plan_dialect(plan: dict):
     (account, QoS, partitions...), not the profile's current ones."""
     from training_framework.launcher.config.schema import _Reader
     from training_framework.launcher.errors import Problems
-    from training_framework.launcher.scheduler import get_scheduler
 
     raw = plan.get("scheduler_settings")
     if not raw:
@@ -354,7 +354,7 @@ def build_attempt(plan: dict, receipt: dict, chosen: list[Candidate], dialect,
                                 resume_table=table_path)
         result.groups.append(GroupAttempt(
             group, node, tasks, table_path, table,
-            f"{batch_dir}/groups/{group}/{node.id}.sbatch", script,
+            f"{batch_dir}/{script_path(scheduler_of(plan), node)}", script,
         ))
     return result
 
@@ -394,6 +394,7 @@ def submit_attempt(receipt, plan: ResumePlan, filesystem, submitter, *,
         raise ResumeError(f"could not write attempt {plan.attempt}'s job scripts to the cluster: "
                           f"{type(error).__name__}: {error}; nothing was submitted") from error
     data = receipt.data
+    hint = scheduler_of(data).reconcile_hint
     data.setdefault("attempts", []).append(entry)
     for g in plan.groups:
         data["nodes"][g.node.id] = {
@@ -432,7 +433,7 @@ def submit_attempt(receipt, plan: ResumePlan, filesystem, submitter, *,
         cancel_submitted()
         name = data["nodes"][current]["job_name"]
         finish("needs reconciliation", f"submitting {current} had an uncertain outcome ({error}); "
-                                       f"check with: squeue --name={name}")
+                                       f"check with: {hint(name)}")
         raise ResumeError(entry["error"]) from error
     except SubmissionFailed as error:
         data["nodes"][current]["status"] = "refused"
@@ -440,7 +441,7 @@ def submit_attempt(receipt, plan: ResumePlan, filesystem, submitter, *,
         finish("failed", f"submitting {current} failed: {error}")
         raise ResumeError(entry["error"]) from error
     except Exception as error:
-        # Anything else (a transport error, a bug): the sbatch in flight may
+        # Anything else (a transport error, a bug): the submission in flight may
         # or may not have been accepted.
         if current is not None:
             receipt.node_unknown(current)
@@ -449,7 +450,7 @@ def submit_attempt(receipt, plan: ResumePlan, filesystem, submitter, *,
         name = data["nodes"][current]["job_name"] if current else None
         finish("needs reconciliation" if current else "failed",
                f"{where} failed unexpectedly ({type(error).__name__}: {error})"
-               + (f"; check with: squeue --name={name}" if name else ""))
+               + (f"; check with: {hint(name)}" if name else ""))
         raise ResumeError(entry["error"]) from error
     except KeyboardInterrupt:
         if current is not None:
@@ -457,7 +458,7 @@ def submit_attempt(receipt, plan: ResumePlan, filesystem, submitter, *,
         cancel_submitted()
         if current is not None:
             finish("needs reconciliation", f"interrupted while submitting {current}; check with: "
-                                           f"squeue --name={data['nodes'][current]['job_name']}")
+                                           f"{hint(data['nodes'][current]['job_name'])}")
         else:
             finish("failed", "interrupted (Ctrl-C); no jobs of this attempt left submitted")
         raise
