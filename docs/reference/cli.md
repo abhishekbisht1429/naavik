@@ -57,6 +57,25 @@ The stop-sync grace period must be a finite non-negative value. The poll
 interval must be finite and greater than zero. These are process-runtime
 settings and are not written into session configuration or checkpoints.
 
+## The `naavik` command
+
+Everything above is your own training entry point. Launching batches and
+reading results is one separate command, installed with the package as
+`naavik` (also `navik`; or `python -m training_framework.cli`):
+
+| Command | Does | Guide |
+|---|---|---|
+| `naavik validate / render / launch MANIFEST` | check, preview, or launch a batch | [Running batches](../guide/08-hpc-batches.md) |
+| `naavik batches / status / resume / fetch` | follow, continue, and collect batches | [Running batches](../guide/08-hpc-batches.md#7-keeping-track-of-your-batches) |
+| `naavik probe-python` | print a site interpreter's identity | [Running batches](../guide/08-hpc-batches.md#1-the-profile-site-settings-on-your-machine) |
+| `naavik summarize ROOT...` | compare runs | [Comparing runs](../guide/12-comparing-runs.md) |
+
+`naavik <command> --help` lists every option. The earlier entry points run
+the same code: `python -m training_framework.hpc <command>` and
+`python -m training_framework.reporting summarize`. `launch` was called
+`submit`, and `--target`/`--targets` were `--profile`/`--profiles`; the old
+names are kept as aliases.
+
 ## Run summaries
 
 `summarize` is a separate program, not a flag of your training entry point:
@@ -64,7 +83,8 @@ it reads finished (or running) runs and compares them. See
 [Comparing runs](../guide/12-comparing-runs.md) for what the report holds.
 
 ```bash
-python -m training_framework.reporting summarize ROOT [ROOT ...] [options]
+naavik summarize ROOT [ROOT ...] [options]
+# or: python -m training_framework.reporting summarize ROOT [ROOT ...] [options]
 ```
 
 | Argument | Default | Meaning |

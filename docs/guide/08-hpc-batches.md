@@ -1,24 +1,31 @@
 # Running batches on an HPC cluster
 
-`training_framework.hpc` turns one committed training configuration into a
-batch of experiments and submits them to a Slurm cluster: one job array per
+The launcher (`naavik`) turns one committed training configuration into a
+batch of experiments and launches them on a Slurm cluster: one job array per
 group of experiments that share resources, each task a single-node run of the
 engine (with DDP inside the node if configured). Everything is decided on your
 workstation; the cluster only checks and executes.
 
 ```bash
 pip install 'training-framework[hpc]'     # adds `packaging`, used on the workstation
-python -m training_framework.hpc validate experiments/sweep.yaml
-python -m training_framework.hpc render   experiments/sweep.yaml --output /tmp/preview
-python -m training_framework.hpc submit   experiments/sweep.yaml
-python -m training_framework.hpc batches  --live        # all your batches and what they are doing
-python -m training_framework.hpc status   <batch-id>    # one batch, task by task
-python -m training_framework.hpc resume   <batch-id>    # continue unfinished tasks from their checkpoints
-python -m training_framework.hpc fetch    <batch-id>    # download results, logs, latest checkpoints
+naavik validate experiments/sweep.yaml
+naavik render   experiments/sweep.yaml --output /tmp/preview
+naavik launch   experiments/sweep.yaml
+naavik batches  --live        # all your batches and what they are doing
+naavik status   <batch-id>    # one batch, task by task
+naavik resume   <batch-id>    # continue unfinished tasks from their checkpoints
+naavik fetch    <batch-id>    # download results, logs, latest checkpoints
 ```
 
 Every key of the profile and the manifest is described in the
 [HPC configuration reference](../reference/hpc-configuration.md).
+
+**Earlier names still work.** `naavik` (also `navik`) is installed with the
+package; `python -m training_framework.hpc <command>` runs the same
+commands. `launch` was called `submit`, `--target`/`--targets` were
+`--profile`/`--profiles`, and the target file was `hpc.yaml` (still read
+when `targets.yaml` does not exist). Each entry of the target file is a
+*profile*: the settings of one cluster.
 
 Batches always run an exact, clean commit: commit the manifest, the training
 config, and the code first. Uncommitted or untracked files are an error.
@@ -28,13 +35,13 @@ For a first run on Big Red 200, follow the staged checklist in
 
 ## 1. The profile (site settings, on your machine)
 
-`~/.config/training-framework/hpc.yaml` (or `--profiles PATH`) holds
+`~/.config/training-framework/targets.yaml` (or `--targets PATH`) holds
 everything specific to a cluster, so the committed manifest runs unchanged
-elsewhere. Pick one with `--profile NAME`, else `default`.
+elsewhere. Pick one with `--target NAME`, else `default`.
 
 ```yaml
 default: bigred200
-profiles:
+targets:
   bigred200:
     ssh_host: bigred200                 # an alias from ~/.ssh/config
     roots:
@@ -66,10 +73,10 @@ For a managed environment built from the site's Python, record that
 interpreter's identity once and paste the output into the profile:
 
 ```bash
-python -m training_framework.hpc probe-python
+naavik probe-python
 ```
 
-If the site later changes its Python, `submit` stops with the new block to
+If the site later changes its Python, `launch` stops with the new block to
 paste; the new identity gives a new, separate environment.
 
 ## 2. The manifest (experiments, committed)
@@ -171,11 +178,11 @@ interpreter. For conda environments that need activation, set
 ## 5. Checking a batch: `validate` and `render`
 
 ```bash
-python -m training_framework.hpc validate batch.yaml [--suggest-data]
-python -m training_framework.hpc render   batch.yaml --output /tmp/preview
+naavik validate batch.yaml [--suggest-data]
+naavik render   batch.yaml --output /tmp/preview
 ```
 
-`validate` runs the same compiler as `submit`, entirely on your machine: it
+`validate` runs the same compiler as `launch`, entirely on your machine: it
 never connects to the cluster, uploads, or submits. It builds the whole
 plan and reports every problem at once, each with the file and key it
 concerns, instead of stopping at the first. In order, it checks:
@@ -219,7 +226,7 @@ For large datasets the progress line says which is happening:
 unchanged since the last run)`. An interrupted run keeps what it hashed.
 Give a huge, fixed dataset a `version` to skip hashing entirely.
 
-What `validate` cannot know, because it stays offline, `submit` checks
+What `validate` cannot know, because it stays offline, `launch` checks
 next: the site interpreter's identity over SSH, which environments and data
 are already on the cluster, that `cluster` paths exist (preflight), and
 whether Slurm accepts the account, partition, and limits.
@@ -228,7 +235,7 @@ whether Slurm accepts the account, partition, and limits.
 stage (job scripts, task configs, `plan.json`, `tasks.tsv`) to `--output`,
 which must be empty or missing, so you can read exactly what would be sent.
 
-## 6. What `submit` does
+## 6. What `launch` does
 
 1. Checks that `ssh` and `rsync` are installed, then compiles the batch
    (the same checks as `validate`).
@@ -249,13 +256,13 @@ says how many files were sent and how many were already there.
 
 **Interrupted uploads resume.** An upload goes to a fixed location and is
 marked ready only when it completes, so nothing ever runs on partial data.
-Run `submit` again: rsync skips the files already there and continues the
+Run `launch` again: rsync skips the files already there and continues the
 partial one. While an upload is incomplete, `<location>.tf-hpc-pending`
-records which content it is; if the local data has changed since, `submit`
+records which content it is; if the local data has changed since, `launch`
 refuses to resume (rsync never deletes at the destination, so files you
 removed would stay) and says what to delete.
 
-**Ctrl-C** during `submit` is recorded in the receipt. Jobs already
+**Ctrl-C** during `launch` is recorded in the receipt. Jobs already
 submitted are cancelled, so no partial batch runs. If an `sbatch` was in
 flight, the receipt says `needs reconciliation` with the `squeue` query to
 check it; otherwise `failed`.
@@ -268,7 +275,7 @@ retried; the receipt says `needs reconciliation` and prints the `squeue
 
 ## 7. Keeping track of your batches
 
-Every `submit` leaves a **receipt**: a small JSON file describing the batch
+Every `launch` leaves a **receipt**: a small JSON file describing the batch
 (when and from where it was submitted, profile, cluster, commit, task count)
 and every job it submitted, with its Slurm job ID. Receipts live in
 `~/.local/state/training-framework/submissions/<batch-id>.json` (or
@@ -285,7 +292,7 @@ cluster as `receipt.json`. Two commands read them; neither changes anything.
 ### All your batches: `batches`
 
 ```bash
-python -m training_framework.hpc batches
+naavik batches
 ```
 
 ```
@@ -310,7 +317,7 @@ needs no profile. The `submit` column is how the submission itself ended:
 ### What they are doing now: `--live`
 
 ```bash
-python -m training_framework.hpc batches --live
+naavik batches --live
 ```
 
 ```
@@ -356,7 +363,7 @@ another cluster; it adds when the batch's jobs are still in the queue), or
 ### Every task: `--tasks`
 
 ```bash
-python -m training_framework.hpc batches --tasks --since 1d
+naavik batches --tasks --since 1d
 ```
 
 ```
@@ -406,17 +413,17 @@ the batches that are missing here, with a `from` column naming the machine
 that submitted them:
 
 ```bash
-python -m training_framework.hpc batches --remote --live
+naavik batches --remote --live
 ```
 
-`--remote` needs a profile (`--profile`, or the default in your profile
+`--remote` needs a profile (`--target`, or the default in your profile
 file). So do `--live` and `--tasks` for receipts written before receipts
 recorded their cluster; newer receipts carry their SSH host.
 
 ### One batch in detail: `status`
 
 ```bash
-python -m training_framework.hpc status <batch-id>      # or the receipt's path
+naavik status <batch-id>      # or the receipt's path
 ```
 
 ```
@@ -431,7 +438,7 @@ probes/frozen/002  lr=0.0001 rng_seed=41  failed (exit 1)  ValueError: ...
 The same rows as `batches --tasks`, for one batch, with its cluster and
 directory. `status` connects to the cluster recorded in the receipt, whatever
 your default profile is; a profile is read only for receipts written before
-receipts recorded their cluster, and a `--profile` that points at a
+receipts recorded their cluster, and a `--target` that points at a
 different cluster is refused rather than queried. A batch whose directory is
 gone is an error, not a list of tasks without records. (Values are shortened above; both print full addresses such
 as `optimizer.optimizer.kwargs.lr`.)
@@ -486,7 +493,7 @@ record`, e.g. out of memory or time) can continue from its latest
 checkpoint:
 
 ```bash
-python -m training_framework.hpc resume <batch-id> --walltime 2-00:00:00
+naavik resume <batch-id> --walltime 2-00:00:00
 ```
 
 ```
@@ -541,7 +548,7 @@ Afterwards `status` and `batches --tasks` follow each task's latest attempt
 the latest attempt (`attempt`, `resumed_from`) and keeps the earlier ones
 under `previous_attempts`; the receipt lists every attempt (`attempts`),
 with its jobs, tasks, checkpoints, and resources, under the same
-transactional rules as `submit`.
+transactional rules as `launch`.
 
 To lose less work when a task is stopped, checkpoint often enough
 (`checkpointer.checkpoint_every`): the stop keeps the latest periodic
@@ -550,7 +557,7 @@ checkpoint.
 ## 11. Getting results back
 
 ```bash
-python -m training_framework.hpc fetch <batch-id>            # into ./hpc-results/<batch-id>/
+naavik fetch <batch-id>            # into ./hpc-results/<batch-id>/
 ```
 
 ```

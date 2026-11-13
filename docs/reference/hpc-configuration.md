@@ -16,21 +16,21 @@ Durations are an integer with `s`, `m`, or `h`: `120s`. Names (batch,
 groups, experiments, data sources) use letters, digits, `_`, and `-` only,
 since they become directory and job names.
 
-## The profile file
+## The target file
 
-`~/.config/training-framework/hpc.yaml` (or `$XDG_CONFIG_HOME/...`, or
-`--profiles PATH`).
+`~/.config/training-framework/targets.yaml` (or `$XDG_CONFIG_HOME/...`, or
+`--targets PATH`).
 
 ```yaml
-default: bigred200          # used when --profile is not given
-profiles:
+default: bigred200          # used when --target is not given
+targets:
   bigred200: {...}          # one entry per cluster/account
 ```
 
 | Key | Required | Meaning |
 |---|---|---|
-| `default` | no | Name of the profile to use without `--profile`. With neither, commands stop. |
-| `profiles` | yes | Mapping of profile name to profile. |
+| `default` | no | Name of the profile to use without `--target`. With neither, commands stop. |
+| `targets` | yes | Mapping of profile name to profile: one entry per target. `profiles` is its earlier name and is still read (a file may not have both). |
 
 ### Profile keys
 
@@ -45,7 +45,7 @@ profiles:
 | `setup_location` | no | `job` | Where a managed environment is built: `job` (a Slurm job the task arrays depend on) or `login` (on the login node, during `submit`). Use `login` when compute nodes have no internet. |
 | `prepare_location` | no | `job` | Where `prepare` data steps run: `job` or `login`, as above. |
 | `path_map` | no | none | Local path prefix → cluster path prefix; see [path_map](#path_map). |
-| `upload_limit` | no | `20G` | Total size of new uploads above which `submit` asks for explicit confirmation (`--yes` also accepts it). |
+| `upload_limit` | no | `20G` | Total size of new uploads above which `launch` asks for explicit confirmation (`--yes` also accepts it). |
 | `setup_resources` | no | `{walltime: "01:00:00", cpus: 4, memory: 16G}` | Resources of the setup job (`setup_location: job`); same keys as [resources](#resources). Make `memory` fit the CPU partition's nodes. |
 
 #### roots
@@ -89,7 +89,7 @@ a new environment or prepared dataset.
 |---|---|---|
 | `existing` | | Absolute path of an environment you manage yourself on the cluster. Tasks use `<existing>/bin/python`; nothing is built and the other keys below (except `conda_run`) do not apply. In `dependency` mode it must contain `training-framework`. |
 | `python_source` | `site` | Where a managed environment's interpreter comes from: `site` (`python3` after the hooks, e.g. a module), `uv` (`uv python install <environment.python>`), or `conda` (conda's base Python). `uv` and `conda` need `environment.python` in the manifest. |
-| `site_python_identity` | | Required with `python_source: site`: the site interpreter's `{implementation, version, executable, platform}`, printed by `python -m training_framework.hpc probe-python`. `submit` checks it against the cluster and stops with the new block if the site changed it. |
+| `site_python_identity` | | Required with `python_source: site`: the site interpreter's `{implementation, version, executable, platform}`, printed by `naavik probe-python`. `submit` checks it against the cluster and stops with the new block if the site changed it. |
 | `backend` | `venv` | Kind of managed environment: `venv` (from the interpreter above) or `conda` (`conda create -p <env> -c conda-forge python=<environment.python>`). A `conda` environment installs its own Python, so it needs `python_source: conda` (or `uv`) and `environment.python`; with `site` it is refused. |
 | `conda_packages` | `[]` | With `backend: conda`: extra conda packages for `conda create` (e.g. `["cudatoolkit=11.8"]`); part of the environment key. |
 | `conda_run` | `false` | Run every command through `conda run --no-capture-output -p <env>` (for conda environments that need activation). Needs a conda environment. |
@@ -114,7 +114,7 @@ instead of `roots.data/<key>/...`.
 ## The manifest
 
 A YAML file committed in your repository; its path is the argument of
-`validate`, `render`, and `submit`. Site keys (`ssh_host`, `roots`,
+`validate`, `render`, and `launch`. Site keys (`ssh_host`, `roots`,
 `account`, `partition`, `qos`, `profile`, ...) are refused here.
 
 | Key | Required | Default | Meaning |

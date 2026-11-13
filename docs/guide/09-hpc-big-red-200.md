@@ -19,7 +19,7 @@ one, and the stages below use both:
 ```bash
 pip install "training-framework[hpc] @ git+ssh://git@github.com/abhishekbisht1429/training-framework.git@dev"
 # or, from a clone: pip install -e '.[hpc]'
-python -m training_framework.hpc --help         # validate, render, submit, status, probe-python
+naavik --help         # validate, render, launch, status, probe-python
 ```
 
 ## 1. SSH and site facts (once)
@@ -90,14 +90,14 @@ environment that is still marked ready.
 
 ## 2. The profile
 
-`~/.config/training-framework/hpc.yaml` (every key is described in the
+`~/.config/training-framework/targets.yaml` (every key is described in the
 [HPC configuration reference](../reference/hpc-configuration.md)).
 Everything except `env` is the same
 for both kinds of environment:
 
 ```yaml
 default: bigred200
-profiles:
+targets:
   bigred200:
     ssh_host: bigred200
     roots:
@@ -144,8 +144,8 @@ groups:
 Commit everything, then check the generated scripts before submitting:
 
 ```bash
-python -m training_framework.hpc validate batch.yaml
-python -m training_framework.hpc render batch.yaml --output /tmp/br200-preview
+naavik validate batch.yaml
+naavik render batch.yaml --output /tmp/br200-preview
 less /tmp/br200-preview/groups/cpu/group-cpu.sbatch   # account, partition, module hooks
 ```
 
@@ -157,9 +157,9 @@ D repeats them with a managed one.
 **A. CPU smoke test** (SSH, staging, `sbatch`, arrays, logs, `status`):
 
 ```bash
-python -m training_framework.hpc submit batch.yaml
-python -m training_framework.hpc status <batch-id>        # pending -> running -> done
-python -m training_framework.hpc batches --tasks           # every batch and task at a glance
+naavik launch batch.yaml
+naavik status <batch-id>        # pending -> running -> done
+naavik batches --tasks           # every batch and task at a glance
 ssh bigred200 'cat <batch-dir>/logs/cpu/*.out'
 ssh bigred200 'cat <batch-dir>/tasks/cpu/seeds/000/record.json'
 ```
@@ -180,7 +180,7 @@ scancel --signal=USR1 --batch <jobid>_0
 
 The log shows `received the scheduler advance signal...` and `finished:
 exit 75 (interrupted)`; `status` shows `interrupted`. Continue it with
-`python -m training_framework.hpc resume <batch-id> --walltime 01:00:00`
+`naavik resume <batch-id> --walltime 01:00:00`
 (see [Resuming unfinished tasks](08-hpc-batches.md#10-resuming-unfinished-tasks)). For the real time
 limit: `walltime: "00:05:00"` with `stop_grace: 60`.
 
@@ -189,7 +189,7 @@ build on the login node (D1), reuse it (D2), then try a build in a job (D3),
 and repeat stages A and B on it.
 
 **E. Data.** Add an `upload: {}` source pointing at a small local directory.
-`submit` shows rsync's progress; a second batch skips the upload.
+`launch` shows rsync's progress; a second batch skips the upload.
 
 ## 5. Managed environments (building on the cluster)
 
@@ -212,7 +212,7 @@ Start with `site`. Record the interpreter's identity once and paste the
 printed block into the profile (it replaces `env.existing`):
 
 ```bash
-python -m training_framework.hpc probe-python
+naavik probe-python
 ```
 
 ```yaml
@@ -222,7 +222,7 @@ python -m training_framework.hpc probe-python
                              executable: /N/soft/.../python3.12, platform: linux-x86_64}
 ```
 
-If the site later changes that Python, `submit` stops and prints the new
+If the site later changes that Python, `launch` stops and prints the new
 block; pasting it gives a new, separate environment. The interpreter must
 satisfy your project's `requires-python`, and `environment.python` (if set)
 must match it.
@@ -272,15 +272,15 @@ Commit the requirements file with the manifest.
 
 ### D1. Build on the login node
 
-With `setup_location: login`, `submit` builds the environment on the login
+With `setup_location: login`, `launch` builds the environment on the login
 node before submitting (installing torch takes several minutes), then
 preflights it:
 
 ```bash
-python -m training_framework.hpc submit batch.yaml
+naavik launch batch.yaml
 ```
 
-`submit` prints `environment: will be built` and `building the environment
+`launch` prints `environment: will be built` and `building the environment
 on the login node`. The setup record is at `<batch-dir>/nodes/setup/record.json`
 (`status: built`), and `status` shows a `setup` row. Then repeat stages A
 and B.
@@ -288,11 +288,11 @@ and B.
 ### D2. Reuse
 
 Submit the batch again (or another batch with the same requirements):
-`submit` prints `environment: ready` and builds nothing. The environment
+`launch` prints `environment: ready` and builds nothing. The environment
 lives at `<roots.envs>/<key>`; the key is a hash of the pinned requirements,
 the backend, the interpreter's identity, and the setup hooks. Changing any
 of them gives a new environment next to the old one; old ones are never
-deleted automatically. `submit --fresh-env` builds a private environment for
+deleted automatically. `launch --fresh-env` builds a private environment for
 one batch.
 
 ### D3. Build in a job
@@ -333,7 +333,7 @@ the environment meanwhile`.
   bigred200 true` works in a terminal without a prompt, re-open the Duo
   control connection if it expired (`ssh bigred200 true`), and keep the key
   private (`chmod 600 ~/.ssh/id_*`).
-- `submit` prints the batch directory and the receipt path on failure; the
+- `launch` prints the batch directory and the receipt path on failure; the
   receipt is `~/.local/state/training-framework/submissions/<batch>.json`.
 - `sbatch` refusing with `Invalid account or account/partition combination
   specified`: the profile's account is missing, wrong, or not allowed on that

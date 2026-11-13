@@ -56,7 +56,7 @@ Resolve for the Python that runs on the cluster:
 
 ```bash
 ssh <cluster> 'module load python/<version> && python3 --version'
-# or, with a profile: python -m training_framework.hpc probe-python
+# or, with a profile: naavik probe-python
 ```
 
 The examples below use 3.12; use what the cluster reports. With
@@ -194,9 +194,9 @@ framework commit and its dependencies (install them there with the same
 
 ```bash
 git add -A && git commit -m "HPC batch setup"
-python -m training_framework.hpc validate batch.yaml
-python -m training_framework.hpc submit batch.yaml
-python -m training_framework.hpc status <batch-id>
+naavik validate batch.yaml
+naavik launch batch.yaml
+naavik status <batch-id>
 ```
 
 `validate` checks that the framework is pinned exactly once and everything
