@@ -102,6 +102,9 @@ def test_cancelling_one_task_leaves_the_others_and_shows_it_cancelled(tmp_path, 
     assert naavik(["cancel", batch_dir.name, "--task", "cpu/seeds/001", "--yes"]) == 0
     capsys.readouterr()
     ref = receipt["nodes"]["group-cpu"]["job_ref"]
+    # The runner applies a task's cancel at its next poll.
+    job = lambda: host_runner.read_job(host_runner.state_dir(), ref)  # noqa: E731
+    wait_for(lambda: job()["elements"]["1"] == "cancelled", "the runner to drop task 001")
     states = _status(batch_dir.name, capsys)
     assert " running " in states["cpu/seeds/000"] and " cancelled" in states["cpu/seeds/001"]
     assert naavik(["cancel", batch_dir.name, "--yes"]) == 0    # stop task 000 too
