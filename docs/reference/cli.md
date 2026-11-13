@@ -66,7 +66,7 @@ reading results is one separate command, installed with the package as
 | Command | Does | Guide |
 |---|---|---|
 | `naavik validate / render / launch MANIFEST` | check, preview, or launch a batch | [Running batches](../guide/08-hpc-batches.md) |
-| `naavik batches / status / resume / fetch` | follow, continue, and collect batches | [Running batches](../guide/08-hpc-batches.md#7-keeping-track-of-your-batches) |
+| `naavik batches / status / logs / cancel / resume / fetch` | follow, stop, continue, and collect batches | [Running batches](../guide/08-hpc-batches.md#7-keeping-track-of-your-batches) |
 | `naavik probe-python` | print a site interpreter's identity | [Running batches](../guide/08-hpc-batches.md#1-the-profile-site-settings-on-your-machine) |
 | `naavik summarize ROOT...` | compare runs | [Comparing runs](../guide/12-comparing-runs.md) |
 

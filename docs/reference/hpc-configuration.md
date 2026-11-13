@@ -36,10 +36,14 @@ targets:
 
 | Key | Required | Default | Meaning |
 |---|---|---|---|
-| `ssh_host` | yes | | Host passed to `ssh` and `rsync`. Usually an alias from `~/.ssh/config`, which supplies user, key, and connection sharing. |
-| `roots` | yes | | Absolute cluster directories; see [roots](#roots). |
-| `scheduler` | yes | | Which scheduler the cluster runs. Only `slurm` exists. |
+| `ssh_host` | this or `local` | | Host passed to `ssh` and `rsync`. Usually an alias from `~/.ssh/config`, which supplies user, key, and connection sharing. |
+| `local` | this or `ssh_host` | | `true`: the target is this machine; commands run here, without `ssh` or `rsync`. Any other value is refused. |
+| `roots` | yes | | Absolute directories on the target; see [roots](#roots). |
+| `scheduler` | yes | | What runs the jobs: `slurm`, or `host` for a machine without a scheduler. |
 | `slurm` | with `scheduler: slurm` | | Slurm settings; see [slurm](#slurm). A block for a scheduler the profile does not use is an error. |
+| `host` | with `scheduler: host` | | Host scheduler settings (`host: {}` without GPUs); see [host](#host). |
+| `worktree` | no | `commit` | What a batch runs: `commit` (HEAD; the working tree must be clean) or `snapshot` (the working tree as it is, made into a commit on HEAD); see the guide's [Uncommitted work](../guide/08-hpc-batches.md#uncommitted-work-worktree-snapshot). |
+| `snapshot_limit` | no | `50M` | With `worktree: snapshot`: most bytes of untracked files a snapshot may take into Git; above it the snapshot is refused, naming the largest files. |
 | `hooks` | no | none | Shell lines run before commands; see [hooks](#hooks). |
 | `env` | no | managed venv from the site Python | Where tasks' Python environment comes from; see [env](#env). |
 | `setup_location` | no | `job` | Where a managed environment is built: `job` (a Slurm job the task arrays depend on) or `login` (on the login node, during `submit`). Use `login` when compute nodes have no internet. |
@@ -69,6 +73,18 @@ All three are required, absolute paths on the cluster.
 Control characters (such as newlines) are refused in every Slurm value, so
 no value can add an extra `#SBATCH` line.
 
+#### host
+
+| Key | Default | Meaning |
+|---|---|---|
+| `gpus` | `[]` | GPU indices (as `nvidia-smi` numbers them) that jobs may use, in the order they are tried. A group may not request more GPUs than the pool has. Each GPU is given to one task at a time across every batch on the machine. |
+| `busy_gpus` | `wait` | `wait`: skip a pool GPU on which any compute process runs (anyone's) until it is free; `use`: only the pool decides. |
+
+The host scheduler takes no `scheduler_options`. It runs a runner with the
+target's `python3` (3.8 or newer, checked by `launch`), keeps its job state
+under `$XDG_STATE_HOME/training-framework/host/<hostname>/` on the target,
+and does not limit a task's CPUs or memory.
+
 #### hooks
 
 Lists of shell lines, run in order before the command of each phase, in the
@@ -87,7 +103,7 @@ a new environment or prepared dataset.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `existing` | | Absolute path of an environment you manage yourself on the cluster. Tasks use `<existing>/bin/python`; nothing is built and the other keys below (except `conda_run`) do not apply. In `dependency` mode it must contain `training-framework`. |
+| `existing` | | Absolute path of an environment you manage yourself on the target. Tasks use `<existing>/bin/python`; nothing is built and the other keys below (except `conda_run`) do not apply. In `dependency` mode it must contain `training-framework`. With `local: true`, `current` means the environment of the interpreter running `naavik` (e.g. your IDE's project interpreter), resolved into the plan. |
 | `python_source` | `site` | Where a managed environment's interpreter comes from: `site` (`python3` after the hooks, e.g. a module), `uv` (`uv python install <environment.python>`), or `conda` (conda's base Python). `uv` and `conda` need `environment.python` in the manifest. |
 | `site_python_identity` | | Required with `python_source: site`: the site interpreter's `{implementation, version, executable, platform}`, printed by `naavik probe-python`. `submit` checks it against the cluster and stops with the new block if the site changed it. |
 | `backend` | `venv` | Kind of managed environment: `venv` (from the interpreter above) or `conda` (`conda create -p <env> -c conda-forge python=<environment.python>`). A `conda` environment installs its own Python, so it needs `python_source: conda` (or `uv`) and `environment.python`; with `site` it is refused. |

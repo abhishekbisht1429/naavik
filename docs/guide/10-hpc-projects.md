@@ -190,6 +190,26 @@ Or use `env.existing: /path/to/env`, an environment that already has this
 framework commit and its dependencies (install them there with the same
 `pip install ... @<sha>`).
 
+### A profile for this machine
+
+To run the same manifest on your workstation, without committing each
+change and in the environment your IDE already uses:
+
+```yaml
+targets:
+  here:
+    local: true
+    scheduler: host
+    host: {gpus: [4, 5]}        # the GPUs batches may use here
+    worktree: snapshot          # run the working tree as it is
+    env: {existing: current}    # the interpreter running naavik
+    roots: {batches: /data/me/naavik/batches, envs: /data/me/naavik/envs, data: /data/me/naavik/data}
+```
+
+`naavik launch batch.yaml --target here` then needs no requirements file
+(the environment exists) and no commit; see
+[Targets](08-hpc-batches.md#targets-this-machine-an-ssh-host-or-a-cluster).
+
 ### 8. Commit, validate, submit
 
 ```bash

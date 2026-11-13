@@ -203,5 +203,5 @@ Every option of the command line is described in the
 
 ---
 
-**See also:** [Running batches on an HPC cluster](08-hpc-batches.md) for
+**See also:** [Running batches](08-hpc-batches.md) for
 producing and fetching sweeps.

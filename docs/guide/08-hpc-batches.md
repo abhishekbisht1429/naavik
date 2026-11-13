@@ -1,10 +1,13 @@
-# Running batches on an HPC cluster
+# Running batches: here, over SSH, or on a cluster
 
-The launcher (`naavik`) turns one committed training configuration into a
-batch of experiments and launches them on a Slurm cluster: one job array per
-group of experiments that share resources, each task a single-node run of the
-engine (with DDP inside the node if configured). Everything is decided on your
-workstation; the cluster only checks and executes.
+The launcher (`naavik`) turns one training configuration into a batch of
+experiments and launches them on a **target**: this machine, a machine you
+reach over SSH, or a Slurm cluster. Each group of experiments that share
+resources is one job array (on Slurm) or one runner (elsewhere); each task
+is a single-node run of the engine (with DDP inside the node if
+configured). Everything is decided on your workstation; the target only
+checks and executes. The same manifest runs on every target: pick one with
+`--target`.
 
 ```bash
 pip install 'training-framework[hpc]'     # adds `packaging`, used on the workstation
@@ -15,6 +18,8 @@ naavik batches  --live        # all your batches and what they are doing
 naavik status   <batch-id>    # one batch, task by task
 naavik resume   <batch-id>    # continue unfinished tasks from their checkpoints
 naavik fetch    <batch-id>    # download results, logs, latest checkpoints
+naavik logs     <batch-id> <task> --follow     # a task's log
+naavik cancel   <batch-id> [--task <task>]    # stop jobs, or some tasks
 ```
 
 Every key of the profile and the manifest is described in the
@@ -27,8 +32,9 @@ commands. `launch` was called `submit`, `--target`/`--targets` were
 when `targets.yaml` does not exist). Each entry of the target file is a
 *profile*: the settings of one cluster.
 
-Batches always run an exact, clean commit: commit the manifest, the training
-config, and the code first. Uncommitted or untracked files are an error.
+Batches always run one exact tree. By default it is a commit you made, so
+uncommitted or untracked files are an error; with `worktree: snapshot` it is
+your working tree as it is (see [Uncommitted work](#uncommitted-work-worktree-snapshot)).
 
 For a first run on Big Red 200, follow the staged checklist in
 [First runs on Big Red 200](09-hpc-big-red-200.md).
@@ -78,6 +84,77 @@ naavik probe-python
 
 If the site later changes its Python, `launch` stops with the new block to
 paste; the new identity gives a new, separate environment.
+
+### Targets: this machine, an SSH host, or a cluster
+
+A profile says how its target is reached and what schedules the jobs there:
+
+```yaml
+default: here
+targets:
+  here:                          # this machine
+    local: true
+    scheduler: host
+    host: {gpus: [4, 5]}         # the GPUs jobs may use
+    worktree: snapshot           # run uncommitted work (below)
+    roots: {batches: /data/me/naavik/batches, envs: /data/me/naavik/envs, data: /data/me/naavik/data}
+    env: {existing: current}     # the environment running naavik (e.g. the IDE's interpreter)
+  gpubox:                        # a machine reached over SSH
+    ssh_host: gpubox
+    scheduler: host
+    host: {gpus: [0, 1, 2, 3]}
+    roots: {...}
+    env: {existing: /opt/envs/train}
+  bigred200:                     # a Slurm cluster, as above
+    ssh_host: bigred200
+    scheduler: slurm
+    slurm: {...}
+    roots: {...}
+```
+
+- **How it is reached:** `ssh_host` (over SSH and rsync) or `local: true`
+  (this machine: no `ssh` or `rsync` needed, nothing is copied to fetch).
+- **What runs the jobs:** `slurm`, or `host` for a machine without a
+  scheduler. With `host`, each job is a small runner process started
+  detached on the target (it outlives your SSH connection). It runs a
+  group's tasks at most `max_parallel` at a time, gives each task its GPUs
+  from the `host.gpus` pool, sends the same early stop signal before the
+  walltime that Slurm does, and kills a task at the walltime.
+- **GPUs on a host:** a task sees only its own GPUs (`CUDA_VISIBLE_DEVICES`
+  holds their UUIDs, numbered from 0 inside the task, so use `device: cuda`
+  in the config); a task of a group without GPUs sees none. The pool's GPUs
+  are shared by every batch on the machine and never given to two tasks at
+  once. With `busy_gpus: wait` (default) a GPU on which anyone else runs a
+  compute process is skipped until it is free; `busy_gpus: use` ignores
+  other processes.
+- **Not enforced on a host:** `cpus` and `memory` are recorded, not
+  limited.
+- **Before staging,** `launch` checks the target: `python3` 3.8 or newer
+  for the runner and, with a GPU pool, every pool GPU in `nvidia-smi`.
+
+Results, logs, `status`, `resume`, `cancel`, and `fetch` are the same on
+every target. A batch that ran on this machine is already here: `fetch`
+prints its directory (`--dest` copies it).
+
+### Uncommitted work: `worktree: snapshot`
+
+With `worktree: snapshot` in a profile, `validate`, `render`, and `launch`
+take your working tree as it is: tracked changes, and untracked files that
+`.gitignore` does not exclude (the manifest and configs too). They become a
+commit on HEAD, made with a temporary index, so your index, branch, and
+files are untouched; the same tree on the same HEAD always gives the same
+commit. Before confirming, `launch` prints `note: snapshot of the working
+tree on <HEAD>: N modified, M untracked file(s)`.
+
+`launch` keeps the commit as `refs/naavik/snapshots/<batch-id>`, so what ran
+stays in your repository: `git diff <HEAD> refs/naavik/snapshots/<batch-id>`.
+`validate` and `render` keep nothing. Plans, receipts, and task records
+carry `base_sha` (the HEAD it was taken on) besides `sha`.
+
+Refused, with the reason: untracked files above `snapshot_limit` (default
+`50M`; the error names the largest, so a stray dataset never goes into
+Git), changed submodules, a `source.ref` other than HEAD, and
+`source.strategy: fetch`.
 
 ## 2. The manifest (experiments, committed)
 
@@ -445,9 +522,15 @@ as `optimizer.optimizer.kwargs.lr`.)
 
 ### Logs
 
-A task's log is `<batch-dir>/logs/<group>/<jobid>_<index>.out` on the
-cluster: `status` gives the batch directory and, for a running task, the
-`<jobid>_<index>`. Follow it with `ssh <host> 'tail -f <log>'`.
+```bash
+naavik logs <batch-id> probes/frozen/001             # the latest attempt's log
+naavik logs <batch-id> probes/frozen/001 --attempt 1
+naavik logs <batch-id> setup --follow                # a step; Ctrl-C stops following
+```
+
+A task's log is `<batch-dir>/logs/<group>/<job>_<index>.out` on the target
+(a step's `<batch-dir>/logs/<step>/<job>.out`); `logs` finds it from the
+receipt and reads it where the batch ran.
 
 Every log line written by the HPC layer starts with `[hpc ...]` (`[hpc setup
 ...]`, `[hpc prepare ...]`) and a UTC time. A task log opens with the task's
@@ -456,6 +539,22 @@ N (ok|failed|interrupted)` and the record's path; the wrapper adds when the
 scheduler's advance signal arrived and the task's exit status. Setup and
 prepare logs show each step, whom they are waiting for when another job
 holds the lease, and, on failure, a single `FAILED:` line.
+
+### Cancelling: `cancel`
+
+```bash
+naavik cancel <batch-id>                                  # every job still queued or running
+naavik cancel <batch-id> --task probes/frozen/003 --task probes/frozen/004
+```
+
+`cancel` lists what it will stop and asks (`--yes` skips the question; it is
+required when not interactive). It acts only on jobs the scheduler still
+lists, and says which had already ended. Running tasks get the scheduler's
+stop (Slurm: `scancel`; a host runner sends the early stop signal first, so
+the task stops cooperatively and records `interrupted`, then kills what is
+left). The receipt records what was cancelled: `status` shows a task
+cancelled with `--task` as `cancelled`, even while its job runs on for the
+others.
 
 ## 8. Results
 
@@ -509,7 +608,11 @@ What it does:
 1. Picks the batch's tasks that are `interrupted` or `ended without a
    record`. Failed tasks are left out (resuming repeats their error); add
    `--include-failed` after fixing the cause, or name tasks with `--task
-   <name>` (repeatable). A finished task is never resumed.
+   <name>` (repeatable; a `cancelled` task too). A finished task is never
+   resumed. A task with no checkpoint (it never got that far, or never
+   ran) is skipped, unless `--restart` is given: it then runs again from its
+   config as the new attempt (`restart from its config (no checkpoint)` in
+   the summary; its record says `restarted`).
 2. Finds each task's newest **complete** checkpoint (one with its
    `manifest.json`; a checkpoint still being written is skipped) under the
    task's sessions directory, by iteration. Tasks that cannot resume are
@@ -616,7 +719,7 @@ See [Comparing runs](12-comparing-runs.md).
 
 ## Limitations
 
-Single-node tasks only; Slurm only; no cancel command yet (use `scancel`); resuming cannot change the config or the
+Single-node tasks only; schedulers: Slurm and `host`; `host` does not limit CPUs or memory; resuming cannot change the config or the
 number of GPUs, and batches submitted before `resume` existed cannot be
 resumed; components that
 bind fixed ports (other than `tensorboard` with `serve: false`) fail when
