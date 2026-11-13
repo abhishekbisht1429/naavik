@@ -105,6 +105,7 @@ def _provenance(plan: dict) -> dict:
         "interpreter": interpreter_facts(),
         "framework_distribution": framework_facts()["distribution"],
         "environment_hash": environment_hash(),
+        **({"base_sha": plan["base_sha"], "snapshot": True} if plan.get("base_sha") else {}),
     }
 
 

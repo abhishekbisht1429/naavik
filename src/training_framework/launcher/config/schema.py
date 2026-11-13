@@ -27,8 +27,12 @@ _DURATION_FACTORS = {"s": 1, "m": 60, "h": 3600}
 PROFILE_KEYS = frozenset({
     "ssh_host", "local", "roots", "scheduler", "slurm", "hooks", "env",
     "setup_location", "prepare_location", "path_map", "upload_limit",
-    "setup_resources",
+    "setup_resources", "worktree", "snapshot_limit",
 })
+#: How a batch takes your code: the commit you made (`commit`), or a commit
+#: made of your working tree as it is (`snapshot`).
+WORKTREE_MODES = ("commit", "snapshot")
+DEFAULT_SNAPSHOT_LIMIT = "50M"
 DEFAULT_SETUP_RESOURCES = {"walltime": "01:00:00", "cpus": 4, "memory": "16G"}
 MANIFEST_KEYS = frozenset({
     "version", "name", "source", "code", "environment", "training", "data",
@@ -212,6 +216,10 @@ class Profile:
     setup_resources: "Resources | None" = None
     #: True for a target that is this machine (`local: true`).
     local: bool = False
+    #: `commit` (a clean tree; batches run HEAD) or `snapshot`.
+    worktree: str = "commit"
+    #: Most bytes of untracked files a snapshot may take into Git.
+    snapshot_limit: int = 50 * 1024 ** 2
 
     @property
     def slurm(self):
@@ -350,6 +358,10 @@ def _parse_profile(raw, where, name, problems) -> Profile:
     if upload_limit is None:
         problems.add(f"{where}.upload_limit must be a size such as 20G")
 
+    snapshot_limit = parse_size(reader.get("snapshot_limit", DEFAULT_SNAPSHOT_LIMIT))
+    if snapshot_limit is None:
+        problems.add(f"{where}.snapshot_limit must be a size such as 50M")
+
     setup_resources = parse_resources(
         reader.get("setup_resources", DEFAULT_SETUP_RESOURCES),
         f"{where}.setup_resources", problems,
@@ -369,6 +381,8 @@ def _parse_profile(raw, where, name, problems) -> Profile:
         upload_limit=upload_limit or 0,
         setup_resources=setup_resources,
         local=local,
+        worktree=reader.choice("worktree", WORKTREE_MODES, "commit"),
+        snapshot_limit=snapshot_limit or 0,
     )
 
 

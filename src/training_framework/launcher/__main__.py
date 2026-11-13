@@ -377,6 +377,13 @@ def _submit(args, profile) -> int:
         if problems:
             raise HpcError("the target cannot run this batch:\n  " + "\n  ".join(problems))
     manifest = compiled.manifest
+    snapshot_info = {}
+    if plan.base_sha:
+        # Kept before anything is staged: the commit that runs stays reachable,
+        # whatever happens to the launch.
+        ref = repository.keep_snapshot(plan.sha, plan.batch_id)
+        snapshot_info = {"base_sha": plan.base_sha, "snapshot": True, "snapshot_ref": ref}
+        print(f"snapshot {plan.sha[:12]} kept as {ref} (git diff {plan.base_sha[:12]} {ref})")
     stager = SourceStager(repository, ports["executor"], ports["transfer"],
                           manifest.source_strategy, manifest.source_url)
     try:
@@ -387,6 +394,7 @@ def _submit(args, profile) -> int:
             upload_limit=profile.upload_limit, review=_review(args.yes), progress=_progress,
             receipt_info={
                 **target_of_profile(profile).receipt_fields(),
+                **snapshot_info,
                 "repository": str(repository.root),
                 "manifest": Path(args.batch).resolve().relative_to(
                     repository.root.resolve()).as_posix(),

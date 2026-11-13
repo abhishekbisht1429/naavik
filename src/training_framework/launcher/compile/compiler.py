@@ -28,7 +28,7 @@ from training_framework.launcher import EXECUTION_PROTOCOL_VERSION
 from training_framework.launcher.config import address as addresses
 from training_framework.launcher.compile import data as data_module
 from training_framework.launcher.compile.data import LocalFacts
-from training_framework.launcher.errors import Problems
+from training_framework.launcher.errors import HpcError, Problems
 from training_framework.launcher.names import hash_bytes, hash_value
 from training_framework.launcher.compile.plan import (
     Artifact,
@@ -83,12 +83,24 @@ def compile_plan(
 ) -> Compiled:
     problems = Problems()
 
-    if not repository.is_clean():
-        problems.add(
-            "the repository has uncommitted changes or untracked files; "
-            "commit or ignore them (batches run an exact commit)"
-        )
-    head = repository.resolve("HEAD")
+    # The batch runs one exact tree: HEAD (worktree: commit, which must then
+    # be clean), or the working tree made into a commit on HEAD (snapshot).
+    snapshot = None
+    if profile.worktree == "snapshot":
+        try:
+            snapshot = repository.snapshot(profile.snapshot_limit)
+        except HpcError as error:
+            problems.add(str(error))
+            problems.raise_if_any()
+        head = snapshot.sha
+    else:
+        if not repository.is_clean():
+            problems.add(
+                "the repository has uncommitted changes or untracked files; "
+                "commit or ignore them (batches run an exact commit), or set "
+                "worktree: snapshot in the target's profile"
+            )
+        head = repository.resolve("HEAD")
     head_bytes = repository.read(head, manifest_path)
     if head_bytes is None:
         problems.add(f"{manifest_path} is not committed")
@@ -97,7 +109,16 @@ def compile_plan(
     problems.raise_if_any()
     manifest = parse_manifest(raw_manifest, manifest_path)
 
-    sha = repository.resolve(manifest.source_ref)
+    if snapshot is not None:
+        if manifest.source_ref != "HEAD":
+            problems.add(f"source.ref '{manifest.source_ref}' cannot be used with worktree: "
+                         "snapshot (the snapshot is of the working tree on HEAD)")
+        if manifest.source_strategy == "fetch":
+            problems.add("source.strategy 'fetch' cannot stage a snapshot (it exists only in "
+                         "this repository); use 'bundle'")
+        sha = head
+    else:
+        sha = repository.resolve(manifest.source_ref)
     if sha != head and repository.read(sha, manifest_path) != head_bytes:
         problems.add(
             f"{manifest_path} differs between HEAD and source.ref "
@@ -120,7 +141,7 @@ def compile_plan(
     # Environment, Python, code layout ------------------------------------
     managed = profile.env.existing is None
     requires_python, problem = _requires_python(repository, sha)
-    notes: list[str] = []
+    notes: list[str] = [snapshot.note()] if snapshot is not None and snapshot.snapshot else []
     if problem:
         problems.add(problem)
     if requires_python is None and not problem:
@@ -302,6 +323,7 @@ def compile_plan(
         engine_options=manifest.engine_options,
         scheduler_settings=_settings_json(profile.scheduler_settings),
         notes=tuple(notes),
+        base_sha=snapshot.base if snapshot is not None and snapshot.snapshot else None,
     )
     return Compiled(plan, manifest, suggestions)
 
