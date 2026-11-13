@@ -17,6 +17,8 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
+from training_framework.launcher.errors import HpcError
+from training_framework.launcher.ports.targets import target_of_receipt
 from training_framework.launcher.scheduler import LEGACY_SCHEDULER
 from training_framework.launcher.services.status import (
     Row,
@@ -127,11 +129,11 @@ def select(views: list[BatchView], *, since: timedelta | None = None, name: str 
 
 def add_live_state(views: list[BatchView], connect, fallback=None) -> None:
     """Fill `now` and `rows` of every view, or `problem` when its state cannot
-    be known. `connect(ssh_host, scheduler)` returns (executor, function
-    returning all of the user's job states). Receipts that do not record
-    their cluster (written before receipts did) use `fallback()`, called at
-    most once and only if such a receipt is listed; it returns (ssh_host,
-    scheduler) or raises with the reason it cannot."""
+    be known. `connect(target, scheduler)` returns (executor, function
+    returning all of the user's job states), for a `Target`. Receipts that
+    do not record their target (written before receipts did) use
+    `fallback()`, called at most once and only if such a receipt is listed;
+    it returns (target, scheduler) or raises with the reason it cannot."""
     resolved: dict = {}
 
     def fallback_cluster():
@@ -143,13 +145,18 @@ def add_live_state(views: list[BatchView], connect, fallback=None) -> None:
                 resolved["value"], resolved["error"] = None, str(error)
         return resolved["value"], resolved["error"]
 
-    by_cluster: dict[tuple[str, str], list[BatchView]] = {}
+    by_cluster: dict[tuple, list[BatchView]] = {}
     for view in views:
         if view.receipt.get("status") == "unreadable receipt":
             view.problem = view.receipt.get("error")
             continue
-        if view.receipt.get("ssh_host"):
-            cluster = (view.receipt["ssh_host"], view.receipt.get("scheduler") or LEGACY_SCHEDULER)
+        try:
+            target = target_of_receipt(view.receipt)
+        except HpcError as error:
+            view.problem = str(error)
+            continue
+        if target is not None:
+            cluster = (target, view.receipt.get("scheduler") or LEGACY_SCHEDULER)
         else:
             cluster, error = fallback_cluster()
             if cluster is None:
@@ -169,7 +176,7 @@ def add_live_state(views: list[BatchView], connect, fallback=None) -> None:
                       else f"{type(error).__name__}: {error}")
             for view in members:
                 view.problem = f"cannot read {host}: {reason}"
-                view.unreachable = host if isinstance(error, TransportError) else None
+                view.unreachable = str(host) if isinstance(error, TransportError) else None
             continue
         for view in members:
             receipt = view.receipt
@@ -256,6 +263,7 @@ def as_json(views: list[BatchView], *, tasks: bool) -> list[dict]:
             "created": receipt.get("created"),
             "profile": receipt.get("profile"),
             "ssh_host": receipt.get("ssh_host"),
+            "target": receipt.get("target"),
             "batch_dir": receipt.get("batch_dir"),
             "task_count": receipt.get("task_count"),
             "status": receipt.get("status"),

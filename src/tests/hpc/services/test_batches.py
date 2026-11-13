@@ -12,6 +12,7 @@ import pytest
 
 from training_framework.hpc.__main__ import main
 from training_framework.hpc.ports.local import LocalExecutor
+from training_framework.launcher.ports.targets import Target
 from training_framework.hpc.services import batches as listing
 from training_framework.hpc.services.status import Row, summarize
 from tests.hpc.fake_cluster import fake_cluster, submitted_jobs  # noqa: F401 (fixture)
@@ -92,12 +93,12 @@ def test_live_state_reads_records_tables_and_the_queue_per_cluster(tmp_path):
     view = listing.BatchView(batch, "local")
     connections = []
 
-    def connect(host, scheduler):
-        connections.append((host, scheduler))
+    def connect(target, scheduler):
+        connections.append((target, scheduler))
         return LocalExecutor(), lambda: {"9_3": "running"}
 
     listing.add_live_state([view], connect, fallback=None)
-    assert connections == [("cluster", "slurm")]
+    assert connections == [(Target("ssh", "cluster"), "slurm")]
     assert view.now == "running: 1 running, 1 done, 1 interrupted, 1 failed"
     states = {row.name: row.state for row in view.rows}
     assert states == {"setup": "built", "g/e/000": "done", "g/e/001": "failed (exit 1)",

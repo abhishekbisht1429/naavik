@@ -210,8 +210,9 @@ def _parser(prog: str = "python -m training_framework.hpc") -> argparse.Argument
                     "the latest complete checkpoint of each task. Running it again copies "
                     "only what is new.")
     fetch.add_argument("batch_id", help="a batch id, or the path to its receipt")
-    fetch.add_argument("--dest", type=Path, default=Path("hpc-results"),
-                       help="where to put it: <dest>/<batch-id>/ (default: ./hpc-results)")
+    fetch.add_argument("--dest", type=Path, default=None,
+                       help="where to put it: <dest>/<batch-id>/ (default: ./hpc-results; "
+                            "a batch that ran on this machine is copied only with --dest)")
     fetch.add_argument("--task", action="append", metavar="NAME", help="fetch this task (repeatable)")
     fetch.add_argument("--state", choices=("done", "finished", "all"), default="done",
                        help="done: finished successfully (default); finished: any final state; "
@@ -350,7 +351,7 @@ def _submit(args, profile) -> int:
             transfer=ports["transfer"], probe=ports["probe"], owner=current_process_owner(),
             upload_limit=profile.upload_limit, review=_review(args.yes), progress=_progress,
             receipt_info={
-                "ssh_host": profile.ssh_host,
+                **target_of_profile(profile).receipt_fields(),
                 "repository": str(repository.root),
                 "manifest": Path(args.batch).resolve().relative_to(
                     repository.root.resolve()).as_posix(),
@@ -446,7 +447,7 @@ def _status(args) -> int:
 
 
 def _batches(args) -> int:
-    from training_framework.launcher.ports.targets import Target, ports_for, target_of_profile
+    from training_framework.launcher.ports.targets import ports_for, target_of_profile
     from training_framework.launcher.scheduler import get_scheduler
     from training_framework.launcher.services import batches as listing
     from training_framework.launcher.services.receipt import default_receipts_dir
@@ -464,13 +465,12 @@ def _batches(args) -> int:
     # A plain listing never reads it.
     explicit = bool(args.profile or args.profiles)
     profile = _profile(args) if args.remote or explicit else None
-    if live or args.remote:
-        _require_tools("ssh")
     receipts_dir = str(args.receipts or default_receipts_dir())
     views = listing.load_receipts(receipts_dir)
 
-    def connect(ssh_host: str, scheduler: str):
-        executor = ports_for(Target("ssh", ssh_host)).executor
+    def connect(target, scheduler: str):
+        _require_tools(*target.tools(transfer=False))
+        executor = ports_for(target).executor
         bundle = get_scheduler(scheduler)
         return executor, (lambda: bundle.user_job_states(executor)) if bundle.user_job_states else None
 
@@ -478,6 +478,7 @@ def _batches(args) -> int:
         if profile is None:
             raise HpcError("--remote needs a profile (it lists the profile's roots.batches)")
         known = {view.batch_id for view in views}
+        _require_tools(*target_of_profile(profile).tools(transfer=False))
         executor = ports_for(target_of_profile(profile)).executor
         for receipt in listing.remote_receipts(executor, profile.roots["batches"]):
             if receipt["batch_id"] not in known:
@@ -489,7 +490,7 @@ def _batches(args) -> int:
     if live:
         def fallback():
             selected = profile or _profile(args)
-            return selected.ssh_host, selected.scheduler
+            return target_of_profile(selected), selected.scheduler
 
         listing.add_live_state(views, connect, fallback)
         if args.active:
@@ -502,6 +503,7 @@ def _batches(args) -> int:
         except HpcError:
             selected = None
         if selected is not None:
+            _require_tools(*target_of_profile(selected).tools(transfer=False))
             ports_for(target_of_profile(selected)).executor.run(["true"])   # raises TransportError
     if args.json:
         print(json.dumps(listing.as_json(views, tasks=args.tasks), indent=2))
@@ -633,6 +635,11 @@ def _fetch(args) -> int:
         raise HpcError(f"{receipt['batch_id']} never reached the cluster ({receipt.get('status')}); "
                        "there is nothing to fetch")
     host, scheduler, _ = _receipt_target(args, receipt)
+    if host.is_local and args.dest is None:
+        # Its results are already on this machine; copying needs a reason.
+        print(f"{receipt['batch_id']} ran on this machine; its results are in "
+              f"{receipt['batch_dir']} (pass --dest to copy them elsewhere)")
+        return 0
     _require_tools(*host.tools(transfer=True))
     ports = ports_for(host, progress=_progress)
     executor = ports.executor
@@ -651,7 +658,7 @@ def _fetch(args) -> int:
     listing = fetching.plan_files(executor, batch_dir, tasks, args.checkpoints, args.include)
     if not args.no_logs:
         fetching.add_logs(executor, batch_dir, receipt, tasks, listing)
-    local_root = args.dest / receipt["batch_id"]
+    local_root = (args.dest or Path("hpc-results")) / receipt["batch_id"]
     present, present_bytes = fetching.already_here(listing, str(local_root))
     total = sum(listing.values())
     print(f"fetch {receipt['batch_id']}: {len(tasks)} task(s) from {host} into {local_root}")

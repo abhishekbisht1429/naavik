@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import posixpath
 import re
+import sys
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -24,7 +25,7 @@ _DURATION = re.compile(r"\A(\d+)([smh])\Z")
 _DURATION_FACTORS = {"s": 1, "m": 60, "h": 3600}
 
 PROFILE_KEYS = frozenset({
-    "ssh_host", "roots", "scheduler", "slurm", "hooks", "env",
+    "ssh_host", "local", "roots", "scheduler", "slurm", "hooks", "env",
     "setup_location", "prepare_location", "path_map", "upload_limit",
     "setup_resources",
 })
@@ -150,6 +151,21 @@ class _Reader:
 
 # Profile ------------------------------------------------------------------
 
+#: `env.existing: current`: the environment of the interpreter running the
+#: command (e.g. an IDE's project interpreter), for a target on this machine.
+CURRENT_ENVIRONMENT = "current"
+
+
+def _existing_environment(env_reader, local: bool, where: str, problems) -> str | None:
+    if env_reader.raw.get("existing") != CURRENT_ENVIRONMENT:
+        return env_reader.absolute_path("existing")
+    if not local:
+        problems.add(f"{where}.env.existing: 'current' (this interpreter's environment) "
+                     "needs a target on this machine (local: true)")
+        return None
+    # Resolved now, so the plan records the path the tasks will use.
+    return sys.prefix
+
 
 @dataclass(frozen=True)
 class PythonIdentity:
@@ -181,7 +197,8 @@ class EnvSettings:
 @dataclass(frozen=True)
 class Profile:
     name: str
-    ssh_host: str
+    #: The SSH alias of the target, or None for `local: true` (this machine).
+    ssh_host: str | None
     roots: dict[str, str]
     scheduler: str
     #: The selected scheduler's own settings, parsed by its bundle.
@@ -193,6 +210,8 @@ class Profile:
     path_map: tuple[tuple[str, str], ...]
     upload_limit: int
     setup_resources: "Resources | None" = None
+    #: True for a target that is this machine (`local: true`).
+    local: bool = False
 
     @property
     def slurm(self):
@@ -240,7 +259,20 @@ def _parse_profile(raw, where, name, problems) -> Profile:
     from training_framework.launcher.scheduler import SCHEDULERS
 
     reader = _Reader(raw, where, problems, PROFILE_KEYS | set(SCHEDULERS))
-    ssh_host = reader.string("ssh_host", required=True)
+    # How the target is reached: exactly one of `ssh_host` and `local: true`.
+    ssh_host = reader.string("ssh_host")
+    local = False
+    if "local" in reader.raw:
+        if reader.raw["local"] is not True:
+            problems.add(f"{where}.local must be true (to use this machine) or left out")
+        else:
+            local = True
+    if local and ssh_host is not None:
+        problems.add(f"{where}: set either ssh_host (a machine reached over SSH) or "
+                     "local: true (this machine), not both")
+    elif not local and ssh_host is None and "ssh_host" not in reader.raw:
+        problems.add(f"{where}: set ssh_host (a machine reached over SSH) or "
+                     "local: true (this machine)")
 
     roots_reader = _Reader(
         reader.get("roots", {}, required=True), f"{where}.roots", problems,
@@ -293,7 +325,7 @@ def _parse_profile(raw, where, name, problems) -> Profile:
             "python_source", ("site", "uv", "conda"), "site",
         ),
         site_python_identity=identity,
-        existing=env_reader.absolute_path("existing"),
+        existing=_existing_environment(env_reader, local, where, problems),
         conda_packages=env_reader.strings("conda_packages"),
         conda_run=env_reader.boolean("conda_run", False),
         bootstrap_python=env_reader.string("bootstrap_python"),
@@ -336,6 +368,7 @@ def _parse_profile(raw, where, name, problems) -> Profile:
         path_map=tuple(sorted(path_map)),
         upload_limit=upload_limit or 0,
         setup_resources=setup_resources,
+        local=local,
     )
 
 
