@@ -212,6 +212,22 @@ class RsyncTransfer:
         match = _TRANSFERRED.search(stdout)
         return int(match.group(1).replace(",", "")) if match else 0
 
+    def pull_tree(self, remote_dir: str, local_dir: str) -> int:
+        """Copy a remote directory into `local_dir` (created if needed),
+        updating files that changed and never deleting anything here;
+        returns the number of files copied."""
+        os.makedirs(local_dir, exist_ok=True)
+        command = [
+            self.rsync, *RSYNC_ARCHIVE, "--protect-args", "--stats",
+            "-e", shlex.join([*self.ssh, *SSH_OPTIONS]),
+            f"{self.host}:{remote_dir.rstrip('/')}/", local_dir.rstrip("/") + "/",
+        ]
+        result = subprocess.run(command, capture_output=True, text=True, check=False)
+        if result.returncode != 0:
+            raise HpcError(f"rsync from {self.host}:{remote_dir} failed: {result.stderr.strip()}")
+        sent = _FILES_SENT.search(result.stdout)
+        return int(sent.group(1).replace(",", "")) if sent else 0
+
     def fetch(self, remote_root: str, paths: list[str], local_root: str) -> FetchSummary:
         if not paths:
             return FetchSummary(0, 0, 0)

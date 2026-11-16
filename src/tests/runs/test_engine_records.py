@@ -45,7 +45,7 @@ def session(tmp_path, *, world_size=1, max_iterations=3, checkpoint_every=None, 
         "data_manager": {"batch_size": world_size, "num_workers": 0, "pin_memory": False},
         "integration_data": {}, "integration_train": {}, "integration_loss": {},
         "optimizer": {"optimizer": {"name": "AdamW", "kwargs": {"lr": 0.1}}},
-        "integration_results": {"output_dir": "results"},
+        "integration_results": {"output_dir": str(tmp_path / "results")},
     }
     if checkpoint_every:
         data["checkpointer"] = {"checkpoint_every": checkpoint_every}

@@ -35,8 +35,11 @@ def _parser(prog: str = "python -m training_framework.reporting") -> argparse.Ar
             "only in their seed grouped into mean ± std."
         ),
     )
-    summarize.add_argument("roots", nargs="+", metavar="ROOT",
+    summarize.add_argument("roots", nargs="*", metavar="ROOT",
                            help="a directory to look for runs in")
+    summarize.add_argument("--runs", action="append", default=[], metavar="RUN",
+                           help="also the session directories of this recorded run (a run id "
+                                "or a unique beginning of one, see `naavik runs`; repeatable)")
     summarize.add_argument("--metric", action="append", default=[], metavar="TAG[:min|:max]",
                            help="a scalar tag to report; with :min or :max its best value too "
                                 "(repeatable; default: every tag, last value only)")
@@ -72,6 +75,27 @@ def _parser(prog: str = "python -m training_framework.reporting") -> argparse.Ar
     return parser
 
 
+def _recorded_session_dirs(prefixes: list[str]) -> list[str]:
+    """The session directories of recorded runs (`naavik runs`)."""
+    if not prefixes:
+        return []
+    from training_framework.runs.registry import find_run, registry_dir
+
+    root = registry_dir()
+    if root is None:
+        raise ReportError("--runs needs the run registry, which is turned off")
+    directories = []
+    for prefix in prefixes:
+        try:
+            run = find_run(root, prefix)
+        except LookupError as error:
+            raise ReportError(str(error)) from None
+        if not run.session_dirs:
+            raise ReportError(f"run {run.run_id} has no session (it failed while building)")
+        directories += run.session_dirs
+    return directories
+
+
 def _summarize(args) -> int:
     if args.table is not None and args.format != "csv":
         raise ReportError("--table only applies with --format csv")
@@ -79,7 +103,10 @@ def _summarize(args) -> int:
         raise ReportError("--seed-key has no effect with --no-seed-groups")
     if args.table == "groups" and args.no_seed_groups:
         raise ReportError("there is no groups table with --no-seed-groups")
-    discovery = discover_runs(*args.roots, include=args.include, exclude=args.exclude)
+    roots = list(args.roots) + _recorded_session_dirs(args.runs)
+    if not roots:
+        raise ReportError("give a ROOT directory or --runs RUN")
+    discovery = discover_runs(*roots, include=args.include, exclude=args.exclude)
     if args.output is not None:
         output = os.path.abspath(args.output)
         for run in discovery.runs:
