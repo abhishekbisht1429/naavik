@@ -198,7 +198,10 @@ class GitRepository:
 
     def keep_snapshot(self, sha: str, batch_id: str) -> str:
         """Keep a snapshot batch's commit reachable; returns the ref."""
-        ref = f"{SNAPSHOT_REFS}/{batch_id}"
+        return self.keep_ref(f"{SNAPSHOT_REFS}/{batch_id}", sha)
+
+    def keep_ref(self, ref: str, sha: str) -> str:
+        """Point `ref` at `sha` (keeping the commit reachable); returns it."""
         self._must(["update-ref", ref, sha], "git update-ref")
         return ref
 

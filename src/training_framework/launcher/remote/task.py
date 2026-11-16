@@ -27,6 +27,7 @@ import yaml
 
 from training_framework.launcher import EXECUTION_PROTOCOL_VERSION
 from training_framework.launcher.remote.runtime import interpreter_identity
+from training_framework.runs.facts import environment_hash
 
 SUPPORTED_PROTOCOL_VERSIONS = (EXECUTION_PROTOCOL_VERSION,)
 INTERRUPTED_EXIT = 75
@@ -51,13 +52,6 @@ def framework_facts() -> dict:
     return {"file": os.path.realpath(training_framework.__file__), "distribution": distribution}
 
 
-def environment_hash() -> str:
-    """Hash of the installed distributions (what `pip freeze` would list)."""
-    entries = sorted({
-        f"{(dist.metadata['Name'] or '').lower()}=={dist.version}"
-        for dist in importlib.metadata.distributions()
-    })
-    return hashlib.sha256("\n".join(entries).encode()).hexdigest()
 
 
 def preflight_facts(plan: dict) -> dict:
