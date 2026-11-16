@@ -35,7 +35,7 @@ def record(run_id=None, **changes):
     run_id = run_id or new_run_id()
     data = {"run_id": run_id, "host": socket.gethostname(), "pid": os.getpid(),
             "process_start_time": process_start_time(os.getpid()),
-            "launch": {"operation": "config"}, "sessions": []}
+            "launch": {"operation": "config"}}
     data.update(changes)
     return data
 
@@ -85,8 +85,11 @@ def test_a_config_is_stored_once_by_content(tmp_path):
     second = RunWriter.create(tmp_path, record()).store_config(dict(config))
     assert first == second == config_sha256(config)
     assert [path.name for path in (tmp_path / CONFIGS).iterdir()] == [f"{first}.yaml"]
-    run = read_run(RunWriter.create(tmp_path, record(sessions=[{"config_sha256": first}])).directory)
+    third = RunWriter.create(tmp_path, record())
+    third.event("session", index=0, session_dir="/runs/s", config_sha256=first)
+    run = read_run(third.directory)
     assert run.config(tmp_path)["session_config"] == {"rng_seed": 1, "sessions_dir": "/runs"}
+    assert run.config(tmp_path, 1) is None
 
 
 def test_an_id_that_is_not_a_run_id_is_refused(tmp_path):

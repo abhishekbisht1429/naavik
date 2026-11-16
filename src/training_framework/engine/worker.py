@@ -1,3 +1,4 @@
+import os
 import signal
 import time
 from collections.abc import Mapping
@@ -14,6 +15,7 @@ from training_framework.engine.topology import (
     pin_process_device,
 )
 from training_framework.session import Session, TrainingSession
+from training_framework.runs.recorder import ENV_RUN_DIRECTORY, record_worker_device
 from training_framework.components.config import (
     component_entry,
     find_component_entry,
@@ -298,6 +300,8 @@ def session_process_worker(
             "stop_sync_poll_interval": stop_sync_poll_interval,
         }
         with session:
+            # Its device as this worker uses it, into the launch's run record.
+            record_worker_device(os.environ.get(ENV_RUN_DIRECTORY), rank, session)
             group = _stop_vote_group(session)
             # A stop requested before the first iteration runs none.
             if not _stop_requested(

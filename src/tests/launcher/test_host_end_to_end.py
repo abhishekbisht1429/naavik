@@ -175,3 +175,37 @@ def test_launch_stops_before_staging_when_the_target_lacks_a_pool_gpu(tmp_path, 
     error = capsys.readouterr().err
     assert "the target cannot run this batch" in error and "[42]" in error
     assert not (tmp_path / "here" / "batches").exists()            # nothing staged
+
+
+def test_a_batch_tasks_run_record_names_its_batch_task_and_code(tmp_path, here, monkeypatch, capsys):
+    from training_framework.runs.registry import list_runs
+
+    registry = tmp_path / "registry"
+    monkeypatch.setenv("TRAINING_FRAMEWORK_RUNS", str(registry))
+    batch_dir, receipt = launch(repo(tmp_path, session(), [1]), here, capsys)
+    wait_for(lambda: record(batch_dir, "cpu/seeds/000"), "the task's record")
+    task_record = record(batch_dir, "cpu/seeds/000")
+    (run,) = list_runs(registry)[0]
+    assert task_record["run_id"] == run.run_id
+    launch_facts = run.record["launch"]
+    assert (launch_facts["batch_id"], launch_facts["task"], launch_facts["attempt"]) == \
+        (batch_dir.name, "cpu/seeds/000", 1)
+    assert launch_facts["scheduler"] == "host" and launch_facts["restarted"] is False
+    assert run.record["code"] == {"sha": receipt["sha"], "base_sha": None, "snapshot": False}
+    wait_for(lambda: list_runs(registry)[0][0].finished, "the run's end")
+    assert list_runs(registry)[0][0].state == "done"
+
+
+def test_a_cancelled_batch_task_is_recorded_as_interrupted(tmp_path, here, monkeypatch, capsys):
+    from training_framework.runs.registry import list_runs
+
+    registry = tmp_path / "registry"
+    monkeypatch.setenv("TRAINING_FRAMEWORK_RUNS", str(registry))
+    progress = tmp_path / "progress"
+    batch_dir, receipt = launch(repo(tmp_path, session(progress, max_iterations=1_000_000), [1]),
+                                here, capsys)
+    wait_for(lambda: (progress / "rank_0.progress").exists(), "the task to run")
+    assert HostSubmitter(LocalExecutor()).cancel(receipt["nodes"]["group-cpu"]["job_ref"]).ok
+    wait_for(lambda: record(batch_dir, "cpu/seeds/000"), "the task's record")
+    (run,) = list_runs(registry)[0]
+    assert run.state == "interrupted" and run.finished["last_iteration"][0] > 0

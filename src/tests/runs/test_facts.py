@@ -31,7 +31,8 @@ def test_a_clean_tree_is_its_head(tmp_path):
     assert RUN_REFS not in git(root, "for-each-ref")
 
 
-def test_a_dirty_tree_is_kept_as_a_snapshot_under_the_run_id(tmp_path):
+def test_a_dirty_tree_is_kept_as_a_snapshot_under_the_run_id(tmp_path, monkeypatch):
+    monkeypatch.setenv("TRAINING_FRAMEWORK_RUNS_SNAPSHOT", "1")   # the default (tests turn it off)
     root = make_repo(tmp_path)
     head = git(root, "rev-parse", "HEAD")
     (root / "my_project" / "__init__.py").write_text("CHANGED = 1\n")
@@ -45,16 +46,18 @@ def test_a_dirty_tree_is_kept_as_a_snapshot_under_the_run_id(tmp_path):
     assert git(root, "status", "--porcelain") == "M my_project/__init__.py"   # still the user's change
 
 
-def test_a_dirty_tree_without_snapshots_says_so_and_keeps_nothing(tmp_path):
+def test_a_dirty_tree_without_snapshots_says_so_and_keeps_nothing(tmp_path, monkeypatch):
+    monkeypatch.setenv("TRAINING_FRAMEWORK_RUNS_SNAPSHOT", "0")
     root = make_repo(tmp_path)
     (root / "my_project" / "__init__.py").write_text("CHANGED = 1\n")
-    identity = code_identity(root, new_run_id(), snapshot=False)
+    identity = code_identity(root, new_run_id())
     assert identity["dirty"] is True and identity["snapshot"] is False
     assert "keeps no snapshot" in identity["error"]
     assert RUN_REFS not in git(root, "for-each-ref")
 
 
-def test_a_snapshot_that_cannot_be_made_is_reported_not_raised(tmp_path):
+def test_a_snapshot_that_cannot_be_made_is_reported_not_raised(tmp_path, monkeypatch):
+    monkeypatch.setenv("TRAINING_FRAMEWORK_RUNS_SNAPSHOT", "1")   # the default (tests turn it off)
     root = make_repo(tmp_path)
     (root / "big.bin").write_bytes(b"x" * 4096)
     identity = code_identity(root, new_run_id(), limit=1024)

@@ -203,7 +203,10 @@ def monitor_processes(
         request_stop_all: Callable[[], None],
         shutdown: Callable[..., None],
         process_timeout_on_join: float,
-) -> None:
+) -> bool:
+    """Watch the workers until they end. Returns True when an interrupt
+    (Ctrl-C, or the scheduler's stop turned into one) stopped them early;
+    raises a worker's failure."""
     waitables = {}
     for wrapper in wrappers:
         waitables[wrapper.error_conn] = ("connection", wrapper)
@@ -278,3 +281,4 @@ def monitor_processes(
 
     if failure:
         raise failure
+    return interrupted

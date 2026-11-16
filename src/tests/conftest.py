@@ -1,3 +1,5 @@
+import os
+
 import pytest
 
 from training_framework.components.registry import (
@@ -74,3 +76,21 @@ def minimal_session_config_2(tmp_path):
             "components_package": "training_framework.components.builtin",
         }
     }
+
+
+@pytest.fixture(autouse=True, scope="session")
+def run_registry_out_of_the_users_home(tmp_path_factory):
+    """Engine launches in tests are recorded in a temporary registry, never
+    in the user's, and make no snapshot commits: test launches find their
+    components inside this repository, whose working tree may hold the
+    user's uncommitted work. Tests about either set their own values."""
+    saved = {name: os.environ.get(name)
+             for name in ("TRAINING_FRAMEWORK_RUNS", "TRAINING_FRAMEWORK_RUNS_SNAPSHOT")}
+    os.environ["TRAINING_FRAMEWORK_RUNS"] = str(tmp_path_factory.mktemp("run-registry"))
+    os.environ["TRAINING_FRAMEWORK_RUNS_SNAPSHOT"] = "0"
+    yield
+    for name, value in saved.items():
+        if value is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = value

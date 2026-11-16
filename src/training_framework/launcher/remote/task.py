@@ -170,6 +170,15 @@ def run_task(config_path: str, record_path: str, plan_path: str,
         log(f"attempt {attempt}: resuming from {resume}")
     started = datetime.now(timezone.utc).isoformat()
     status, error = 0, None
+    # The engine's run record says which batch task it is, and that the code
+    # is the batch's (the staged checkout is not inspected).
+    os.environ["NAAVIK_RUN_CONTEXT"] = json.dumps({
+        "batch_id": plan["batch_id"], "task": task_name, "attempt": attempt,
+        "scheduler": plan["scheduler"], "restarted": restart,
+        "code": {"sha": plan["sha"], "base_sha": plan.get("base_sha"),
+                 "snapshot": bool(plan.get("base_sha"))},
+    })
+    engine = None
     try:
         from training_framework.engine import Configurator, TrainingEngine
 
@@ -179,7 +188,8 @@ def run_task(config_path: str, record_path: str, plan_path: str,
             sys.argv = [sys.argv[0], "--resume-session", resume, *engine_options]
         else:
             sys.argv = [sys.argv[0], "--config", config_path, *engine_options]
-        with TrainingEngine(Configurator()) as engine:
+        engine = TrainingEngine(Configurator())
+        with engine:
             engine.start_session()
     except KeyboardInterrupt:
         interrupted = True
@@ -198,6 +208,7 @@ def run_task(config_path: str, record_path: str, plan_path: str,
         "started": started,
         "finished": datetime.now(timezone.utc).isoformat(),
         "attempt": attempt,
+        "run_id": engine.run_id if engine is not None else None,
     }
     if resume:
         record["resumed_from"] = resume

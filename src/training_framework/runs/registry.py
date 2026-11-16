@@ -137,9 +137,13 @@ class Run:
         return next((e for e in reversed(self.events) if e.get("event") == "finished"), None)
 
     @property
+    def sessions(self) -> list[dict]:
+        """The launch's sessions, as recorded once they were built."""
+        return [e for e in self.events if e.get("event") == "session"]
+
+    @property
     def session_dirs(self) -> list[str]:
-        return [e["session_dir"] for e in self.events
-                if e.get("event") == "session" and e.get("session_dir")]
+        return [e["session_dir"] for e in self.sessions if e.get("session_dir")]
 
     @property
     def state(self) -> str:
@@ -156,8 +160,9 @@ class Run:
         return ENDED_WITHOUT_RECORD
 
     def config(self, root: Path, index: int = 0) -> dict | None:
-        sessions = self.record.get("sessions") or []
-        if index >= len(sessions):
+        """Session `index`'s resolved config, from the registry `root`."""
+        sessions = self.sessions
+        if index >= len(sessions) or not sessions[index].get("config_sha256"):
             return None
         path = Path(root) / CONFIGS / f"{sessions[index]['config_sha256']}.yaml"
         return yaml.safe_load(path.read_text()) if path.exists() else None

@@ -32,6 +32,7 @@ from training_framework.session import (
     normalize_session_type,
     session_class_for_type,
 )
+from training_framework.runs.recorder import RunRecorder, worker_run_directory
 from training_framework.util import context_entry, context_exit, requires_context
 
 
@@ -52,6 +53,15 @@ class TrainingEngine:
         self._session_process_wrappers: list[SessionProcessWrapper] = []
         # One per multi-process launch, held until its workers have joined.
         self._rendezvous: list[HostedRendezvous] = []
+        # The run registry's record of this launch (see training_framework.runs),
+        # and the sessions it records: (session, config sources).
+        self._recorder = RunRecorder()
+        self._recorded_sessions: list[tuple] = []
+
+    @property
+    def run_id(self) -> str | None:
+        """This launch's id in the run registry (None when not recorded)."""
+        return self._recorder.run_id
 
     @property
     def _topology_overrides(self):
@@ -127,6 +137,7 @@ class TrainingEngine:
         if hosted is not None:
             self._rendezvous.append(hosted)
         self._session_process_wrappers = wrappers
+        self._recorded_sessions.append((session, None))
 
     @staticmethod
     def _check_rank_component_plan(session, world_size: int) -> None:
@@ -246,6 +257,7 @@ class TrainingEngine:
         if hosted is not None:
             self._rendezvous.append(hosted)
         self._session_process_wrappers.extend(wrappers)
+        self._recorded_sessions.append((sessions[0], config_sources))
         if config_sources:
             write_config_sources(sessions[0].session_config.session_dir, config_sources)
 
@@ -276,7 +288,11 @@ class TrainingEngine:
 
         try:
             for wrapper in self._session_process_wrappers:
-                wrapper.start()
+                # The worker records its device in this launch's run record;
+                # it learns where from its environment, set only while it is
+                # spawned (a spawned process copies the environment then).
+                with worker_run_directory(self._recorder.directory):
+                    wrapper.start()
                 started.append(wrapper)
         except BaseException:
             for wrapper in started:
@@ -321,15 +337,20 @@ class TrainingEngine:
 
     @context_entry
     def __enter__(self):
+        # Recorded before anything is built, so a launch that fails while
+        # building has a record too.
+        self._recorder = RunRecorder.start(self._configurator)
         try:
             self._register_configured_sessions()
-        except BaseException:
+        except BaseException as error:
             # `__exit__` never runs when entry fails, so undo it here: ports
             # held for sessions registered before the failure would
             # otherwise stay bound.
             self._release_rendezvous()
             self._session_process_wrappers = []
+            self._recorder.finished(_run_status(error), _describe(error))
             raise
+        self._recorder.sessions(self._recorded_sessions)
         return self
 
     def _register_configured_sessions(self) -> None:
@@ -382,8 +403,8 @@ class TrainingEngine:
     def _process_ready_waitables(self, waitables, ready_waitables):
         return process_ready_waitables(waitables, ready_waitables)
 
-    def _monitor_processes(self):
-        monitor_processes(
+    def _monitor_processes(self) -> bool:
+        return monitor_processes(
             self._session_process_wrappers,
             process_ready=self._process_ready_waitables,
             request_stop_all=self.request_stop_all,
@@ -400,6 +421,8 @@ class TrainingEngine:
 
     @context_exit
     def __exit__(self, exc_type, exc_val, exc_tb):
+        error = exc_val
+        interrupted = False
         try:
             if exc_type is not None:
                 self.request_stop_all()
@@ -410,8 +433,26 @@ class TrainingEngine:
             elif getattr(self._configurator, "debug", False):
                 self._join_started_processes()
             else:
-                self._monitor_processes()
+                # True when an interrupt stopped the workers early: the
+                # launch ends normally, but did not run to its end.
+                interrupted = bool(self._monitor_processes())
+        except BaseException as raised:
+            error = raised
+            raise
         finally:
             self._close_resources()
+            self._recorder.finished(
+                "interrupted" if interrupted and error is None else _run_status(error),
+                _describe(error), workers=self._session_process_wrappers)
         return False
 
+
+def _run_status(error: BaseException | None) -> str:
+    """How a launch ended, for its run record."""
+    if error is None:
+        return "ok"
+    return "interrupted" if isinstance(error, KeyboardInterrupt) else "failed"
+
+
+def _describe(error: BaseException | None) -> str | None:
+    return None if error is None else f"{type(error).__name__}: {error}"
