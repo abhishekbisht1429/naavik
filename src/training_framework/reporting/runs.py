@@ -77,6 +77,9 @@ class RunRecord:
     #: The code the run ran (`code_text`), from its HPC task record or its
     #: run record; None when unknown (runs older than these records).
     code: str | None = None
+    #: The training config file a batch task was made from, when its batch
+    #: used more than one (from its record); None otherwise.
+    config_file: str | None = None
 
 
 @dataclass
@@ -149,7 +152,7 @@ def discover_runs(
             continue
         run = _load(run_id, located[session_dir])
         run.problems[:0] = run_problems.get(session_dir, [])
-        run.code = _task_code(located[session_dir].task_dir, run.problems)
+        run.code, run.config_file = _task_facts(located[session_dir].task_dir, run.problems)
         if run.code is None:
             run.code = code_text(recorded_code.get(os.path.realpath(session_dir)))
         runs.append(run)
@@ -278,20 +281,24 @@ def code_text(code: dict | None) -> str | None:
     return text
 
 
-def _task_code(task_dir: str | None, problems: list[str]) -> str | None:
-    """The code of an HPC task: its batch's commit, from its record."""
+def _task_facts(task_dir: str | None, problems: list[str]) -> tuple[str | None, str | None]:
+    """(code, config file) of an HPC task, from its record: its batch's
+    commit, and the training config file it was made from."""
     if task_dir is None:
-        return None
+        return None, None
     path = os.path.join(task_dir, TASK_RECORD_FILE)
     if not os.path.exists(path):
-        return None                        # still running, or not fetched
+        return None, None                  # still running, or not fetched
     try:
         with open(path, encoding="utf-8") as handle:
             record = json.load(handle)
     except (OSError, ValueError) as error:
         problems.append(f"{TASK_RECORD_FILE} cannot be read ({error!r}); its code is unknown")
-        return None
-    return code_text(record) if isinstance(record, dict) else None
+        return None, None
+    if not isinstance(record, dict):
+        return None, None
+    config_file = record.get("config_file")
+    return code_text(record), config_file if isinstance(config_file, str) else None
 
 
 def _recorded_code() -> dict[str, dict]:

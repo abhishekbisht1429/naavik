@@ -189,7 +189,10 @@ def summarize_runs(
 
     problems = list(discovery.problems)
     flat = {run.run_id: _flat_config(run, ignored) for run in runs}
-    _add_code(runs, flat, ignored, problems)
+    _add_run_fact(CODE_KEY, "code", {run.run_id: run.code for run in runs}, runs, flat, ignored,
+                  problems)
+    _add_run_fact(CONFIG_KEY, "config file",
+                  {run.run_id: run.config_file for run in runs}, runs, flat, ignored, problems)
     # Each run's seeds as config paths: a `component:path` key resolves to
     # where that component's entry is in the run's own config.
     run_seeds = {run.run_id: _config_seeds(run, seeds) for run in runs}
@@ -315,25 +318,27 @@ def _path(text, what) -> str:
 # -- hyperparameters -------------------------------------------------------------
 
 
-#: The setting a run's code is compared as.
+#: The settings a run's code and training config file are compared as.
 CODE_KEY = "code"
+CONFIG_KEY = "config"
 
 
-def _add_code(runs, flat, ignored, problems) -> None:
-    """Compare each run's code like a setting, so runs on different code are
-    never one seed group. Only when some run's code is known (reports of
-    older runs are unchanged); unknown code is the value `unknown`."""
-    if not any(run.code for run in runs) or any(covers(key, CODE_KEY) for key in ignored):
+def _add_run_fact(key, what, values, runs, flat, ignored, problems) -> None:
+    """Compare a fact of each run (its code, its config file) like a setting
+    named `key`, so runs that differ in it are never one seed group. Only
+    when some run's value is known (reports of older runs are unchanged); an
+    unknown value is `unknown`."""
+    if not any(values.values()) or any(covers(name, key) for name in ignored):
         return
     clashing = sorted({path for config in flat.values() if config
-                       for path in config if covers(CODE_KEY, path)})
+                       for path in config if covers(key, path)})
     if clashing:
-        problems.append(f"the runs' code is not compared: their configs have "
-                        f"{', '.join(clashing)} (pass --ignore-key {CODE_KEY} to silence)")
+        problems.append(f"the runs' {what} is not compared: their configs have "
+                        f"{', '.join(clashing)} (pass --ignore-key {key} to silence)")
         return
     for run in runs:
         if flat[run.run_id] is not None:
-            flat[run.run_id][CODE_KEY] = run.code or "unknown"
+            flat[run.run_id][key] = values[run.run_id] or "unknown"
 
 
 def _flat_config(run: RunRecord, ignored: list[str]) -> dict[str, Any] | None:

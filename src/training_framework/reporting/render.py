@@ -56,6 +56,11 @@ def render_markdown(summary: Summary, *, generated: datetime | None = None) -> s
             "- `code` is the commit each run ran (a batch task's from its `record.json`, "
             "a direct run's from the run registry); `unknown`: not recorded."
         )
+    if "config" in summary.shared or any(column.name == "config" for column in summary.columns):
+        lines.append(
+            "- `config` is the training config file a batch task was made from (its "
+            "batch's experiments used more than one); `unknown`: not recorded."
+        )
     lines.append("")
 
     if summary.groups is not None:

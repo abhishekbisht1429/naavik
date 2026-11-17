@@ -193,7 +193,21 @@ def compile_plan(
     for problem in dialect.check_profile():
         problems.add(problem)
 
-    base_config, base_session = _training_config(manifest, repository, sha, problems)
+    # Each training config once: `training.config`, and every experiment's own.
+    configs = {manifest.training_config: _training_config(
+        manifest, manifest.training_config, repository, sha, problems)}
+    for group in manifest.groups:
+        for experiment in group.experiments:
+            if experiment.config is not None and experiment.config not in configs:
+                configs[experiment.config] = _training_config(
+                    manifest, experiment.config, repository, sha, problems,
+                    where=f"groups.{group.name}.experiments[{experiment.name}].config")
+    several_configs = any(experiment.config is not None
+                          for group in manifest.groups for experiment in group.experiments)
+
+    def config_of(experiment) -> str:
+        return experiment.config or manifest.training_config
+
     for path in manifest.code_paths:
         if not repository.exists(sha, path):
             problems.add(f"code.paths: '{path}' does not exist at {sha[:12]}")
@@ -236,16 +250,17 @@ def compile_plan(
         problems.add(problem)
 
     # Tasks ------------------------------------------------------------------
-    tasks_raw = _expand(manifest, base_session, dialect, problems)
+    tasks_raw = _expand(manifest, lambda experiment: configs[config_of(experiment)][1],
+                        dialect, problems)
     problems.raise_if_any()
 
     facts_found = None
     if code_facts is not None:
         facts_found = code_facts(sha, manifest, bool(environment["managed"]), [
-            (name, {**base_config, "sessions": [
+            (name, {**configs[config_of(experiment)][0], "sessions": [
                 _with_sessions_dir(session, f"{batch_dir}/tasks/{name}/sessions")]})
-            for name, session in (
-                (f"{group.name}/{experiment.name}/{number:03d}", session)
+            for name, experiment, session in (
+                (f"{group.name}/{experiment.name}/{number:03d}", experiment, session)
                 for group, experiment, number, _, session, _ in tasks_raw)])
         for problem in facts_found.problems:
             problems.add(problem)
@@ -291,10 +306,11 @@ def compile_plan(
             )
         seen_hashes[identity_hash] = name
         session = _with_sessions_dir(session, f"{batch_dir}/tasks/{name}/sessions")
-        config = {**base_config, "sessions": [session]}
+        config = {**configs[config_of(experiment)][0], "sessions": [session]}
         tasks.append(Task(
             group.name, experiment.name, number, array_index, tuple(variant),
             config, hash_value(config),
+            config_of(experiment) if several_configs else None,
         ))
     problems.raise_if_any()
 
@@ -410,32 +426,35 @@ def compile_plan(
 # Helpers -----------------------------------------------------------------------
 
 
-def _training_config(manifest, repository, sha, problems):
-    if repository.read(sha, manifest.training_config) is None:
-        problems.add(f"training.config '{manifest.training_config}' does not exist at {sha[:12]}")
+def _training_config(manifest, path, repository, sha, problems, where="training.config"):
+    """(config, selected session) of the training config at `path`."""
+    if repository.read(sha, path) is None:
+        problems.add(f"{where} '{path}' does not exist at {sha[:12]}")
         return {}, {}
     # Includes are read at the same commit: the commit is the whole config.
     try:
         config = load_config(
-            manifest.training_config,
-            reader=RepositoryFiles(lambda path: repository.read(sha, path)),
+            path,
+            reader=RepositoryFiles(lambda included: repository.read(sha, included)),
         ).config
     except ConfigFileError as error:
-        problems.add(f"training.config at {sha[:12]}: {error}")
+        problems.add(f"{where} at {sha[:12]}: {error}")
         return {}, {}
     sessions = config.get("sessions") if isinstance(config, dict) else None
     if not isinstance(sessions, list) or not sessions:
-        problems.add(f"training.config '{manifest.training_config}' has no 'sessions' list")
+        problems.add(f"{where} '{path}' has no 'sessions' list")
         return {}, {}
     if manifest.training_session >= len(sessions):
         problems.add(
             f"training.session {manifest.training_session} is out of range "
-            f"({len(sessions)} session(s))"
+            f"({len(sessions)} session(s)"
+            + (f" in {path})" if where != "training.config" else ")")
         )
         return {}, {}
     session = sessions[manifest.training_session]
     if not isinstance(session, dict):
-        problems.add("the selected session must be a mapping")
+        problems.add("the selected session must be a mapping"
+                     + (f" ({path})" if where != "training.config" else ""))
         return {}, {}
     session_config = session.get("session_config")
     if not isinstance(session_config, dict) or not isinstance(
@@ -443,6 +462,7 @@ def _training_config(manifest, repository, sha, problems):
         problems.add(
             "the selected session needs session_config.components_package "
             "(the package that registers its components)"
+            + (f" ({path})" if where != "training.config" else "")
         )
     return config, session
 
@@ -634,8 +654,9 @@ def _parse_entries(entries, field, where, base, problems):
     return parsed
 
 
-def _expand(manifest, base_session, dialect, problems):
-    """(group, experiment, number, array index, session, variant) per task."""
+def _expand(manifest, session_of, dialect, problems):
+    """(group, experiment, number, array index, session, variant) per task;
+    `session_of(experiment)`: the selected session of its training config."""
     tasks = []
     for group in manifest.groups:
         where = f"groups.{group.name}"
@@ -644,6 +665,7 @@ def _expand(manifest, base_session, dialect, problems):
         array_index = 0
         for experiment in group.experiments:
             e_where = f"{where}.experiments[{experiment.name}]"
+            base_session = session_of(experiment)
             overrides = _parse_entries(experiment.overrides, "value", f"{e_where}.overrides", base_session, problems)
             matrix = _parse_entries(experiment.matrix, "values", f"{e_where}.matrix", base_session, problems)
             session = base_session

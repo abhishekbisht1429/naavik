@@ -448,6 +448,8 @@ class Experiment:
     name: str
     overrides: tuple[dict, ...]   # raw {component?, path, value}
     matrix: tuple[dict, ...]      # raw {component?, path, values}
+    #: Its own training config (a repository path); None: `training.config`.
+    config: str | None = None
 
 
 @dataclass(frozen=True)
@@ -726,8 +728,9 @@ def _parse_group(name, raw, where, problems) -> Group | None:
 
 
 def _parse_experiment(raw, where, problems) -> Experiment | None:
-    reader = _Reader(raw, where, problems, {"name", "overrides", "matrix"})
+    reader = _Reader(raw, where, problems, {"name", "overrides", "matrix", "config"})
     name = reader.get("name", required=True)
+    config = reader.string("config")
     if name is not None and (problem := check_name(name, f"{where}.name")):
         problems.add(problem)
         name = None
@@ -760,7 +763,7 @@ def _parse_experiment(raw, where, problems) -> Experiment | None:
                 )
     if name is None or not isinstance(overrides, list) or not isinstance(matrix, list):
         return None
-    return Experiment(name, tuple(overrides), tuple(matrix))
+    return Experiment(name, tuple(overrides), tuple(matrix), config)
 
 
 def __getattr__(name):

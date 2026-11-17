@@ -211,6 +211,10 @@ def run_task(config_path: str, record_path: str, plan_path: str,
         "attempt": attempt,
         "run_id": engine.run_id if engine is not None else None,
     }
+    config_file = next((task.get("config_file") for task in plan.get("tasks", [])
+                        if task.get("name") == task_name), None)
+    if config_file:
+        record["config_file"] = config_file
     if resume:
         record["resumed_from"] = resume
     if restart:

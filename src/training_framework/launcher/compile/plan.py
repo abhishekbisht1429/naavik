@@ -54,6 +54,9 @@ class Task:
     variant: tuple[dict, ...]      # [{address, value}] of the matrix
     config: dict = field(repr=False)  # the full training config file
     config_hash: str = ""
+    #: The training config file it was made from, when the batch's
+    #: experiments use more than one (None otherwise).
+    config_file: str | None = None
 
     @property
     def name(self) -> str:
@@ -180,6 +183,7 @@ class ExecutionPlan:
                     "array_index": task.array_index,
                     "variant": list(task.variant),
                     "config_hash": task.config_hash,
+                    **({"config_file": task.config_file} if task.config_file else {}),
                 }
                 for task in self.tasks
             ],
