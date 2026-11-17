@@ -38,10 +38,34 @@ def environment_facts() -> dict:
         facts["cuda"] = torch.version.cuda
     except ImportError:                   # recorded as missing, not an error
         facts["torch"] = None
+    facts["framework"] = framework_facts()
+    return facts
+
+
+def framework_facts() -> dict:
+    """The framework this process imported: where from, the installed
+    distribution's version only when that installation is the imported
+    code (an older install beside a source checkout says nothing about
+    it), and the checkout's commit when it is one (never snapshotted)."""
+    import training_framework
+
+    location = Path(training_framework.__file__).resolve().parent
+    facts = {"location": str(location), "version": None}
     try:
-        facts["framework"] = importlib.metadata.version("training-framework")
+        distribution = importlib.metadata.distribution("training-framework")
+        installed = Path(distribution.locate_file("training_framework/__init__.py")).resolve()
+        if installed.parent == location:
+            facts["version"] = distribution.version
     except importlib.metadata.PackageNotFoundError:
-        facts["framework"] = None
+        pass
+    from training_framework.launcher.errors import HpcError
+    from training_framework.launcher.ports.repository import GitRepository
+
+    try:
+        repository = GitRepository(location)
+        facts.update(sha=repository.resolve("HEAD"), dirty=not repository.is_clean())
+    except (HpcError, OSError):
+        pass
     return facts
 
 

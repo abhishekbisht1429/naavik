@@ -110,8 +110,13 @@ def detail(run: Run, runs: list[Run], root: Path) -> str:
         lines.append("code     - (not in a Git repository)")
     env = record.get("environment") or {}
     lines.append(f"env      python {env.get('python')}, torch {env.get('torch')}, CUDA "
-                 f"{env.get('cuda')}, framework {env.get('framework')}, packages "
-                 f"{(env.get('packages_sha256') or '')[:12]}")
+                 f"{env.get('cuda')}, packages {(env.get('packages_sha256') or '')[:12]}")
+    framework = env.get("framework")
+    if isinstance(framework, dict):
+        text = f"framework {framework.get('version') or '(no installed version)'} | {framework.get('location')}"
+        if framework.get("sha"):
+            text += f" | git {framework['sha'][:10]}" + (" (dirty)" if framework.get("dirty") else "")
+        lines.append(text)
     for rank, facts in sorted(run.ranks.items()):
         device = facts.get("device")
         if facts.get("name"):
@@ -159,7 +164,13 @@ def config_value(run: Run, root: Path, key: str) -> Any:
     return flat[key]
 
 
-def difference(a: Run, b: Run, root: Path) -> str:
+def _ignored(key: str, ignored) -> bool:
+    return any(key == item or key.startswith(f"{item}.") for item in ignored)
+
+
+def difference(a: Run, b: Run, root: Path, ignored=()) -> str:
+    """What differs, leaving out config keys in `ignored` (a key and
+    everything under it): those that differ between runs by construction."""
     def text(value):
         return yaml.safe_dump(value, default_flow_style=True).strip() if isinstance(value, (dict, list)) \
             else json.dumps(value) if not isinstance(value, str) else value
@@ -171,9 +182,12 @@ def difference(a: Run, b: Run, root: Path) -> str:
         if code_a.get("sha") and code_b.get("sha"):
             lines.append(f"        git diff {code_a['sha'][:12]} {code_b['sha'][:12]}")
     config_a, config_b = flatten(a.config(root) or {}), flatten(b.config(root) or {})
+    skipped = set()
     for key in sorted(set(config_a) | set(config_b)):
         left, right = config_a.get(key, "(absent)"), config_b.get(key, "(absent)")
-        if left != right:
+        if left != right and _ignored(key, ignored):
+            skipped.add(key)
+        elif left != right:
             lines.append(f"config  {key}: {text(left)} | {text(right)}")
     env_a, env_b = a.record.get("environment") or {}, b.record.get("environment") or {}
     for key in sorted(set(env_a) | set(env_b)):
@@ -186,4 +200,7 @@ def difference(a: Run, b: Run, root: Path) -> str:
             lines.append(f"rank {rank}  {left} | {right}")
     if len(lines) == 1:
         lines.append("no differences in code, config, environment, or devices")
+    if skipped:
+        lines.append(f"(not compared, they differ by construction: {', '.join(sorted(skipped))}; "
+                     "--all-keys compares them)")
     return "\n".join(lines)

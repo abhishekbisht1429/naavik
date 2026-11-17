@@ -52,6 +52,9 @@ def _parser(prog: str) -> argparse.ArgumentParser:
     diff = commands.add_parser("diff", help="what differs between two runs")
     diff.add_argument("a", help="a run id (or a unique beginning)")
     diff.add_argument("b", help="another run id (or a unique beginning)")
+    diff.add_argument("--all-keys", action="store_true",
+                      help="also compare the config keys that differ between runs by construction "
+                           "(sessions_dir, the rendezvous address and port)")
     registry_option(diff)
 
     sync = commands.add_parser("sync", help="copy the runs recorded on targets into this registry")
@@ -141,7 +144,10 @@ def _show(args) -> int:
 
 def _diff(args) -> int:
     root = _root(args)
-    print(views.difference(_find(root, args.a), _find(root, args.b), root))
+    from training_framework.reporting.summary import DEFAULT_IGNORED_KEYS
+
+    ignored = () if args.all_keys else DEFAULT_IGNORED_KEYS
+    print(views.difference(_find(root, args.a), _find(root, args.b), root, ignored))
     return 0
 
 

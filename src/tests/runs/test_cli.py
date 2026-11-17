@@ -166,6 +166,11 @@ def test_diff_names_what_differs(recorded, capsys):
     output = capsys.readouterr().out
     assert "config  optimizer.optimizer.kwargs.lr: 0.1 | 0.2" in output
     assert "rng_seed" not in output and "code " not in output
+    # The rendezvous port the engine picked differs by construction: named, not compared.
+    assert "config  ddp.master_port" not in output
+    assert "(not compared, they differ by construction: ddp.master_port" in output
+    assert naavik(["runs", "diff", first, second, "--all-keys"]) == 0
+    assert "config  ddp.master_port: " in capsys.readouterr().out
 
 
 def test_diff_of_a_run_with_itself_finds_nothing(recorded, capsys):

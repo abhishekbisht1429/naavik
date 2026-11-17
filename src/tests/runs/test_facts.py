@@ -97,3 +97,25 @@ def test_a_cuda_worker_records_its_gpu_by_name_and_uuid():
     smi = subprocess.run(["nvidia-smi", "--query-gpu=uuid", "--format=csv,noheader"],
                          capture_output=True, text=True).stdout.split()
     assert facts["uuid"] == f"GPU-{properties.uuid}" and facts["uuid"] in smi
+
+
+def test_the_framework_is_the_imported_one_not_whatever_is_installed():
+    import importlib.metadata
+    from pathlib import Path
+
+    import training_framework
+    from training_framework.runs.facts import framework_facts
+
+    facts = framework_facts()
+    location = Path(training_framework.__file__).resolve().parent
+    assert facts["location"] == str(location)
+    try:
+        distribution = importlib.metadata.distribution("training-framework")
+        installed_here = (Path(distribution.locate_file("training_framework/__init__.py"))
+                          .resolve().parent == location)
+        expected = distribution.version if installed_here else None
+    except importlib.metadata.PackageNotFoundError:
+        expected = None
+    assert facts["version"] == expected       # an installation elsewhere names nothing
+    # This checkout is a Git repository: its commit is recorded, never snapshotted.
+    assert len(facts["sha"]) == 40 and isinstance(facts["dirty"], bool)
