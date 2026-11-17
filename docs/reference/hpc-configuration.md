@@ -143,6 +143,24 @@ A YAML file committed in your repository; its path is the argument of
 | `training` | yes | | The training config and engine options; see [training](#training). |
 | `data` | no | | Config values that are datasets; see [data](#data). |
 | `groups` | yes | | Groups of experiments sharing resources; see [groups](#groups). |
+| `project` | no | | A project file (a path in the repository) adding `source`, `code`, `environment`, and `data`; see [The project file](#the-project-file). |
+| `description` | no | | Why the batch runs; kept in the receipt and each task's run record (`naavik run --note`). |
+
+`code` is required in the manifest or its project file.
+
+### The project file
+
+`naavik-project.yaml` at the repository root (any path, when a manifest
+names it with `project:`): what a project's batches share. Read from the
+batch's commit; it must be identical at `source.ref`. A key in both the
+manifest and the project file is an error.
+
+| Key | Meaning |
+|---|---|
+| `source`, `code`, `environment`, `data` | As in the manifest. |
+| `run_defaults.resources` | [resources](#resources) of a `naavik run` task (`--gpus`, `--walltime` override). |
+| `run_defaults.max_parallel` | `max_parallel` of a `naavik run` group (a positive integer). |
+| `run_defaults.target` | The target `naavik run` uses when no `--target` is given. |
 
 ### source
 

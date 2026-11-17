@@ -167,6 +167,19 @@ is compared: it changes the global batch size. `--ignore-key PATH` adds a
 path (and everything under it) to these; `--no-default-ignores` compares
 the defaults too.
 
+**The code is compared too.** When some run's code is known, each run gets
+a setting `code`: the commit it ran (12 characters), marked `(snapshot)`
+for a working tree run as a snapshot, or `(dirty)` for a direct run whose
+uncommitted changes were not kept. A batch task's comes from its
+`record.json` (next to `variant.json`), a direct run's from the [run
+registry](13-run-registry.md), matched by its session directory. Runs on
+different code are never one seed group: a group's spread is then seed
+noise, not a code change. A run whose code was not recorded (runs from
+before these records) shows `unknown`; when no run's code is known, the
+report is as it was. `--ignore-key code` leaves the code out. A config that
+has a `code` setting of its own is reported as a problem and the code is
+not compared.
+
 ## Problems and `--strict`
 
 The **Problems** section lists, among others: a truncated or corrupt event

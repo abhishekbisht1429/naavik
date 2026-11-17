@@ -14,6 +14,7 @@ pip install 'training-framework[hpc]'     # adds `packaging`, used on the workst
 naavik validate experiments/sweep.yaml
 naavik render   experiments/sweep.yaml --output /tmp/preview
 naavik launch   experiments/sweep.yaml
+naavik run      configs/model/base.yaml   # one config as a one-task batch, followed
 naavik batches  --live        # all your batches and what they are doing
 naavik status   <batch-id>    # one batch, task by task
 naavik resume   <batch-id>    # continue unfinished tasks from their checkpoints
@@ -198,6 +199,41 @@ groups:
 - `training.engine_options` accepts `--heartbeat-timeout`,
   `--stop-sync-grace-period`, `--stop-sync-poll-interval`, and
   `--process_timeout_on_join`; config changes belong in overrides.
+- `description` (optional) says why the batch runs; it is kept in the
+  receipt and in each task's run record.
+
+### Sharing settings: the project file
+
+`source`, `code`, `environment`, and `data` are usually the same for every
+batch of a project. Put them once in `naavik-project.yaml` at the root of
+the repository, and name it from each manifest:
+
+```yaml
+# naavik-project.yaml
+code: {framework: dependency, paths: ["."]}
+environment: {requirements: requirements/hpc.txt, python: "3.12"}
+data:
+  sources: [...]
+run_defaults:                 # what `naavik run` uses (see below)
+  resources: {walltime: "04:00:00", gpus: 1, cpus: 8, memory: 64G}
+  max_parallel: 1
+  target: workstation
+```
+
+```yaml
+# experiments/sweep.yaml
+version: 1
+name: sweep
+project: naavik-project.yaml
+training: {config: configs/fine-tuning.yaml}
+groups: {...}
+```
+
+The project file is read from the batch's commit, like the manifest, and
+must be identical at `source.ref`. A key set in both files is an error (each
+setting has one place). The staged `manifest.yaml` is the two merged, and
+the batch's manifest hash covers both. `run_defaults` is only read by
+`naavik run`.
 
 ## 3. Data
 
@@ -291,6 +327,33 @@ concerns, instead of stopping at the first. In order, it checks:
 8. **Job scripts**: every Slurm script is rendered (resources, partitions,
    array sizes against `max_array_size`, dependencies, the early-stop
    signal), so mistakes `sbatch` would reject surface here.
+9. **Every task config, with the batch's own code**: the commit (or
+   snapshot) that will run is exported once into
+   `~/.cache/training-framework/trees/<commit>`, and a separate Python
+   process checks each task's config there, building nothing: session
+   settings, every component name (a misspelling is refused, naming the
+   task), wiring, companions, singletons, and every `config_schema` value.
+   Your working tree is never used, so a fix you have not committed does
+   not hide a broken commit.
+
+The check runs with the target's environment when the target is this
+machine with `env.existing`, else with the interpreter running `naavik`;
+its framework must be the one the target will run. In checkout mode it is
+the batch's own (it must be in `code.paths`). With a managed environment,
+a `git+...@<commit>` pin needs that exact, clean framework commit here; a
+`==X.Y.Z` pin needs that installed version, or a framework checkout whose
+`pyproject.toml` says `X.Y.Z` (with a note). Otherwise `validate` says what
+to install.
+
+What it cannot check without building the session is printed once as a
+`note:`: `import_components` (it reads checkpoints), the dataflow and
+graph order (they need built components), and configs that only their
+constructor reads (the optimizer's, the data manager's). Those still
+fail when the task starts.
+
+`TRAINING_FRAMEWORK_CODE_CHECK=0` skips this check. It is never silent:
+`validate`, `render`, and `launch` print a warning, and the receipt
+records `code_check: skipped` (`done` otherwise).
 
 It prints any `note:` lines, then `ok: N task(s) in G group(s); commit ...;
 environment ...` and exits 0, or `error: N problems:` with the list and
@@ -350,6 +413,43 @@ mirrored as `receipt.json` in the batch directory) lists every job submitted.
 If a submission's outcome is uncertain (a dropped connection), nothing is
 retried; the receipt says `needs reconciliation` and prints the `squeue
 --name=...` query that finds the job.
+
+### One config, followed: `naavik run`
+
+```bash
+naavik run configs/model/vit-attnpool.yaml \
+    --override optimizer:optimizer.kwargs.lr=3.0e-4 --note "attention pooling"
+```
+
+`naavik run CONFIG` runs one config as a one-task batch, built from the
+project file at the root of the repository holding `CONFIG` (it is
+required): group `run`, one experiment named after the file
+(`run/vit-attnpool/000`), with `run_defaults.resources` (`--gpus` and
+`--walltime` override them). The target is `--target`, else
+`run_defaults.target`, else the target file's default. Everything else is
+`launch`: the same checks, the same staging, a receipt, a run record. It
+asks only when the upload exceeds `upload_limit` (`--yes` skips that too).
+
+- `--override PATH=VALUE` sets a path in the session;
+  `--override component:PATH=VALUE` a path inside that component's entry,
+  wherever it is listed (the manifest's [addresses](#2-the-manifest-experiments-committed)).
+  `VALUE` is YAML, read like a config file: `3e-4` is the *string*
+  `"3e-4"`, `3.0e-4` the number. Repeatable.
+- `--note TEXT` is the batch's `description`: kept in the receipt and in
+  the run record (`naavik runs show` prints it).
+
+It then **follows the task**: its log as it grows, then a last line such as
+`run/vit-attnpool/000: done`, and exits with the task's exit status (`1`
+when it ended without one: cancelled, no record). This works the same on
+every target. **Ctrl-C** cancels the task (as `naavik cancel --task`) and
+keeps following until it stops (mid-training it saves and ends
+`interrupted`); a **second Ctrl-C** stops following, and prints the `naavik
+logs ... --follow` command to resume. `--detach` returns once the task is
+launched.
+
+With `worktree: snapshot` on the target, `naavik run` runs your working
+tree as it is: no commit is needed for a quick try, and the snapshot keeps
+exactly what ran.
 
 ## 7. Keeping track of your batches
 

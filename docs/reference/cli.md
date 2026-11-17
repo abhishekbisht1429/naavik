@@ -66,6 +66,7 @@ reading results is one separate command, installed with the package as
 | Command | Does | Guide |
 |---|---|---|
 | `naavik validate / render / launch MANIFEST` | check, preview, or launch a batch | [Running batches](../guide/08-hpc-batches.md) |
+| `naavik run CONFIG [--override PATH=VALUE] [--note TEXT] [--gpus N] [--walltime T] [--detach]` | one config as a one-task batch, followed to its end | [`naavik run`](../guide/08-hpc-batches.md#one-config-followed-naavik-run) |
 | `naavik batches / status / logs / cancel / resume / fetch` | follow, stop, continue, and collect batches | [Running batches](../guide/08-hpc-batches.md#7-keeping-track-of-your-batches) |
 | `naavik probe-python` | print a site interpreter's identity | [Running batches](../guide/08-hpc-batches.md#1-the-profile-site-settings-on-your-machine) |
 | `naavik summarize ROOT... [--runs RUN]` | compare runs | [Comparing runs](../guide/12-comparing-runs.md) |
@@ -76,6 +77,12 @@ the same code: `python -m training_framework.hpc <command>` and
 `python -m training_framework.reporting summarize`. `launch` was called
 `submit`, and `--target`/`--targets` were `--profile`/`--profiles`; the old
 names are kept as aliases.
+
+`validate`, `render`, `launch`, and `run` check every task config with the
+batch's own code ([step 9](../guide/08-hpc-batches.md#5-checking-a-batch-validate-and-render));
+`TRAINING_FRAMEWORK_CODE_CHECK=0` skips it, with a warning, recorded in the
+receipt. `naavik run` exits with the task's exit status (`130` when Ctrl-C
+stopped following).
 
 ## `naavik runs`
 

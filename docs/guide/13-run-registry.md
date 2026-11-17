@@ -129,6 +129,12 @@ With `TRAINING_FRAMEWORK_RUNS_SNAPSHOT=0`, or when untracked files exceed
 the limit, no snapshot is kept: the record says the tree was dirty and why.
 A batch task records its batch's commit (and snapshot base) instead.
 
+`naavik summarize` uses these records to tell runs on different code apart
+(see [Comparing runs](12-comparing-runs.md#which-settings-are-compared)).
+A batch launched with a description (`naavik run --note TEXT`, or the
+manifest's `description`) keeps it in each task's record; `naavik runs
+show` prints it as `note`.
+
 ## Across machines
 
 Each machine has its own registry. A batch task records on the machine it
