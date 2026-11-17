@@ -16,6 +16,7 @@ class FakeConfig:
     version: str = "1"
     fetch_seconds: float = 0.0
     broken: bool = False
+    download: bool = False
 
 
 def _count(path):

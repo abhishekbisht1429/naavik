@@ -356,6 +356,12 @@ class TrainingEngine:
     def _register_configured_sessions(self) -> None:
         if self._configurator.mode == "new":
             sources = self._configured_sources()
+            # Declared data that asks for a download, once and under a
+            # lease, before any session is built (`training_framework.data`).
+            from training_framework.data.direct import ensure_downloads
+
+            ensure_downloads([self._split_session_definition(definition)[:2]
+                              for definition in self._configurator.session_configs])
             for index, definition in enumerate(self._configurator.session_configs):
                 config, session_type, session_kwargs = (
                     self._split_session_definition(definition)
