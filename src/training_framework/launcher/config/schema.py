@@ -36,8 +36,14 @@ DEFAULT_SNAPSHOT_LIMIT = "50M"
 DEFAULT_SETUP_RESOURCES = {"walltime": "01:00:00", "cpus": 4, "memory": "16G"}
 MANIFEST_KEYS = frozenset({
     "version", "name", "source", "code", "environment", "training", "data",
-    "groups",
+    "groups", "project",
 })
+#: The project file (`naavik-project.yaml`): what a project's batches share.
+PROJECT_FILE = "naavik-project.yaml"
+#: Manifest keys a project file may hold (a manifest naming the project may
+#: not repeat them: one source per key).
+PROJECT_MANIFEST_KEYS = ("source", "code", "environment", "data")
+PROJECT_KEYS = frozenset(PROJECT_MANIFEST_KEYS) | {"run_defaults"}
 HOOK_PHASES = ("common", "setup", "prepare", "task")
 LOCATIONS = ("job", "login")
 
@@ -473,6 +479,60 @@ def _scheduler_options(raw, where, problems) -> dict:
         problems.add(f"{where} must map a scheduler name to its options")
         return {}
     return {key: dict(value) for key, value in raw.items()}
+
+
+@dataclass(frozen=True)
+class RunDefaults:
+    """`run_defaults` of a project file: what `naavik run` uses unless told."""
+
+    resources: dict
+    max_parallel: int | None
+    target: str | None
+
+
+@dataclass(frozen=True)
+class Project:
+    #: The manifest keys it provides, as written.
+    manifest_keys: dict
+    run_defaults: RunDefaults
+
+
+def parse_project(raw: Any, source: str) -> Project:
+    """A project file: `source`, `code`, `environment`, `data` (as in a
+    manifest) and `run_defaults: {resources, max_parallel, target}`."""
+    problems = Problems()
+    reader = _Reader(raw, source, problems, PROJECT_KEYS)
+    defaults = _Reader(reader.get("run_defaults", {}), f"{source}.run_defaults", problems,
+                       {"resources", "max_parallel", "target"})
+    resources = defaults.get("resources", {})
+    if not isinstance(resources, Mapping):
+        problems.add(f"{source}.run_defaults.resources must be a mapping")
+        resources = {}
+    max_parallel = defaults.get("max_parallel")
+    if max_parallel is not None and (isinstance(max_parallel, bool)
+                                     or not isinstance(max_parallel, int) or max_parallel < 1):
+        problems.add(f"{source}.run_defaults.max_parallel must be a positive integer")
+    target = defaults.string("target")
+    problems.raise_if_any()
+    return Project(
+        manifest_keys={key: reader.raw[key] for key in PROJECT_MANIFEST_KEYS if key in reader.raw},
+        run_defaults=RunDefaults(dict(resources), max_parallel, target),
+    )
+
+
+def with_project(raw_manifest: Any, project: Project, manifest_source: str,
+                 project_source: str) -> dict:
+    """The manifest with the project file's keys added; a key in both is an
+    error (one source per key)."""
+    if not isinstance(raw_manifest, Mapping):
+        return raw_manifest
+    both = sorted(key for key in project.manifest_keys if key in raw_manifest)
+    if both:
+        problems = Problems()
+        problems.add(f"{manifest_source} and its project file {project_source} both set "
+                     f"{', '.join(both)}; keep each in one of them")
+        problems.raise_if_any()
+    return {**raw_manifest, **project.manifest_keys}
 
 
 def parse_manifest(raw: Any, source: str) -> Manifest:

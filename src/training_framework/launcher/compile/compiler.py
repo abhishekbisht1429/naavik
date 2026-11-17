@@ -47,7 +47,7 @@ from training_framework.launcher.config.requirements import (
     RequirementsError,
     parse_requirements,
 )
-from training_framework.launcher.config.schema import Manifest, Profile, parse_manifest
+from training_framework.launcher.config.schema import Manifest, Profile, parse_manifest, parse_project, with_project
 from training_framework.launcher.ports.shell import exec_script
 from training_framework.launcher.scheduler import get_scheduler
 from training_framework.launcher.config.topology import check_topology, parse_engine_options
@@ -107,6 +107,23 @@ def compile_plan(
         problems.raise_if_any()
     raw_manifest = _load_yaml(head_bytes, manifest_path, problems)
     problems.raise_if_any()
+    # A project file the manifest names adds the keys a project's batches
+    # share; read at the same commit as the manifest.
+    project_path = project_bytes = None
+    if isinstance(raw_manifest, Mapping) and raw_manifest.get("project") is not None:
+        project_path = raw_manifest["project"]
+        if not isinstance(project_path, str) or not project_path:
+            problems.add(f"{manifest_path}.project must be a path in the repository")
+        else:
+            project_bytes = repository.read(head, project_path)
+            if project_bytes is None:
+                problems.add(f"project file '{project_path}' does not exist at {head[:12]} "
+                             f"(named by {manifest_path}.project)")
+        problems.raise_if_any()
+        project_raw = _load_yaml(project_bytes, project_path, problems)
+        problems.raise_if_any()
+        raw_manifest = with_project(raw_manifest, parse_project(project_raw, project_path),
+                                    manifest_path, project_path)
     manifest = parse_manifest(raw_manifest, manifest_path)
 
     if snapshot is not None:
@@ -122,6 +139,11 @@ def compile_plan(
     if sha != head and repository.read(sha, manifest_path) != head_bytes:
         problems.add(
             f"{manifest_path} differs between HEAD and source.ref "
+            f"'{manifest.source_ref}'; check out that ref first"
+        )
+    if project_path and sha != head and repository.read(sha, project_path) != project_bytes:
+        problems.add(
+            f"{project_path} differs between HEAD and source.ref "
             f"'{manifest.source_ref}'; check out that ref first"
         )
 
@@ -304,7 +326,8 @@ def compile_plan(
         batch_id=batch_id,
         batch_dir=batch_dir,
         sha=sha,
-        manifest_hash=hash_bytes(head_bytes),
+        # With a project file, both files make the manifest.
+        manifest_hash=hash_bytes(head_bytes + (b"\0" + project_bytes if project_bytes else b"")),
         profile=profile.name,
         scheduler=dialect.name,
         code_mode=manifest.code_framework,
