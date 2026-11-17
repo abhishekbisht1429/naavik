@@ -80,7 +80,12 @@ def compile_plan(
         facts: LocalFacts,
         clock: datetime,
         fresh_env: bool = False,
+        manifest_data: bytes | None = None,
 ) -> Compiled:
+    """`manifest_data`: a manifest given as data rather than read from the
+    repository (`naavik run` builds one); `manifest_path` then only names
+    it in messages, and everything else is still read at the batch's
+    commit."""
     problems = Problems()
 
     # The batch runs one exact tree: HEAD (worktree: commit, which must then
@@ -101,7 +106,7 @@ def compile_plan(
                 "worktree: snapshot in the target's profile"
             )
         head = repository.resolve("HEAD")
-    head_bytes = repository.read(head, manifest_path)
+    head_bytes = manifest_data if manifest_data is not None else repository.read(head, manifest_path)
     if head_bytes is None:
         problems.add(f"{manifest_path} is not committed")
         problems.raise_if_any()
@@ -136,7 +141,7 @@ def compile_plan(
         sha = head
     else:
         sha = repository.resolve(manifest.source_ref)
-    if sha != head and repository.read(sha, manifest_path) != head_bytes:
+    if manifest_data is None and sha != head and repository.read(sha, manifest_path) != head_bytes:
         problems.add(
             f"{manifest_path} differs between HEAD and source.ref "
             f"'{manifest.source_ref}'; check out that ref first"
@@ -347,6 +352,7 @@ def compile_plan(
         scheduler_settings=_settings_json(profile.scheduler_settings),
         notes=tuple(notes),
         base_sha=snapshot.base if snapshot is not None and snapshot.snapshot else None,
+        description=manifest.description,
     )
     return Compiled(plan, manifest, suggestions)
 

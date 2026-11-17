@@ -36,7 +36,7 @@ DEFAULT_SNAPSHOT_LIMIT = "50M"
 DEFAULT_SETUP_RESOURCES = {"walltime": "01:00:00", "cpus": 4, "memory": "16G"}
 MANIFEST_KEYS = frozenset({
     "version", "name", "source", "code", "environment", "training", "data",
-    "groups", "project",
+    "groups", "project", "description",
 })
 #: The project file (`naavik-project.yaml`): what a project's batches share.
 PROJECT_FILE = "naavik-project.yaml"
@@ -438,6 +438,8 @@ class Manifest:
     data_sources: tuple[Any, ...]
     groups: tuple[Group, ...]
     raw: dict = field(repr=False)
+    #: Free text: why this batch runs (`naavik run --note`).
+    description: str | None = None
 
 
 _PROFILE_KEY_MESSAGE = (
@@ -641,6 +643,7 @@ def parse_manifest(raw: Any, source: str) -> Manifest:
         data_sources=tuple(sources),
         groups=tuple(groups),
         raw=dict(raw),
+        description=reader.string("description"),
     )
 
 

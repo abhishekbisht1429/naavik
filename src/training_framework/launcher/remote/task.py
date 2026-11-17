@@ -175,6 +175,7 @@ def run_task(config_path: str, record_path: str, plan_path: str,
     os.environ["NAAVIK_RUN_CONTEXT"] = json.dumps({
         "batch_id": plan["batch_id"], "task": task_name, "attempt": attempt,
         "scheduler": plan["scheduler"], "restarted": restart,
+        **({"note": plan["description"]} if plan.get("description") else {}),
         "code": {"sha": plan["sha"], "base_sha": plan.get("base_sha"),
                  "snapshot": bool(plan.get("base_sha"))},
     })

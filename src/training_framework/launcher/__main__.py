@@ -156,6 +156,24 @@ def _parser(prog: str = "python -m training_framework.hpc") -> argparse.Argument
                                  help="build a managed environment for this batch only")
             command.add_argument("--yes", action="store_true",
                                  help="do not ask (also accepts uploads above upload_limit)")
+    run = commands.add_parser(
+        "run", help="run one config as a one-task batch, and follow it",
+        description="Run CONFIG as a one-task batch built from the project file "
+                    "(naavik-project.yaml at the repository root): checked, staged, and "
+                    "recorded like any batch. Follows the task's log until it ends and exits "
+                    "with its status. Ctrl-C cancels the task; a second Ctrl-C stops following.")
+    run.add_argument("config", help="the training config (a file in the repository)")
+    run.add_argument("--override", action="append", default=[], metavar="PATH=VALUE",
+                     help="set PATH (in the session) or component:PATH (inside that "
+                          "component's entry) to VALUE, read as YAML; repeatable")
+    run.add_argument("--note", help="why this run: kept in its receipt and run record")
+    run.add_argument("--gpus", type=int, help="GPUs for the task (default: run_defaults)")
+    run.add_argument("--walltime", help="walltime of the task, [D-]HH:MM:SS (default: run_defaults)")
+    run.add_argument("--detach", action="store_true", help="return once launched; do not follow")
+    run.add_argument("--fresh-env", action="store_true",
+                     help="build a managed environment for this run only")
+    run.add_argument("--yes", action="store_true", help="do not ask, even above upload_limit")
+    profile_options(run)
     status = commands.add_parser("status", help="show the state of every task of a submitted batch")
     status.add_argument("batch_id", help="a batch id, or the path to its receipt")
     status.add_argument("--receipts", type=Path, help="receipt directory "
@@ -341,7 +359,9 @@ def _size(value) -> str:
     return f"{value:.1f} TiB"
 
 
-def _review(assume_yes: bool):
+def _review(assume_yes: bool, only_over_limit: bool = False):
+    """Print the batch's summary; ask before submitting (`only_over_limit`:
+    only when the uploads exceed the profile's upload_limit)."""
     def review(plan, summary) -> bool:
         print(f"batch {plan.batch_id}: {summary.tasks} task(s) in {summary.groups} group(s)")
         print(f"environment: {'ready' if summary.environment_ready else 'will be built'}")
@@ -350,7 +370,7 @@ def _review(assume_yes: bool):
         if summary.uploads:
             limit = f" (limit {_size(summary.upload_limit)})" if summary.upload_limit else ""
             print(f"total upload: {_size(summary.upload_bytes)}{limit}")
-        if assume_yes:
+        if assume_yes or (only_over_limit and not summary.over_limit):
             return True
         if not sys.stdin.isatty():
             print("error: not interactive; pass --yes to submit", file=sys.stderr)
@@ -379,15 +399,24 @@ def _require_tools(*names: str) -> None:
 
 
 def _submit(args, profile) -> int:
-    from training_framework.launcher.remote.runtime import current_process_owner
-    from training_framework.launcher.services.evaluation import enabled as code_check_enabled
-    from training_framework.launcher.services.staging import SourceStager
-    from training_framework.launcher.services.submit import submit
-
     from training_framework.launcher.ports.targets import target_of_profile
 
     _require_tools(*target_of_profile(profile).tools(transfer=True))
     compiled, repository = _compile(args, profile, fresh_env=args.fresh_env)
+    label = Path(args.batch).resolve().relative_to(repository.root.resolve()).as_posix()
+    status, _ = _launch(profile, compiled, repository, manifest_label=label,
+                        review=_review(args.yes))
+    return status
+
+
+def _launch(profile, compiled, repository, *, manifest_label: str, review):
+    """Stage and submit a compiled batch; (exit status, receipt or None)."""
+    from training_framework.launcher.remote.runtime import current_process_owner
+    from training_framework.launcher.services.evaluation import enabled as code_check_enabled
+    from training_framework.launcher.services.staging import SourceStager
+    from training_framework.launcher.services.submit import submit
+    from training_framework.launcher.ports.targets import target_of_profile
+
     plan = compiled.plan
     for note in plan.notes:
         print(f"note: {note}")
@@ -414,14 +443,14 @@ def _submit(args, profile) -> int:
             plan, manifest.raw, stager=stager, filesystem=ports["filesystem"],
             executor=ports["executor"], submitter=ports["submitter"],
             transfer=ports["transfer"], probe=ports["probe"], owner=current_process_owner(),
-            upload_limit=profile.upload_limit, review=_review(args.yes), progress=_progress,
+            upload_limit=profile.upload_limit, review=review, progress=_progress,
             receipt_info={
                 **target_of_profile(profile).receipt_fields(),
                 **snapshot_info,
                 "code_check": "done" if code_check_enabled() else "skipped",
                 "repository": str(repository.root),
-                "manifest": Path(args.batch).resolve().relative_to(
-                    repository.root.resolve()).as_posix(),
+                "manifest": manifest_label,
+                **({"description": plan.description} if plan.description else {}),
                 "submitted_from": socket.gethostname(),
             },
         )
@@ -439,12 +468,12 @@ def _submit(args, profile) -> int:
             if receipt.data.get("error"):
                 print(f"  {receipt.data['error']}")
             print(f"receipt: {receipt.path}")
-        return 130
+        return 130, receipt
     print(f"{receipt.status}: {plan.batch_dir}")
     for node_id, job_ref in receipt.submitted_jobs():
         print(f"  {node_id}: job {job_ref}")
     print(f"receipt: {receipt.path}")
-    return 0 if receipt.status == "submitted" else 1
+    return (0 if receipt.status == "submitted" else 1), receipt
 
 
 def _load_receipt(args) -> tuple[Path, dict]:
@@ -697,6 +726,104 @@ def _resume(args) -> int:
     return 0
 
 
+def _run(args) -> int:
+    """`naavik run`: see the `run` parser's description."""
+    from training_framework.launcher.compile.compiler import compile_plan
+    from training_framework.launcher.config.schema import PROJECT_FILE, parse_project
+    from training_framework.launcher.ports.targets import target_of_profile
+    from training_framework.launcher.services import quick_run
+
+    config = Path(args.config).resolve()
+    if not config.is_file():
+        raise HpcError(f"{args.config} does not exist")
+    # The project is the repository holding the config.
+    repository = GitRepository(config.parent)
+    root = repository.root.resolve()
+    project_file = root / PROJECT_FILE
+    if not project_file.is_file():
+        raise HpcError(f"naavik run needs a project file: {project_file} does not exist "
+                       "(it holds the code, environment, and run_defaults of the project)")
+    try:
+        project = parse_project(yaml.safe_load(project_file.read_text()), PROJECT_FILE)
+    except yaml.YAMLError as error:
+        raise HpcError(f"{PROJECT_FILE} is not valid YAML ({error})") from None
+    if args.profile is None and project.run_defaults.target:
+        args.profile = project.run_defaults.target
+    profile = _profile(args)
+    _require_tools(*target_of_profile(profile).tools(transfer=True))
+    relative = config.relative_to(root).as_posix()
+    manifest = quick_run.run_manifest(
+        config=relative, project=PROJECT_FILE, run_defaults=project.run_defaults,
+        overrides=args.override, note=args.note, gpus=args.gpus, walltime=args.walltime)
+    label = f"naavik run {relative}"
+    compiled = compile_plan(
+        manifest_path=label, repository=repository, profile=profile,
+        facts=WorkstationFacts(repository.root), clock=datetime.now(timezone.utc),
+        fresh_env=args.fresh_env, manifest_data=quick_run.manifest_bytes(manifest))
+    _check_code(compiled, repository, profile)
+    status, receipt = _launch(profile, compiled, repository, manifest_label=label,
+                              review=_review(args.yes, only_over_limit=True))
+    if status != 0 or receipt is None or args.detach:
+        if status == 0 and receipt is not None:
+            print(f"follow: naavik logs {receipt.data['batch_id']} --task "
+                  f"{compiled.plan.tasks[0].name} --follow")
+        return status
+    return _follow(receipt.path, receipt.data, compiled.plan.tasks[0].name)
+
+
+def _follow(receipt_path, receipt: dict, task: str) -> int:
+    """Follow `task` of a launched batch to its end (see services.follow)."""
+    from training_framework.launcher.ports.targets import ports_for, target_of_receipt
+    from training_framework.launcher.scheduler import get_scheduler
+    from training_framework.launcher.services import control
+    from training_framework.launcher.services.follow import Follower
+    from training_framework.launcher.services.status import fetch_batches, task_rows
+
+    target = target_of_receipt(receipt)
+    executor = ports_for(target).executor
+    bundle = get_scheduler(receipt["scheduler"])
+    refs = [node["job_ref"] for node in receipt["nodes"].values() if node.get("job_ref")]
+    batch_dir = receipt["batch_dir"]
+    tables = {}
+
+    def rows():
+        # The queue first, then the files: a task gone from the queue has
+        # already written its record.
+        live = bundle.job_states(executor)(refs) if bundle.job_states and refs else {}
+        files = fetch_batches(executor, [batch_dir]).get(batch_dir)
+        if files is not None:
+            tables.update(files.tables)
+        # Re-read: a cancel is recorded in the receipt.
+        return task_rows(json.loads(Path(receipt_path).read_text()), files, live)
+
+    def log():
+        if not tables:
+            return None
+        return f"{batch_dir}/{control.log_path(receipt, tables, task)}"
+
+    def read(path, offset):
+        result = executor.run(["sh", "-c", 'test -f "$1" && tail -c "+$2" "$1" || true',
+                               "sh", path, str(offset + 1)])
+        return result.stdout.encode()
+
+    def cancel():
+        _cancel(argparse.Namespace(batch_id=str(receipt_path), receipts=None, profile=None,
+                                    profiles=None, task=[task], yes=True))
+
+    def write(chunk: bytes):
+        sys.stdout.write(chunk.decode(errors="replace"))
+        sys.stdout.flush()
+
+    print(f"following {task} (Ctrl-C cancels it)", flush=True)
+    outcome = Follower(task=task, rows=rows, log=log, read=read, cancel=cancel, write=write,
+                       say=lambda message: print(message, file=sys.stderr, flush=True)).run()
+    if outcome.state is None:
+        print(f"follow again: naavik logs {receipt['batch_id']} --task {task} --follow")
+    else:
+        print(f"{task}: {outcome.state}")
+    return outcome.status
+
+
 def _batch_files(args, receipt):
     """(target, bundle, ports, files) of a launched batch, from where its
     receipt says it went."""
@@ -885,6 +1012,8 @@ def main(argv: list[str] | None = None, prog: str | None = None) -> int:
             return _cancel(args)
         if args.command == "logs":
             return _logs(args)
+        if args.command == "run":
+            return _run(args)
         profile = _profile(args)
         if args.command == "probe-python":
             from training_framework.launcher.ports.targets import target_of_profile

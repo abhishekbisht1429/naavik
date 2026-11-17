@@ -94,6 +94,8 @@ def detail(run: Run, runs: list[Run], root: Path) -> str:
         lines.append(f"batch    {launch['batch_id']} | task {launch.get('task')} | attempt "
                      f"{launch.get('attempt')} | {launch.get('scheduler')}"
                      + (" | restarted" if launch.get("restarted") else ""))
+    if launch.get("note"):
+        lines.append(f"note     {launch['note']}")
     if parent is not None:
         lines.append(f"continues {parent.run_id} ({parent.state})")
     code = record.get("code")

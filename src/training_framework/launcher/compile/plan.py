@@ -131,6 +131,8 @@ class ExecutionPlan:
     #: For a snapshot batch: the HEAD its `sha` (the working tree made into a
     #: commit) was taken on. None: `sha` is a commit the user made.
     base_sha: str | None = None
+    #: The manifest's `description` (why the batch runs), if any.
+    description: str | None = None
 
     def node(self, node_id: str) -> JobNode:
         for node in self.nodes:
@@ -155,6 +157,7 @@ class ExecutionPlan:
             "scheduler_settings": self.scheduler_settings,
             # Only snapshot batches carry these, so other plans are unchanged.
             **({"base_sha": self.base_sha, "snapshot": True} if self.base_sha else {}),
+            **({"description": self.description} if self.description else {}),
             "artifacts": [artifact.as_json() for artifact in self.artifacts],
             "nodes": [
                 {
