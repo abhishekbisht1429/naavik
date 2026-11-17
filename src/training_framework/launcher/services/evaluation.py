@@ -114,17 +114,41 @@ def checkout_note(manifest, managed, framework: dict) -> str | None:
     return None
 
 
+def _tree_environment(sha, manifest, repository, profile):
+    """(tree, interpreter, environment) to run the batch's code here."""
+    from training_framework.launcher.ports.source_tree import source_tree
+
+    tree = source_tree(repository.root, sha)
+    interpreter = _interpreter(profile)
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join(_pythonpath(tree, manifest, interpreter))}
+    return tree, interpreter, env
+
+
+def fetch_here(sha, manifest, requirement, entry: dict, repository, profile,
+               progress=print) -> None:
+    """Fetch one requirement (`TaskRequirement`) on this machine, with the
+    batch's own code, before an `upload` of it."""
+    from training_framework.launcher.compile.data import fetch_command
+
+    tree, interpreter, env = _tree_environment(sha, manifest, repository, profile)
+    command = fetch_command(requirement.class_path, entry, requirement.requirement["name"])
+    command = [interpreter] + command[1:-1]          # this machine's lease: no --under-lease
+    command[command.index("--config") + 1] = json.dumps(entry, sort_keys=True, default=str)
+    progress(f"fetching data '{requirement.requirement['name']}' here, into {requirement.location}")
+    completed = subprocess.run(command, cwd=str(tree), env=env, check=False)
+    if completed.returncode != 0:
+        raise HpcError(f"could not fetch data '{requirement.requirement['name']}' here "
+                       f"(exit {completed.returncode}; see above)")
+
+
 def evaluate_batch(sha, manifest, managed, tasks, repository, profile):
     """The `code_facts` port of `compile_plan`: check every task (name,
     config) with the code of commit `sha`, and collect its data
     requirements."""
     from training_framework.launcher.compile.compiler import CodeFacts, TaskRequirement
-    from training_framework.launcher.ports.source_tree import source_tree
 
     result = CodeFacts()
-    tree = source_tree(repository.root, sha)
-    interpreter = _interpreter(profile)
-    env = {**os.environ, "PYTHONPATH": os.pathsep.join(_pythonpath(tree, manifest, interpreter))}
+    tree, interpreter, env = _tree_environment(sha, manifest, repository, profile)
     with tempfile.TemporaryDirectory() as directory:
         given, answer = Path(directory, "tasks.json"), Path(directory, "result.json")
         given.write_text(json.dumps({"tasks": [{"name": name, "config": config}

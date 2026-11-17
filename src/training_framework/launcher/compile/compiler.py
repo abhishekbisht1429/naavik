@@ -269,6 +269,7 @@ def compile_plan(
     data = data_module.compile_sources(
         sources, sessions, profile, facts, environment.get("key"), code_identity, problems,
     )
+    _data_requirements(tasks_raw, sessions, sources, profile, facts, facts_found, problems, data)
     suggestions = data_module.suggest_sources(sessions, sources, facts)
     if suggestions:
         notes.append(
@@ -581,6 +582,30 @@ def _context(phase, environment, source_dir, manifest, profile) -> ExecutionCont
         unset_variables=UNSET_VARIABLES,
         hooks=tuple(profile.hooks["common"]) + tuple(profile.hooks[phase]),
     )
+
+
+def _data_requirements(tasks_raw, sessions, sources, profile, facts, code_facts, problems,
+                       data) -> None:
+    """Declared data (step 4): managed when the target's profile has `data_modes`;
+    said once (a note) when it does not."""
+    names = [f"{group.name}/{experiment.name}/{number:03d}"
+             for group, experiment, number, _, _, _ in tasks_raw]
+    if code_facts is None:
+        if profile.data is not None:
+            problems.add(f"target '{profile.name}' manages data (data_modes in its profile), which "
+                         "needs the data requirements the code check finds; the code check "
+                         "is off (TRAINING_FRAMEWORK_CODE_CHECK=0)")
+        return
+    per_task = [code_facts.requirements.get(name, ()) for name in names]
+    if profile.data is None:
+        found = sorted({item.requirement["name"] for items in per_task for item in items})
+        if found:
+            code_facts.notes.append(
+                f"data requirement(s) {', '.join(found)} are not managed on target "
+                f"'{profile.name}' (its profile has no data_modes); each task reads what is at "
+                "its config's path")
+        return
+    data_module.compile_requirements(per_task, sessions, sources, profile, facts, problems, data)
 
 
 def _with_sessions_dir(session: dict, path: str) -> dict:

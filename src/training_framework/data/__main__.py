@@ -1,6 +1,7 @@
 """`python -m training_framework.data fetch|verify --component DOTTED --config JSON
---requirement NAME [--scheduler S]`: obtain or check one data requirement of
-one component config (the target's prepare step runs `fetch`).
+--requirement NAME [--scheduler S | --under-lease]`: obtain or check one data
+requirement of one component config (the target's prepare step runs `fetch
+--under-lease`: it holds the lease on the location already).
 
 The location is the config's own (the batch has already rewritten it for
 the target), so the command and the config can never disagree.
@@ -28,6 +29,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--config", required=True, help="its config entry, as JSON")
     parser.add_argument("--requirement", required=True, help="the requirement's name")
     parser.add_argument("--scheduler", help="the batch scheduler this runs under")
+    parser.add_argument("--under-lease", action="store_true",
+                        help="the caller holds the lease on the location (a prepare step)")
     args = parser.parse_args(argv)
     from training_framework.components.importing import import_object
 
@@ -48,7 +51,8 @@ def main(argv: list[str] | None = None) -> int:
                 return 1
             _log(f"{located.location}: ok")
             return 0
-        outcome = ensure(component_class, located, notify=_log, scheduler=args.scheduler)
+        outcome = ensure(component_class, located, notify=_log, scheduler=args.scheduler,
+                         lease_held=args.under_lease)
         _log(f"{args.requirement} at {located.location}: {outcome}")
         return 0
     except (DataError, ValueError, TypeError, ImportError) as error:

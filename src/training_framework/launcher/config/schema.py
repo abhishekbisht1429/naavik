@@ -27,8 +27,11 @@ _DURATION_FACTORS = {"s": 1, "m": 60, "h": 3600}
 PROFILE_KEYS = frozenset({
     "ssh_host", "local", "roots", "scheduler", "slurm", "hooks", "env",
     "setup_location", "prepare_location", "path_map", "upload_limit",
-    "setup_resources", "worktree", "snapshot_limit",
+    "setup_resources", "worktree", "snapshot_limit", "data_modes",
 })
+#: How a data requirement reaches a target (profile `data_modes:`; not
+#: `data:`, which is the manifest's data sources).
+DATA_MODES = ("fetch", "upload", "present")
 #: How a batch takes your code: the commit you made (`commit`), or a commit
 #: made of your working tree as it is (`snapshot`).
 WORKTREE_MODES = ("commit", "snapshot")
@@ -226,6 +229,8 @@ class Profile:
     worktree: str = "commit"
     #: Most bytes of untracked files a snapshot may take into Git.
     snapshot_limit: int = 50 * 1024 ** 2
+    #: How data requirements reach this target; None: not managed.
+    data: "DataModes | None" = None
 
     @property
     def slurm(self):
@@ -233,6 +238,38 @@ class Profile:
         if self.scheduler != "slurm":
             raise AttributeError("this profile does not use Slurm")
         return self.scheduler_settings
+
+
+@dataclass(frozen=True)
+class DataModes:
+    """Profile `data_modes: {default: MODE, <requirement name>: MODE}`."""
+
+    default: str
+    named: tuple[tuple[str, str], ...]
+
+    def mode(self, name: str) -> str:
+        return dict(self.named).get(name, self.default)
+
+
+def _parse_data_modes(raw: Any, where: str, problems: Problems) -> DataModes | None:
+    if raw is None:
+        return None
+    if not isinstance(raw, Mapping):
+        problems.add(f"{where} must be a mapping of a requirement name (or 'default') to "
+                     f"one of {', '.join(DATA_MODES)}")
+        return None
+    default, named = "fetch", []
+    for key, mode in raw.items():
+        if mode not in DATA_MODES:
+            problems.add(f"{where}.{key} must be one of {', '.join(DATA_MODES)}; got {mode!r}")
+            continue
+        if key == "default":
+            default = mode
+        elif problem := check_name(key, f"{where} (a requirement name)"):
+            problems.add(problem)
+        else:
+            named.append((key, mode))
+    return DataModes(default, tuple(sorted(named)))
 
 
 def parse_profiles(raw: Any, selected: str | None, source: str) -> Profile:
@@ -389,6 +426,7 @@ def _parse_profile(raw, where, name, problems) -> Profile:
         local=local,
         worktree=reader.choice("worktree", WORKTREE_MODES, "commit"),
         snapshot_limit=snapshot_limit or 0,
+        data=_parse_data_modes(reader.get("data_modes"), f"{where}.data_modes", problems),
     )
 
 

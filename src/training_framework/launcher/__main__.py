@@ -290,7 +290,7 @@ def _profile(args):
     return parse_profiles(yaml.safe_load(path.read_text()), args.profile, str(path))
 
 
-def _compile(args, profile, fresh_env=False):
+def _compile(args, profile, fresh_env=False, fetch_here=False):
     # Imported here so `--help` stays fast.
     from training_framework.launcher.compile.compiler import compile_plan
 
@@ -304,16 +304,17 @@ def _compile(args, profile, fresh_env=False):
         facts=WorkstationFacts(repository.root),
         clock=datetime.now(timezone.utc),
         fresh_env=fresh_env,
-        code_facts=_code_facts(repository, profile),
+        code_facts=_code_facts(repository, profile, fetch_here=fetch_here),
     )
     _print_code_notes(compiled)
     return compiled, repository
 
 
-def _code_facts(repository, profile):
+def _code_facts(repository, profile, fetch_here=False):
     """The compiler's `code_facts` port: every task config checked with the
     batch's own code before anything is staged; None (with a warning) when
-    the check is turned off."""
+    the check is turned off. `fetch_here` (launch, run): data the target's
+    profile uploads is first fetched on this machine when it is missing."""
     from training_framework.launcher.services.evaluation import ENV_SWITCH, enabled, evaluate_batch
 
     if not enabled():
@@ -322,9 +323,47 @@ def _code_facts(repository, profile):
 
     def port(sha, manifest, managed, tasks):
         _progress(f"checking {len(tasks)} task config(s) with the code of {sha[:12]}")
-        return evaluate_batch(sha, manifest, managed, tasks, repository, profile)
+        facts = evaluate_batch(sha, manifest, managed, tasks, repository, profile)
+        if fetch_here and not facts.problems and profile.data is not None:
+            _fetch_uploads_here(sha, manifest, tasks, facts, repository, profile)
+        return facts
 
     return port
+
+
+def _fetch_uploads_here(sha, manifest, tasks, facts, repository, profile) -> None:
+    """Fetch, on this machine, every missing requirement the target uploads
+    (once per location), unless a hand-written data source covers it."""
+    from training_framework.launcher import framework
+    from training_framework.launcher.config import address as addresses
+    from training_framework.launcher.services.evaluation import fetch_here
+
+    covered = set()
+    for item in manifest.data_sources:
+        target, _ = addresses.parse_address(item.get("target") if isinstance(item, dict) else None, "")
+        covered.add(target)
+    done = set()
+    for name, config in tasks:
+        for requirement in facts.requirements.get(name, ()):
+            spec = requirement.requirement
+            address = addresses.Address(requirement.component, (spec["path"],))
+            if (profile.data.mode(spec["name"]) != "upload" or not spec["fetchable"]
+                    or address in covered or requirement.location in done
+                    or _ready_here(requirement)):
+                continue
+            done.add(requirement.location)
+            entry = dict(framework.component_entry_of(config["sessions"][0], requirement.component))
+            fetch_here(sha, manifest, requirement, entry, repository, profile, progress=_progress)
+
+
+def _ready_here(requirement) -> bool:
+    """Whether this machine has the requirement's data, marked ready."""
+    from training_framework.data import DataRequirement, requirement_key
+    from training_framework.launcher.remote.lease import read_marker
+    from training_framework.launcher.remote.runtime import StdlibFilesystem
+
+    key = requirement_key(DataRequirement(**requirement.requirement))
+    return read_marker(StdlibFilesystem(), requirement.location) == key
 
 
 def _print_code_notes(compiled) -> None:
@@ -405,7 +444,7 @@ def _submit(args, profile) -> int:
     from training_framework.launcher.ports.targets import target_of_profile
 
     _require_tools(*target_of_profile(profile).tools(transfer=True))
-    compiled, repository = _compile(args, profile, fresh_env=args.fresh_env)
+    compiled, repository = _compile(args, profile, fresh_env=args.fresh_env, fetch_here=True)
     label = Path(args.batch).resolve().relative_to(repository.root.resolve()).as_posix()
     status, _ = _launch(profile, compiled, repository, manifest_label=label,
                         review=_review(args.yes))
@@ -763,7 +802,7 @@ def _run(args) -> int:
         manifest_path=label, repository=repository, profile=profile,
         facts=WorkstationFacts(repository.root), clock=datetime.now(timezone.utc),
         fresh_env=args.fresh_env, manifest_data=quick_run.manifest_bytes(manifest),
-        code_facts=_code_facts(repository, profile))
+        code_facts=_code_facts(repository, profile, fetch_here=True))
     _print_code_notes(compiled)
     status, receipt = _launch(profile, compiled, repository, manifest_label=label,
                               review=_review(args.yes, only_over_limit=True))

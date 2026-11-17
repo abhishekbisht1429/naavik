@@ -417,3 +417,116 @@ def _suggested_name(path: tuple, taken: set[str]) -> str:
         name, number = f"{base}_{number}", number + 1
     taken.add(name)
     return name
+
+
+# Data requirements (declared by components) ----------------------------------
+
+
+def _literal(part: str) -> str:
+    """A command part `expand_command` leaves as it is (JSON has braces)."""
+    return part.replace("{", "{{").replace("}", "}}")
+
+
+def fetch_command(class_path: str, entry: Mapping, requirement: str) -> list[str]:
+    """The prepare step that fetches one requirement on the target (the step
+    holds the lease on the location, so the command takes none)."""
+    import json
+
+    return ["python", "-m", "training_framework.data", "fetch", "--component", class_path,
+            "--config", _literal(json.dumps(entry, sort_keys=True, default=str)),
+            "--requirement", requirement, "--under-lease"]
+
+
+def compile_requirements(
+        per_task: list[tuple],
+        sessions: list[dict],
+        sources: list[Source],
+        profile: Profile,
+        facts: LocalFacts,
+        problems: Problems,
+        result: DataResult,
+) -> None:
+    """Data requirements (`TaskRequirement`, per task index) as data on the
+    target, by the profile's `data_modes`: `fetch` (a prepare step at the
+    config's path, mapped), `upload` (the content-keyed upload of the
+    config's path here), `present` (a given path, as `cluster`). An address a
+    hand-written source already covers is left to it."""
+    from training_framework.data import DataRequirement, requirement_key
+
+    covered = {source.address for source in sources}
+    names = {source.name for source in sources}
+    # (mode, address, requirement name) -> {value: task indices}  (upload, present)
+    plain: dict[tuple, dict[str, list[int]]] = {}
+    # location -> (key, requirement, address, mapped path, class, entry, task indices)
+    fetches: dict[str, list] = {}
+    for index, requirements in enumerate(per_task):
+        for item in requirements:
+            requirement = DataRequirement(**item.requirement)
+            address = Address(item.component, (requirement.path,))
+            if address in covered:
+                continue
+            mode = profile.data.mode(requirement.name)
+            if mode == "upload" and not facts.exists(item.path):
+                problems.add(
+                    f"data '{requirement.name}' ({item.component}) is uploaded from this "
+                    f"machine but is not at {item.path} yet; "
+                    + ("`naavik launch` fetches it here first" if requirement.fetchable
+                       else "it is obtained by hand: place it there"))
+                continue
+            if mode != "fetch":
+                plain.setdefault((mode, address, requirement.name), {}).setdefault(
+                    item.path, []).append(index)
+                continue
+            if not requirement.fetchable:
+                problems.add(
+                    f"data '{requirement.name}' ({item.component}) cannot be fetched: it is "
+                    f"obtained by hand; on target '{profile.name}' set data_modes: "
+                    f"{{{requirement.name}: upload}} or {{{requirement.name}: present}}")
+                continue
+            mapped = map_path(item.path, profile) or item.path
+            if not posixpath.isabs(mapped):
+                problems.add(f"data '{requirement.name}' ({item.component}): {item.path!r} is "
+                             "not an absolute path on the target")
+                continue
+            location = posixpath.join(mapped, requirement.subpath) if requirement.subpath else mapped
+            key = requirement_key(requirement)
+            known = fetches.get(location)
+            if known is not None and known[0] != key:
+                problems.add(f"data '{requirement.name}' and '{known[1].name}' would be fetched "
+                             f"into the same location {location} with different content")
+                continue
+            if known is None:
+                entry = dict(framework.component_entry_of(sessions[index], item.component))
+                entry[requirement.path] = mapped
+                known = fetches[location] = [key, requirement, address, mapped,
+                                             item.class_path, entry, []]
+            known[6].append(index)
+
+    def unique(name: str) -> str:
+        chosen, number = name, 2
+        while chosen in names:
+            chosen, number = f"{name}-{number}", number + 1
+        names.add(chosen)
+        return chosen
+
+    for (mode, address, name), values in plain.items():
+        source = Source(unique(name), address, "upload" if mode == "upload" else "cluster", {})
+        (_upload if mode == "upload" else _cluster)(
+            source, values, profile, facts, None, None, problems, result)
+    for number, (location, (key, requirement, address, mapped, class_path, entry, indices)) \
+            in enumerate(sorted(fetches.items())):
+        name = unique(requirement.name)
+        source = Source(name, address, "prepare", {},
+                        resources=profile.setup_resources if profile.prepare_location == "job" else None)
+        artifact = Artifact("prepare", name, key, location, "user-chosen", {
+            "command": fetch_command(class_path, entry, requirement.name),
+            "requirement": requirement.as_json(), "component": class_path,
+        })
+        node_id = f"fetch-{name}-{number}"
+        result.artifacts.append(artifact)
+        result.prepare_nodes.append((node_id, artifact, source, location))
+        result.users[node_id] = set(indices)
+        _rewrite(result, indices, address, mapped)
+        result.rows.append({"source": name, "value": location, "location": location,
+                            "size": "" if requirement.size_hint is None else str(requirement.size_hint),
+                            "kind": f"fetch ({requirement.name} {requirement.version})"})

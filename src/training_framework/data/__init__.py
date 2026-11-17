@@ -164,11 +164,12 @@ def verify(component_class: type, located: Located) -> list[str]:
 
 
 def ensure(component_class: type, located: Located, *, notify: Callable[[str], None] = print,
-           scheduler: str | None = None, filesystem=None) -> str:
+           scheduler: str | None = None, filesystem=None, lease_held: bool = False) -> str:
     """Make `located` ready; returns what happened: `ready` (already),
     `fetched`, or `present` (obtained by hand and verified). `scheduler`:
     the batch scheduler this runs under (its job owns the lease), or None
-    for a process of its own."""
+    for a process of its own. `lease_held`: the caller holds the lease on
+    the location already (a batch's prepare step), so none is taken."""
     from training_framework.launcher.remote.lease import Lease, check_marker, write_marker
     from training_framework.launcher.remote.runtime import (
         ProcessProbe,
@@ -191,6 +192,8 @@ def ensure(component_class: type, located: Located, *, notify: Callable[[str], N
         return "present"
     if check_marker(filesystem, location, key):
         return "ready"
+    if lease_held:
+        return _fetch(component_class, located, label, key, filesystem, write_marker, notify)
     owner = current_owner(scheduler) if scheduler else current_process_owner()
     probe = owner_probe(scheduler) if scheduler else ProcessProbe()
     lease = Lease(filesystem, probe, location, owner, notify=notify)
@@ -199,16 +202,20 @@ def ensure(component_class: type, located: Located, *, notify: Callable[[str], N
         if check_marker(filesystem, location, key):
             notify(f"{label}: fetched meanwhile by another run")
             return "ready"
-        notify(f"{label}: fetching")
-        component_class.fetch_data(located.config, requirement, located.path)
-        problems = verify(component_class, located)
-        if problems:
-            raise DataError(f"{label}: fetched, but it is not right: " + "; ".join(problems))
-        write_marker(filesystem, location, key)
-        notify(f"{label}: ready")
-        return "fetched"
+        return _fetch(component_class, located, label, key, filesystem, write_marker, notify)
     finally:
         lease.release()
+
+
+def _fetch(component_class, located, label, key, filesystem, write_marker, notify) -> str:
+    notify(f"{label}: fetching")
+    component_class.fetch_data(located.config, located.requirement, located.path)
+    problems = verify(component_class, located)
+    if problems:
+        raise DataError(f"{label}: fetched, but it is not right: " + "; ".join(problems))
+    write_marker(filesystem, located.location, key)
+    notify(f"{label}: ready")
+    return "fetched"
 
 
 def _by_hand(requirement: DataRequirement) -> str:
