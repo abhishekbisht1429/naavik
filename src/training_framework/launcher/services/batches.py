@@ -219,8 +219,18 @@ def _submit_text(receipt: dict) -> str:
     return f"{status} ({reason[:40]}{'...' if len(reason) > 40 else ''})"
 
 
-def format_views(views: list[BatchView], *, live: bool, tasks: bool, origins: bool) -> str:
-    if not views:
+@dataclass(frozen=True)
+class UnreachableTarget:
+    """A target `batches --all-targets` could not list (one `?` row): out of
+    reach, or its settings are wrong."""
+
+    name: str
+    reason: str
+
+
+def format_views(views: list[BatchView], *, live: bool, tasks: bool, origins: bool,
+                 unreachable: list[UnreachableTarget] = ()) -> str:
+    if not views and not unreachable:
         return "no batches"
     headers = ["batch", "submitted", "profile", "tasks", "submit"]
     if origins:
@@ -241,12 +251,18 @@ def format_views(views: list[BatchView], *, live: bool, tasks: bool, origins: bo
         if live:
             row.append(view.now if view.now else f"? ({view.problem})" if view.problem else "?")
         table.append(row)
+    for target in unreachable:
+        reason = f"(cannot list: {target.reason})"
+        # The reason goes in the last column: `now` when live, else `submit`.
+        row = ["?", "", target.name, ""] + ([""] if origins else []) + \
+            (["", reason] if live else [reason])
+        table.append(row)
     widths = [max(len(line[i]) for line in table) for i in range(len(headers) - 1)]
     lines = []
     for index, line in enumerate(table):
         lines.append("  ".join(cell.ljust(width) for cell, width in zip(line, widths))
                      + "  " + line[-1])
-        if tasks and index > 0:
+        if tasks and 0 < index <= len(views):
             view = views[index - 1]
             if view.rows:
                 lines.append(format_rows(view.rows, indent="    "))

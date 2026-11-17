@@ -194,6 +194,9 @@ def _parser(prog: str = "python -m training_framework.hpc") -> argparse.Argument
                          help="show every task of each batch (implies --live)")
     listing.add_argument("--remote", action="store_true",
                          help="also list batches submitted from other machines (needs a profile)")
+    listing.add_argument("--all-targets", action="store_true",
+                         help="list the batches on every target of the target file (one "
+                              "connection each; a target that cannot be reached is one ? row)")
     listing.add_argument("--active", action="store_true",
                          help="only batches with queued or running tasks (implies --live)")
     listing.add_argument("--since", metavar="AGE", help="only batches submitted within AGE: 30m, 12h, 7d, 2w")
@@ -608,10 +611,16 @@ def _batches(args) -> int:
     # needed: for --remote, when one is named explicitly, or (lazily) for a
     # live lookup of a receipt written before receipts recorded the cluster.
     # A plain listing never reads it.
+    if args.all_targets and (args.profile or args.remote):
+        raise HpcError("--all-targets lists every target; drop --target and --remote")
     explicit = bool(args.profile or args.profiles)
-    profile = _profile(args) if args.remote or explicit else None
+    profile = _profile(args) if args.remote or (explicit and not args.all_targets) else None
     receipts_dir = str(args.receipts or default_receipts_dir())
     views = listing.load_receipts(receipts_dir)
+    unreachable_targets = []
+    if args.all_targets:
+        unreachable_targets = _list_every_target(args, views)
+        views = listing.sort_views(views)
 
     def connect(target, scheduler: str):
         _require_tools(*target.tools(transfer=False))
@@ -651,10 +660,14 @@ def _batches(args) -> int:
             _require_tools(*target_of_profile(selected).tools(transfer=False))
             ports_for(target_of_profile(selected)).executor.run(["true"])   # raises TransportError
     if args.json:
-        print(json.dumps(listing.as_json(views, tasks=args.tasks), indent=2))
+        print(json.dumps(listing.as_json(views, tasks=args.tasks)
+                         + [{"target": target.name, "unreachable": target.reason}
+                            for target in unreachable_targets], indent=2))
     else:
-        print(listing.format_views(views, live=live, tasks=args.tasks, origins=args.remote))
-        if not views:
+        print(listing.format_views(views, live=live, tasks=args.tasks,
+                                   origins=args.remote or args.all_targets,
+                                   unreachable=unreachable_targets))
+        if not views and not args.all_targets:
             print(f"note: no batches were submitted from this machine (receipts in "
                   f"{receipts_dir}){'' if args.remote else '; `batches --remote` also lists the batches on the cluster'}",
                   file=sys.stderr)
@@ -664,7 +677,41 @@ def _batches(args) -> int:
         reason = problem.removeprefix(f"cannot read {host}: ")
         print(f"error: cannot reach {host} over SSH: {reason}", file=sys.stderr)
         print(f"hint: {SSH_HINT.format(host=host)}", file=sys.stderr)
-    return 1 if unreachable else 0
+    for target in unreachable_targets:
+        print(f"error: cannot list target '{target.name}': {target.reason}", file=sys.stderr)
+    return 1 if unreachable or unreachable_targets else 0
+
+
+def _list_every_target(args, views) -> list:
+    """Add the batches found on every target of the target file to `views`
+    (those without a receipt here); the targets that could not be read."""
+    from training_framework.launcher.config.schema import parse_profiles, target_names
+    from training_framework.launcher.ports.targets import ports_for, target_of_profile
+    from training_framework.launcher.services import batches as listing
+
+    path = args.profiles or default_profiles_path()
+    if not path.exists():
+        raise HpcError(f"no target file: {path} does not exist")
+    raw = yaml.safe_load(path.read_text())
+    names = target_names(raw)
+    if not names:
+        raise HpcError(f"{path} lists no targets")
+    known = {view.batch_id for view in views}
+    missing = []
+    for name in names:
+        try:
+            profile = parse_profiles(raw, name, str(path))
+            target = target_of_profile(profile)
+            _require_tools(*target.tools(transfer=False))
+            receipts = listing.remote_receipts(ports_for(target).executor, profile.roots["batches"])
+        except HpcError as error:          # transport errors too: one row, the others go on
+            missing.append(listing.UnreachableTarget(name, str(error).replace("\n", " ")))
+            continue
+        for receipt in receipts:
+            if receipt["batch_id"] not in known:
+                known.add(receipt["batch_id"])
+                views.append(listing.BatchView(receipt, "cluster"))
+    return missing
 
 
 def _resume(args) -> int:

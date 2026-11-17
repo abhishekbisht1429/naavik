@@ -306,6 +306,15 @@ def parse_profiles(raw: Any, selected: str | None, source: str) -> Profile:
     return profile
 
 
+def target_names(raw: Any) -> list[str]:
+    """The names of every target in a target file (`targets:` or its
+    earlier name `profiles:`), sorted; [] when it has none."""
+    if not isinstance(raw, Mapping):
+        return []
+    entries = raw.get("targets", raw.get("profiles"))
+    return sorted(entries) if isinstance(entries, Mapping) else []
+
+
 def _parse_profile(raw, where, name, problems) -> Profile:
     from training_framework.launcher.scheduler import SCHEDULERS
 
