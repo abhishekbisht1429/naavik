@@ -184,6 +184,26 @@ refused with it, since each group sets its own size. `mean`, `std` and
 `image_dtype` apply to every view: with `uint8`, `normalize_images` takes the
 list of view batches and normalizes each.
 
+## Its data, fetched once
+
+Each built-in dataset declares the data it needs, so a batch target can
+fetch, upload, or check it (the profile's
+[`data_modes`](../guide/08-hpc-batches.md#declared-data-data_modes-in-the-profile)),
+and so a download never happens twice:
+
+| Dataset | Requirement | Fetched | Kept at |
+|---|---|---|---|
+| `cifar10` | `cifar10` | yes; one download for both splits | `root` |
+| `flowers102` | `flowers102` | yes; one download for every split | `root` |
+| `inaturalist` | `inaturalist`, per split | yes; each split its own download | `root/<split>` |
+| `imagenet` | `imagenet`, per split | no: obtained by hand; its class folders are checked | `root/<split>` |
+| `stanford_cars` | `stanford_cars` | no: placed by hand; its files are checked | `root` |
+
+In a run you start yourself, a dataset with `download: true` is fetched
+before any session is built, under a lease on its path, and marked ready
+(`<root>.tf-hpc-ready`): two runs started at once download it once, the
+second waiting for the first. With `download: false` nothing changes.
+
 ## Adding a dataset
 
 Subclass `TorchvisionDataset`, give it a config listing its splits, and
@@ -226,3 +246,36 @@ class Food101(TorchvisionDataset):
             download=self._cfg.download,
         )
 ```
+
+To let targets and runs fetch its data, declare it (class methods: nothing
+is built, and the target finds them again by importing the class):
+
+```python
+from training_framework.data import DataRequirement
+from training_framework.components.builtin.datasets.base import missing_files
+
+
+@resource("food101")
+class Food101(TorchvisionDataset):
+    ...
+
+    @classmethod
+    def data_requirements(cls, config):        # config: the parsed config_schema
+        return (DataRequirement("food101", "root", "1", size_hint=5_000_000_000),)
+
+    @classmethod
+    def fetch_data(cls, config, requirement, path):
+        datasets.Food101(root=path, split="train", download=True)
+
+    @classmethod
+    def verify_data(cls, config, requirement, path):   # cheap: files present
+        return missing_files(path, ["food-101/images/", "food-101/meta/train.json"])
+```
+
+A `DataRequirement` names the data (what `data_modes` refer to), the config
+field holding its path (`root`), and a `version` to change when the
+content changes; `key` adds what else identifies it (a split with its own
+download), `subpath` where under the path it lives, and `fetchable=False`
+data obtained by hand. Its content key is the name, version, and `key`
+only. `python -m training_framework.data fetch|verify --component DOTTED
+--config JSON --requirement NAME` runs one by hand.

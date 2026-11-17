@@ -50,7 +50,8 @@ targets:
 | `prepare_location` | no | `job` | Where `prepare` data steps run: `job` or `login`, as above. |
 | `path_map` | no | none | Local path prefix → cluster path prefix; see [path_map](#path_map). |
 | `upload_limit` | no | `20G` | Total size of new uploads above which `launch` asks for explicit confirmation (`--yes` also accepts it). |
-| `setup_resources` | no | `{walltime: "01:00:00", cpus: 4, memory: 16G}` | Resources of the setup job (`setup_location: job`); same keys as [resources](#resources). Make `memory` fit the CPU partition's nodes. |
+| `setup_resources` | no | `{walltime: "01:00:00", cpus: 4, memory: 16G}` | Resources of the setup job (`setup_location: job`); same keys as [resources](#resources). Make `memory` fit the CPU partition's nodes. Also the resources of the jobs that fetch declared data. |
+| `data_modes` | no | not managed | How declared data reaches this target: `{default: MODE, <requirement name>: MODE}`, MODE one of `fetch`, `upload`, `present` (`default` defaults to `fetch`); see the guide's [Declared data](../guide/08-hpc-batches.md#declared-data-data_modes-in-the-profile). Without it, declared data is not managed. |
 
 #### roots
 

@@ -237,7 +237,54 @@ the batch's manifest hash covers both. `run_defaults` is only read by
 
 ## 3. Data
 
-Only config values listed in `data.sources` are treated as data:
+Data reaches a target in one of two ways. **Declared data**: a dataset
+component says what it needs (the built-in datasets do; see
+[Image datasets](../reference/datasets.md#its-data-fetched-once)), and the
+target's profile says how it gets there. **Data sources**: config values
+you list in the manifest's `data.sources`. A source wins on the address it
+names, so existing manifests keep working.
+
+### Declared data: `data_modes` in the profile
+
+```yaml
+# targets.yaml
+targets:
+  cluster:
+    ...
+    data_modes:
+      default: fetch          # fetch | upload | present (default: fetch)
+      imagenet: present       # by requirement name
+      flowers102: upload
+```
+
+- `fetch`: fetched on the target, once, by a prepare step before the
+  tasks (on the login node or as a job: `prepare_location`; a job gets
+  `setup_resources`), at the config's path mapped through `path_map`. The
+  data is keyed by what it is (name, version, split), never by the commit:
+  a new commit or snapshot finds it ready. Data obtained by hand (ImageNet,
+  Stanford Cars) cannot be fetched; `validate` says to `upload` or
+  `present` it.
+- `upload`: the content-keyed upload below, of the config's path on this
+  machine. When the data is not here yet, `validate` says so and `launch`
+  (or `naavik run`) fetches it here first.
+- `present`: already on the target at the config's path (mapped through
+  `path_map`); `launch` checks that it exists.
+
+Two batches (or a batch and a direct run on the same machine) never fetch
+the same data at once: fetching takes a lease on the location, and a
+ready marker next to it (`<path>.tf-hpc-ready`) records what is there. A
+location that holds other content (an older version) is refused, never
+overwritten: remove it, or use a new path.
+
+A profile without `data_modes` manages nothing: tasks read what is at
+their configs' paths, as before, and `validate` notes which requirements it
+left alone. Managed data needs the code check (it is what finds the
+requirements), so `TRAINING_FRAMEWORK_CODE_CHECK=0` is refused on such a
+target.
+
+### Data sources
+
+Only config values listed in `data.sources` are treated as data sources:
 
 ```yaml
 data:
