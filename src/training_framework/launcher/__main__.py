@@ -146,6 +146,11 @@ def _parser(prog: str = "python -m training_framework.hpc") -> argparse.Argument
         command = commands.add_parser(name, help=help_text, aliases=aliases)
         command.add_argument("batch", help="path to the committed batch manifest")
         profile_options(command)
+        command.add_argument("--group", action="append", default=[], metavar="GROUP",
+                             help="only this group's experiments (repeatable)")
+        command.add_argument("--experiment", action="append", default=[],
+                             metavar="GROUP/EXPERIMENT",
+                             help="only this experiment (repeatable)")
         if name == "validate":
             command.add_argument("--suggest-data", action="store_true",
                                  help="print data.sources entries for uncovered local paths")
@@ -292,7 +297,7 @@ def _profile(args):
 
 def _compile(args, profile, fresh_env=False, fetch_here=False):
     # Imported here so `--help` stays fast.
-    from training_framework.launcher.compile.compiler import compile_plan
+    from training_framework.launcher.compile.compiler import Selection, compile_plan
 
     batch = Path(args.batch).resolve()
     repository = GitRepository(batch.parent)
@@ -305,6 +310,7 @@ def _compile(args, profile, fresh_env=False, fetch_here=False):
         clock=datetime.now(timezone.utc),
         fresh_env=fresh_env,
         code_facts=_code_facts(repository, profile, fetch_here=fetch_here),
+        selection=Selection(tuple(args.group), tuple(args.experiment)),
     )
     _print_code_notes(compiled)
     return compiled, repository
@@ -493,6 +499,7 @@ def _launch(profile, compiled, repository, *, manifest_label: str, review):
                 "repository": str(repository.root),
                 "manifest": manifest_label,
                 **({"description": plan.description} if plan.description else {}),
+                **({"selection": plan.selection} if plan.selection else {}),
                 "submitted_from": socket.gethostname(),
             },
         )

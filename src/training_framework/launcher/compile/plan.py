@@ -136,6 +136,9 @@ class ExecutionPlan:
     base_sha: str | None = None
     #: The manifest's `description` (why the batch runs), if any.
     description: str | None = None
+    #: The groups and experiments chosen (`launch --group/--experiment`);
+    #: None: all of the manifest.
+    selection: dict | None = None
 
     def node(self, node_id: str) -> JobNode:
         for node in self.nodes:
@@ -161,6 +164,7 @@ class ExecutionPlan:
             # Only snapshot batches carry these, so other plans are unchanged.
             **({"base_sha": self.base_sha, "snapshot": True} if self.base_sha else {}),
             **({"description": self.description} if self.description else {}),
+            **({"selection": self.selection} if self.selection else {}),
             "artifacts": [artifact.as_json() for artifact in self.artifacts],
             "nodes": [
                 {

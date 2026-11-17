@@ -93,6 +93,60 @@ class CodeFacts:
     requirements: dict[str, tuple[TaskRequirement, ...]] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class Selection:
+    """Part of a manifest: whole groups, and `GROUP/EXPERIMENT`s."""
+
+    groups: tuple[str, ...] = ()
+    experiments: tuple[str, ...] = ()
+
+    def __bool__(self) -> bool:
+        return bool(self.groups or self.experiments)
+
+    def as_json(self) -> dict:
+        return {key: list(value) for key, value in
+                (("groups", self.groups), ("experiments", self.experiments)) if value}
+
+
+def _select(manifest: Manifest, selection: Selection | None, problems: Problems) -> Manifest:
+    """The manifest with only the chosen groups and experiments (task names
+    and numbers stay as the whole manifest makes them)."""
+    import dataclasses as _dataclasses
+
+    if not selection:
+        return manifest
+    groups = {group.name: group for group in manifest.groups}
+    for name in selection.groups:
+        if name not in groups:
+            problems.add(f"--group {name}: the manifest has no such group "
+                         f"(it has: {', '.join(groups)})")
+    chosen: dict[str, set[str] | None] = {name: None for name in selection.groups if name in groups}
+    for item in selection.experiments:
+        group, slash, experiment = item.partition("/")
+        if not slash or not experiment:
+            problems.add(f"--experiment {item}: name it GROUP/EXPERIMENT")
+            continue
+        if group not in groups:
+            problems.add(f"--experiment {item}: the manifest has no group '{group}' "
+                         f"(it has: {', '.join(groups)})")
+            continue
+        names = [e.name for e in groups[group].experiments]
+        if experiment not in names:
+            problems.add(f"--experiment {item}: group '{group}' has no experiment "
+                         f"'{experiment}' (it has: {', '.join(names)})")
+            continue
+        if chosen.get(group, set()) is not None:            # not already the whole group
+            chosen.setdefault(group, set()).add(experiment)
+    kept = []
+    for group in manifest.groups:
+        if group.name not in chosen:
+            continue
+        wanted = chosen[group.name]
+        experiments = tuple(e for e in group.experiments if wanted is None or e.name in wanted)
+        kept.append(_dataclasses.replace(group, experiments=experiments))
+    return _dataclasses.replace(manifest, groups=tuple(kept))
+
+
 #: `code_facts(sha, manifest, managed, tasks)`, tasks being (name, config) in
 #: order: the batch's own code asked about its expanded task configs (as the
 #: manifest makes them, before data paths are rewritten for the target).
@@ -117,12 +171,14 @@ def compile_plan(
         fresh_env: bool = False,
         manifest_data: bytes | None = None,
         code_facts: CodeFactsPort | None = None,
+        selection: Selection | None = None,
 ) -> Compiled:
     """`manifest_data`: a manifest given as data rather than read from the
     repository (`naavik run` builds one); `manifest_path` then only names
     it in messages, and everything else is still read at the batch's
     commit. `code_facts`: asked once the tasks are expanded (problems it
-    reports stop the compile there); None: not asked."""
+    reports stop the compile there); None: not asked. `selection`: only
+    these groups and experiments become tasks (None: all)."""
     problems = Problems()
 
     # The batch runs one exact tree: HEAD (worktree: commit, which must then
@@ -207,6 +263,11 @@ def compile_plan(
 
     def config_of(experiment) -> str:
         return experiment.config or manifest.training_config
+
+    # Only now: what is recorded (config files) is the whole manifest's, so
+    # the parts of one manifest launched apart compare as one batch.
+    manifest = _select(manifest, selection, problems)
+    problems.raise_if_any()
 
     for path in manifest.code_paths:
         if not repository.exists(sha, path):
@@ -419,6 +480,7 @@ def compile_plan(
         notes=tuple(notes),
         base_sha=snapshot.base if snapshot is not None and snapshot.snapshot else None,
         description=manifest.description,
+        selection=selection.as_json() if selection else None,
     )
     return Compiled(plan, manifest, suggestions, facts_found)
 
