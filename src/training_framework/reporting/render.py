@@ -125,6 +125,7 @@ def render_json(summary: Summary) -> str:
             "writers": record.writers,
             "attempts": [asdict(attempt) for attempt in record.attempts],
             "metrics": {tag: asdict(metric) for tag, metric in run.metrics.items()},
+            **({"note": record.note} if record.note else {}),
         }
 
     def group_json(group: GroupSummary) -> dict[str, Any]:
@@ -178,6 +179,9 @@ def _run_rows(summary: Summary, plain: bool = False):
         header.append("group")
     header += [column.name for column in summary.columns]
     header += ["extended", "attempts"]
+    notes = any(run.run.note for run in summary.runs)
+    if notes:
+        header.append("note")
     for metric in summary.metrics:
         for field in _metric_fields(summary, metric):
             label = f"{metric.tag} {_field_label(summary, field)}"
@@ -201,6 +205,8 @@ def _run_rows(summary: Summary, plain: bool = False):
             row.append(_attempts(run))
         else:
             row.append(f"{_attempts(run)} ({rewritten} steps rewritten)")
+        if notes:
+            row.append(run.run.note or ("" if plain else "-"))
         for metric in summary.metrics:
             values = run.metrics.get(metric.tag)
             for field in _metric_fields(summary, metric):

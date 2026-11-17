@@ -80,6 +80,9 @@ class RunRecord:
     #: The training config file a batch task was made from, when its batch
     #: used more than one (from its record); None otherwise.
     config_file: str | None = None
+    #: Why it ran (`naavik run --note`, a manifest's `description`): from
+    #: its task record or its run record; shown, never compared.
+    note: str | None = None
 
 
 @dataclass
@@ -152,9 +155,13 @@ def discover_runs(
             continue
         run = _load(run_id, located[session_dir])
         run.problems[:0] = run_problems.get(session_dir, [])
-        run.code, run.config_file = _task_facts(located[session_dir].task_dir, run.problems)
+        run.code, run.config_file, run.note = _task_facts(located[session_dir].task_dir,
+                                                          run.problems)
+        recorded = recorded_code.get(os.path.realpath(session_dir)) or {}
         if run.code is None:
-            run.code = code_text(recorded_code.get(os.path.realpath(session_dir)))
+            run.code = code_text(recorded.get("code"))
+        if run.note is None:
+            run.note = recorded.get("note")
         runs.append(run)
     return Discovery(roots=resolved, runs=runs, problems=problems)
 
@@ -281,29 +288,31 @@ def code_text(code: dict | None) -> str | None:
     return text
 
 
-def _task_facts(task_dir: str | None, problems: list[str]) -> tuple[str | None, str | None]:
-    """(code, config file) of an HPC task, from its record: its batch's
-    commit, and the training config file it was made from."""
+def _task_facts(task_dir: str | None, problems: list[str]) -> tuple:
+    """(code, config file, note) of an HPC task, from its record: its
+    batch's commit, the training config file it was made from, and why it
+    ran."""
     if task_dir is None:
-        return None, None
+        return None, None, None
     path = os.path.join(task_dir, TASK_RECORD_FILE)
     if not os.path.exists(path):
-        return None, None                  # still running, or not fetched
+        return None, None, None            # still running, or not fetched
     try:
         with open(path, encoding="utf-8") as handle:
             record = json.load(handle)
     except (OSError, ValueError) as error:
         problems.append(f"{TASK_RECORD_FILE} cannot be read ({error!r}); its code is unknown")
-        return None, None
+        return None, None, None
     if not isinstance(record, dict):
-        return None, None
-    config_file = record.get("config_file")
-    return code_text(record), config_file if isinstance(config_file, str) else None
+        return None, None, None
+    config_file, note = record.get("config_file"), record.get("note")
+    return (code_text(record), config_file if isinstance(config_file, str) else None,
+            note if isinstance(note, str) else None)
 
 
 def _recorded_code() -> dict[str, dict]:
-    """The code of every run in this machine's run registry, by (real) session
-    directory; empty when the registry is off or empty."""
+    """`{"code", "note"}` of every run in this machine's run registry, by
+    (real) session directory; empty when the registry is off or empty."""
     from training_framework.runs.registry import list_runs, registry_dir
 
     root = registry_dir()
@@ -313,7 +322,9 @@ def _recorded_code() -> dict[str, dict]:
     runs, _ = list_runs(root)
     for run in runs:
         for session_dir in run.session_dirs:
-            found[os.path.realpath(session_dir)] = run.record.get("code")
+            found[os.path.realpath(session_dir)] = {
+                "code": run.record.get("code"),
+                "note": (run.record.get("launch") or {}).get("note")}
     return found
 
 

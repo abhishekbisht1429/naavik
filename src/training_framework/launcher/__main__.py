@@ -588,6 +588,8 @@ def _status(args) -> int:
     live = bundle.job_states(executor)(refs) if bundle.job_states and refs else {}
     files = fetch_batches(executor, [receipt["batch_dir"]]).get(receipt["batch_dir"])
     print(f"batch {receipt['batch_id']}: {receipt['status']} | {host}:{receipt['batch_dir']}")
+    if receipt.get("description"):
+        print(f"note: {receipt['description']}")
     if problem := missing_files(receipt, files):
         raise HpcError(f"{problem} on {host}")
     print(format_rows(task_rows(receipt, files, live)))

@@ -51,10 +51,12 @@ def what_text(run: Run) -> str:
 
 
 def table(runs: list[Run]) -> str:
-    rows = [("run", "started", "host", "state", "code", "what")]
+    notes = any((run.record.get("launch") or {}).get("note") for run in runs)
+    rows = [("run", "started", "host", "state", "code") + (("note",) if notes else ()) + ("what",)]
     for run in runs:
+        note = ((run.record.get("launch") or {}).get("note") or "-",) if notes else ()
         rows.append((run.run_id, _local(started(run)), run.record.get("host") or "?",
-                     run.state, code_text(run.record.get("code")), what_text(run)))
+                     run.state, code_text(run.record.get("code"))) + note + (what_text(run),))
     widths = [max(len(row[i]) for row in rows) for i in range(len(rows[0]) - 1)]
     return "\n".join("  ".join(cell.ljust(width) for cell, width in zip(row, widths)) + "  " + row[-1]
                      for row in rows)

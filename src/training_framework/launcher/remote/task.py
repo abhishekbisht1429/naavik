@@ -215,6 +215,8 @@ def run_task(config_path: str, record_path: str, plan_path: str,
                         if task.get("name") == task_name), None)
     if config_file:
         record["config_file"] = config_file
+    if plan.get("description"):
+        record["note"] = plan["description"]
     if resume:
         record["resumed_from"] = resume
     if restart:

@@ -235,6 +235,10 @@ def format_views(views: list[BatchView], *, live: bool, tasks: bool, origins: bo
     headers = ["batch", "submitted", "profile", "tasks", "submit"]
     if origins:
         headers.insert(3, "from")
+    # Why each batch ran, only when some batch says.
+    notes = any(view.receipt.get("description") for view in views)
+    if notes:
+        headers.insert(headers.index("submit"), "note")
     if live:
         headers.append("now")
     table = [headers]
@@ -248,6 +252,8 @@ def format_views(views: list[BatchView], *, live: bool, tasks: bool, origins: bo
         if origins:
             row.insert(3, "this machine" if view.origin == "local"
                        else receipt.get("submitted_from") or "elsewhere")
+        if notes:
+            row.insert(len(row) - 1, receipt.get("description") or "-")
         if live:
             row.append(view.now if view.now else f"? ({view.problem})" if view.problem else "?")
         table.append(row)
@@ -255,7 +261,7 @@ def format_views(views: list[BatchView], *, live: bool, tasks: bool, origins: bo
         reason = f"(cannot list: {target.reason})"
         # The reason goes in the last column: `now` when live, else `submit`.
         row = ["?", "", target.name, ""] + ([""] if origins else []) + \
-            (["", reason] if live else [reason])
+            ([""] if notes else []) + (["", reason] if live else [reason])
         table.append(row)
     widths = [max(len(line[i]) for line in table) for i in range(len(headers) - 1)]
     lines = []
@@ -281,6 +287,7 @@ def as_json(views: list[BatchView], *, tasks: bool) -> list[dict]:
             "ssh_host": receipt.get("ssh_host"),
             "target": receipt.get("target"),
             "batch_dir": receipt.get("batch_dir"),
+            **({"description": receipt["description"]} if receipt.get("description") else {}),
             "task_count": receipt.get("task_count"),
             "status": receipt.get("status"),
             "error": receipt.get("error"),
