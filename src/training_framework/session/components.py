@@ -125,6 +125,31 @@ class _PlannedComponent:
 
 
 @dataclass(frozen=True)
+class PlannedComponent:
+    """One component `plan_from_config` found: its name, class, and the
+    config it would be constructed with (None: constructed without one)."""
+
+    name: str
+    component_class: type[Component]
+    config: Mapping | None
+
+
+@dataclass(frozen=True)
+class ActivationPlan:
+    """The components building a session would construct, in that order."""
+
+    components: tuple[PlannedComponent, ...]
+
+    @property
+    def names(self) -> tuple[str, ...]:
+        return tuple(component.name for component in self.components)
+
+
+class ImportsNotPlanned(Exception):
+    """`plan_from_config` cannot plan a config that imports components."""
+
+
+@dataclass(frozen=True)
 class _RestorePlan:
     component_class: type[Component]
     dependencies: dict[str, str]
@@ -975,22 +1000,13 @@ class SessionComponents:
             inject=False,
         )
 
-    def register_from_config(
+    def _configured_roots(
             self,
-            config: Mapping,
-            *,
-            default_configs: Mapping[str, Mapping] | None = None,
-            view: SessionConfigView | None = None,
-    ) -> None:
-        """Activate what `config` configures.
-
-        `view` is `config` already read by `read_session_config`; its
-        bindings must be the ones this instance was created with.
-        """
-        if view is None:
-            view = read_session_config(config, session_type=self.session_type)
-        self.role_bindings.validate_config(view.components)
-
+            view: SessionConfigView,
+            default_configs: Mapping[str, Mapping] | None,
+    ) -> tuple[list[str], dict[str, dict]]:
+        """The roots activation starts from (defaults, then the configured
+        components) and each one's config."""
         component_configs: dict[str, dict] = {}
         configured_roots: list[str] = []
         for name, entry in view.components.items():
@@ -1012,6 +1028,57 @@ class SessionComponents:
                 )
 
         roots.extend(configured_roots)
+        return roots, component_configs
+
+    def plan_from_config(
+            self,
+            config: Mapping,
+            *,
+            default_configs: Mapping[str, Mapping] | None = None,
+            view: SessionConfigView | None = None,
+    ) -> "ActivationPlan":
+        """What `register_from_config(config)` would construct, in the order
+        it would, with every check that precedes construction (names,
+        wiring, companions, singletons) -- and no constructor run.
+
+        A config that imports components (`import_components`) is not
+        planned: imports restore components from checkpoints first, which
+        is construction. `ImportsNotPlanned` says so.
+        """
+        from training_framework.session.imports import IMPORT_COMPONENTS_KEY
+
+        if view is None:
+            view = read_session_config(config, session_type=self.session_type)
+        self.role_bindings.validate_config(view.components)
+        if config.get(IMPORT_COMPONENTS_KEY):
+            raise ImportsNotPlanned(
+                f"{IMPORT_COMPONENTS_KEY} restores components from checkpoints, "
+                "so its plan is only known when the session is built")
+        roots, component_configs = self._configured_roots(view, default_configs)
+        plan = self._plan_activation(roots, component_configs)
+        order = self._construction_order(plan, roots)
+        return ActivationPlan(tuple(
+            PlannedComponent(name, plan[name].component_class,
+                             plan[name].constructor_args[0] if plan[name].constructor_args else None)
+            for name in order))
+
+    def register_from_config(
+            self,
+            config: Mapping,
+            *,
+            default_configs: Mapping[str, Mapping] | None = None,
+            view: SessionConfigView | None = None,
+    ) -> None:
+        """Activate what `config` configures.
+
+        `view` is `config` already read by `read_session_config`; its
+        bindings must be the ones this instance was created with.
+        """
+        if view is None:
+            view = read_session_config(config, session_type=self.session_type)
+        self.role_bindings.validate_config(view.components)
+
+        roots, component_configs = self._configured_roots(view, default_configs)
 
         # Imported lazily: the imports module uses this one's error types.
         from training_framework.session.imports import (
