@@ -74,6 +74,9 @@ class RunRecord:
     #: resume started from), per tag; the later attempt's value is kept.
     rewritten: dict[str, int]
     problems: list[str] = field(default_factory=list)
+    #: The code the run ran (`code_text`), from its HPC task record or its
+    #: run record; None when unknown (runs older than these records).
+    code: str | None = None
 
 
 @dataclass
@@ -129,6 +132,7 @@ def discover_runs(
                 )
             located[session_dir] = entry
 
+    recorded_code = _recorded_code()
     ids, notes = _run_ids(located, len(resolved) > 1)
     run_problems: dict[str, list[str]] = {}
     for message, session_dir in notes:
@@ -145,6 +149,9 @@ def discover_runs(
             continue
         run = _load(run_id, located[session_dir])
         run.problems[:0] = run_problems.get(session_dir, [])
+        run.code = _task_code(located[session_dir].task_dir, run.problems)
+        if run.code is None:
+            run.code = code_text(recorded_code.get(os.path.realpath(session_dir)))
         runs.append(run)
     return Discovery(roots=resolved, runs=runs, problems=problems)
 
@@ -252,6 +259,55 @@ def _run_ids(
             )
         seen[run_id] = session_dir
     return ids, notes
+
+
+#: Where an HPC task keeps its record (next to `variant.json`).
+TASK_RECORD_FILE = "record.json"
+
+
+def code_text(code: dict | None) -> str | None:
+    """A run's code as compared in summaries: the commit, marked when it is a
+    snapshot of a working tree or a dirty checkout; None when unknown."""
+    if not isinstance(code, dict) or not isinstance(code.get("sha"), str) or not code["sha"]:
+        return None
+    text = code["sha"][:12]
+    if code.get("snapshot"):
+        return f"{text} (snapshot)"
+    if code.get("dirty"):
+        return f"{text} (dirty)"
+    return text
+
+
+def _task_code(task_dir: str | None, problems: list[str]) -> str | None:
+    """The code of an HPC task: its batch's commit, from its record."""
+    if task_dir is None:
+        return None
+    path = os.path.join(task_dir, TASK_RECORD_FILE)
+    if not os.path.exists(path):
+        return None                        # still running, or not fetched
+    try:
+        with open(path, encoding="utf-8") as handle:
+            record = json.load(handle)
+    except (OSError, ValueError) as error:
+        problems.append(f"{TASK_RECORD_FILE} cannot be read ({error!r}); its code is unknown")
+        return None
+    return code_text(record) if isinstance(record, dict) else None
+
+
+def _recorded_code() -> dict[str, dict]:
+    """The code of every run in this machine's run registry, by (real) session
+    directory; empty when the registry is off or empty."""
+    from training_framework.runs.registry import list_runs, registry_dir
+
+    root = registry_dir()
+    if root is None:
+        return {}
+    found = {}
+    runs, _ = list_runs(root)
+    for run in runs:
+        for session_dir in run.session_dirs:
+            found[os.path.realpath(session_dir)] = run.record.get("code")
+    return found
 
 
 def _load(run_id: str, entry: _Located) -> RunRecord:

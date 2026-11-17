@@ -189,6 +189,7 @@ def summarize_runs(
 
     problems = list(discovery.problems)
     flat = {run.run_id: _flat_config(run, ignored) for run in runs}
+    _add_code(runs, flat, ignored, problems)
     # Each run's seeds as config paths: a `component:path` key resolves to
     # where that component's entry is in the run's own config.
     run_seeds = {run.run_id: _config_seeds(run, seeds) for run in runs}
@@ -312,6 +313,27 @@ def _path(text, what) -> str:
 
 
 # -- hyperparameters -------------------------------------------------------------
+
+
+#: The setting a run's code is compared as.
+CODE_KEY = "code"
+
+
+def _add_code(runs, flat, ignored, problems) -> None:
+    """Compare each run's code like a setting, so runs on different code are
+    never one seed group. Only when some run's code is known (reports of
+    older runs are unchanged); unknown code is the value `unknown`."""
+    if not any(run.code for run in runs) or any(covers(key, CODE_KEY) for key in ignored):
+        return
+    clashing = sorted({path for config in flat.values() if config
+                       for path in config if covers(CODE_KEY, path)})
+    if clashing:
+        problems.append(f"the runs' code is not compared: their configs have "
+                        f"{', '.join(clashing)} (pass --ignore-key {CODE_KEY} to silence)")
+        return
+    for run in runs:
+        if flat[run.run_id] is not None:
+            flat[run.run_id][CODE_KEY] = run.code or "unknown"
 
 
 def _flat_config(run: RunRecord, ignored: list[str]) -> dict[str, Any] | None:

@@ -51,6 +51,11 @@ def render_markdown(summary: Summary, *, generated: datetime | None = None) -> s
         "settings: an extended run's changed partway, see `extended`) and, "
         "for HPC tasks, `variant.json` (`component:path` columns)."
     )
+    if "code" in summary.shared or any(column.name == "code" for column in summary.columns):
+        lines.append(
+            "- `code` is the commit each run ran (a batch task's from its `record.json`, "
+            "a direct run's from the run registry); `unknown`: not recorded."
+        )
     lines.append("")
 
     if summary.groups is not None:
