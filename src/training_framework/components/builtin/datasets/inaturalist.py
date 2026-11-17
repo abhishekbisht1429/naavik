@@ -9,7 +9,9 @@ from training_framework.components import resource
 from training_framework.components.builtin.datasets.base import (
     TorchvisionDataset,
     TorchvisionDatasetConfig,
+    missing_files,
 )
+from training_framework.data import DataRequirement
 
 
 @dataclass
@@ -30,6 +32,21 @@ class INaturalist(TorchvisionDataset):
     """iNaturalist, labelled by species (torchvision's ``full`` category)."""
 
     config_schema = INaturalistConfig
+
+    # Each version (split) is its own download, into `root/<split>`.
+    @classmethod
+    def data_requirements(cls, config) -> tuple[DataRequirement, ...]:
+        return (DataRequirement("inaturalist", "root", "1", key={"split": config.split},
+                                subpath=config.split),)
+
+    @classmethod
+    def fetch_data(cls, config, requirement, path) -> None:
+        datasets.INaturalist(root=path, version=config.split, target_type="full",
+                             download=True)
+
+    @classmethod
+    def verify_data(cls, config, requirement, path) -> list[str]:
+        return missing_files(path, [f"{config.split}/"])
 
     def _build_source(self) -> Any:
         return datasets.INaturalist(

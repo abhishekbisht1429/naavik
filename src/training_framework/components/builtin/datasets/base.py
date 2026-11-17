@@ -35,6 +35,22 @@ if TYPE_CHECKING:
     from training_framework.session import Session
 
 
+def missing_files(root: str, relative: list[str]) -> list[str]:
+    """`verify_data` for a known layout: each relative path that is not
+    there (a trailing `/` asks for a non-empty directory)."""
+    import os
+
+    problems = []
+    for item in relative:
+        path = os.path.join(root, item.rstrip("/"))
+        if item.endswith("/"):
+            if not os.path.isdir(path) or not os.listdir(path):
+                problems.append(f"{item} is missing or empty")
+        elif not os.path.exists(path):
+            problems.append(f"{item} is missing")
+    return problems
+
+
 #: The transforms every dataset provides; any other value is a dotted path.
 TRANSFORM_PRESETS = ("train", "eval")
 

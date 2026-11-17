@@ -10,7 +10,9 @@ from training_framework.components import resource
 from training_framework.components.builtin.datasets.base import (
     TorchvisionDataset,
     TorchvisionDatasetConfig,
+    missing_files,
 )
+from training_framework.data import DataRequirement
 
 _NATIVE_SIZE = 32
 
@@ -30,6 +32,21 @@ class CIFAR10(TorchvisionDataset):
 
     config_schema = CIFAR10Config
     IMAGE_SIZE = _NATIVE_SIZE
+
+    # Both splits are one download into `root`.
+    @classmethod
+    def data_requirements(cls, config) -> tuple[DataRequirement, ...]:
+        return (DataRequirement("cifar10", "root", "1", size_hint=170_498_071),)
+
+    @classmethod
+    def fetch_data(cls, config, requirement, path) -> None:
+        datasets.CIFAR10(root=path, train=True, download=True)
+
+    @classmethod
+    def verify_data(cls, config, requirement, path) -> list[str]:
+        return missing_files(path, [f"cifar-10-batches-py/{name}" for name in (
+            "data_batch_1", "data_batch_2", "data_batch_3", "data_batch_4", "data_batch_5",
+            "test_batch", "batches.meta")])
 
     def _build_source(self) -> Any:
         return datasets.CIFAR10(

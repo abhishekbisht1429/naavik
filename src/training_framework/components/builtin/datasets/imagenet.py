@@ -10,7 +10,9 @@ from training_framework.components import resource
 from training_framework.components.builtin.datasets.base import (
     TorchvisionDataset,
     TorchvisionDatasetConfig,
+    missing_files,
 )
+from training_framework.data import DataError, DataRequirement
 
 
 @dataclass
@@ -41,6 +43,20 @@ class ImageNet(TorchvisionDataset):
     """
 
     config_schema = ImageNetConfig
+
+    # Obtained by hand from image-net.org: only verified.
+    @classmethod
+    def data_requirements(cls, config) -> tuple[DataRequirement, ...]:
+        return (DataRequirement("imagenet", "root", "1", key={"split": config.split},
+                                subpath=config.split, fetchable=False),)
+
+    @classmethod
+    def fetch_data(cls, config, requirement, path) -> None:
+        raise DataError("ImageNet must be obtained from image-net.org and extracted by hand")
+
+    @classmethod
+    def verify_data(cls, config, requirement, path) -> list[str]:
+        return missing_files(path, [f"{config.split}/"])
 
     @property
     def _split_root(self) -> str:

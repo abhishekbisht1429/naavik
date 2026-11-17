@@ -9,7 +9,9 @@ from training_framework.components import resource
 from training_framework.components.builtin.datasets.base import (
     TorchvisionDataset,
     TorchvisionDatasetConfig,
+    missing_files,
 )
+from training_framework.data import DataError, DataRequirement
 
 
 @dataclass
@@ -24,6 +26,24 @@ class StanfordCars(TorchvisionDataset):
     under `root` by hand."""
 
     config_schema = StanfordCarsConfig
+
+    # torchvision can no longer download it: placed by hand, only verified.
+    @classmethod
+    def data_requirements(cls, config) -> tuple[DataRequirement, ...]:
+        return (DataRequirement("stanford_cars", "root", "1", key={"split": config.split},
+                                fetchable=False),)
+
+    @classmethod
+    def fetch_data(cls, config, requirement, path) -> None:
+        raise DataError("Stanford Cars cannot be downloaded any more; place it under root")
+
+    @classmethod
+    def verify_data(cls, config, requirement, path) -> list[str]:
+        if config.split == "train":
+            return missing_files(path, ["stanford_cars/cars_train/",
+                                        "stanford_cars/devkit/cars_train_annos.mat"])
+        return missing_files(path, ["stanford_cars/cars_test/",
+                                    "stanford_cars/cars_test_annos_withlabels.mat"])
 
     def _build_source(self) -> Any:
         return datasets.StanfordCars(
