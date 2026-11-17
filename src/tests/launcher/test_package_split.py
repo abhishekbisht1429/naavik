@@ -34,10 +34,21 @@ def _run(*argv: str) -> subprocess.CompletedProcess:
                           env={**os.environ, "PYTHONPATH": str(SRC)}, check=False)
 
 
-@pytest.mark.parametrize("new", _launcher_modules())
+#: The top-level names `training_framework.hpc` had before the split; a module
+#: added to the launcher since (e.g. `evaluate`) never had an earlier path.
+EARLIER_TOP_LEVEL = {"compile", "config", "errors", "framework", "names", "ports", "remote",
+                     "scheduler", "services"}
+
+
+@pytest.mark.parametrize("new", [name for name in _launcher_modules()
+                                 if name.split(".")[2] in EARLIER_TOP_LEVEL])
 def test_every_earlier_module_path_is_the_moved_module(new):
     old = new.replace("training_framework.launcher.", "training_framework.hpc.", 1)
     assert importlib.import_module(old) is importlib.import_module(new)
+
+
+def test_a_module_added_since_the_split_has_no_earlier_path():
+    assert importlib.util.find_spec("training_framework.hpc.evaluate") is None
 
 
 @pytest.mark.parametrize("old, new", [

@@ -287,7 +287,29 @@ def _compile(args, profile, fresh_env=False):
         clock=datetime.now(timezone.utc),
         fresh_env=fresh_env,
     )
+    _check_code(compiled, repository, profile)
     return compiled, repository
+
+
+def _check_code(compiled, repository, profile) -> None:
+    """Every task config checked with the batch's own code before anything
+    is staged; what it cannot check is printed once as notes."""
+    from training_framework.launcher.errors import Problems
+    from training_framework.launcher.services.evaluation import ENV_SWITCH, enabled, evaluate_batch
+
+    if not enabled():
+        print(f"warning: the task configs were not checked ({ENV_SWITCH}=0)", file=sys.stderr)
+        return
+    _progress(f"checking {len(compiled.plan.tasks)} task config(s) with the code of "
+              f"{compiled.plan.sha[:12]}")
+    evaluation = evaluate_batch(compiled.plan, compiled.manifest, repository, profile)
+    for note in evaluation.notes:
+        print(f"note: {note}")
+    if evaluation.problems:
+        problems = Problems()
+        for problem in evaluation.problems:
+            problems.add(problem)
+        problems.raise_if_any()
 
 
 def _cluster(profile):
@@ -358,6 +380,7 @@ def _require_tools(*names: str) -> None:
 
 def _submit(args, profile) -> int:
     from training_framework.launcher.remote.runtime import current_process_owner
+    from training_framework.launcher.services.evaluation import enabled as code_check_enabled
     from training_framework.launcher.services.staging import SourceStager
     from training_framework.launcher.services.submit import submit
 
@@ -395,6 +418,7 @@ def _submit(args, profile) -> int:
             receipt_info={
                 **target_of_profile(profile).receipt_fields(),
                 **snapshot_info,
+                "code_check": "done" if code_check_enabled() else "skipped",
                 "repository": str(repository.root),
                 "manifest": Path(args.batch).resolve().relative_to(
                     repository.root.resolve()).as_posix(),
