@@ -77,6 +77,9 @@ then prefixed with the directory name).
 
 A root can be a `sessions_dir`, any directory above several of them, a single
 session directory, an HPC batch directory, or `hpc-results/<batch-id>/`.
+`--runs RUN` (repeatable) adds the session directories of a
+[recorded run](13-run-registry.md) by its id, so no root is needed:
+`naavik summarize --runs 01M7KMT17KHK --runs 01M7KMT4A2T9`.
 Several roots go in one report; each run's id then starts with its root's
 name:
 

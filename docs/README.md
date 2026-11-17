@@ -44,6 +44,9 @@ A task-ordered path. It picks up where the
 12. [Comparing runs](guide/12-comparing-runs.md) — one report over a sweep's
     runs, local or HPC: the hyperparameters that differ, each metric, and
     runs that differ only in their seed as mean ± std.
+13. [Every run is recorded](guide/13-run-registry.md) — the record each
+    launch leaves (config, code, environment, devices, outcome), and
+    `naavik runs` to list, show, compare, and sync them.
 
 ## Look it up
 

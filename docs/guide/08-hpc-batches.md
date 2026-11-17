@@ -660,6 +660,11 @@ checkpoint.
 
 ## 11. Getting results back
 
+Every task also has a [run record](13-run-registry.md) on the machine it ran
+on (its `record.json` names it as `run_id`); `naavik runs sync` brings those
+records here, without the run files.
+
+
 ```bash
 naavik fetch <batch-id>            # into ./hpc-results/<batch-id>/
 ```

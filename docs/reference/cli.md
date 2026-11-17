@@ -68,13 +68,33 @@ reading results is one separate command, installed with the package as
 | `naavik validate / render / launch MANIFEST` | check, preview, or launch a batch | [Running batches](../guide/08-hpc-batches.md) |
 | `naavik batches / status / logs / cancel / resume / fetch` | follow, stop, continue, and collect batches | [Running batches](../guide/08-hpc-batches.md#7-keeping-track-of-your-batches) |
 | `naavik probe-python` | print a site interpreter's identity | [Running batches](../guide/08-hpc-batches.md#1-the-profile-site-settings-on-your-machine) |
-| `naavik summarize ROOT...` | compare runs | [Comparing runs](../guide/12-comparing-runs.md) |
+| `naavik summarize ROOT... [--runs RUN]` | compare runs | [Comparing runs](../guide/12-comparing-runs.md) |
+| `naavik runs list / show / diff / sync` | every recorded run | [Every run is recorded](../guide/13-run-registry.md) |
 
 `naavik <command> --help` lists every option. The earlier entry points run
 the same code: `python -m training_framework.hpc <command>` and
 `python -m training_framework.reporting summarize`. `launch` was called
 `submit`, and `--target`/`--targets` were `--profile`/`--profiles`; the old
 names are kept as aliases.
+
+## `naavik runs`
+
+The [run registry](../guide/13-run-registry.md): every engine launch's
+record. Also `python -m training_framework.runs`.
+
+| Command | Does |
+|---|---|
+| `naavik runs list [--since AGE] [--state S] [--host H] [--batch TEXT] [--where KEY=VALUE] [--limit N] [--json]` | recorded runs, newest first (at most 50 by default; `--limit 0`: all) |
+| `naavik runs show RUN [--json]` | one run in detail: launch, code, environment, devices, sessions, checkpoints, outcome |
+| `naavik runs diff A B [--all-keys]` | what differs in code, config, environment, and devices (`--all-keys`: also `sessions_dir` and the rendezvous address and port) |
+| `naavik runs sync [--target T ... \| --all-targets] [--targets FILE]` | copy the runs recorded on SSH targets into this registry |
+
+`RUN`, `A`, `B`: a run id or any unique beginning of one. Every command takes
+`--registry PATH` (default `$TRAINING_FRAMEWORK_RUNS`, else
+`~/.local/share/training-framework/runs`). Exit status `2` with the reason
+on standard error when a run is not found, is ambiguous, or the registry is
+turned off. Environment variables: `TRAINING_FRAMEWORK_RUNS=PATH|off`,
+`TRAINING_FRAMEWORK_RUNS_SNAPSHOT=0`.
 
 ## Run summaries
 
@@ -89,7 +109,8 @@ naavik summarize ROOT [ROOT ...] [options]
 
 | Argument | Default | Meaning |
 |---|---|---|
-| `ROOT` | (required) | A directory to look for runs (`session_*` directories) in: a `sessions_dir`, a directory above several, one session directory, an HPC batch, or `hpc-results/<batch-id>` |
+| `ROOT` | | A directory to look for runs (`session_*` directories) in: a `sessions_dir`, a directory above several, one session directory, an HPC batch, or `hpc-results/<batch-id>`. A ROOT or `--runs` is needed |
+| `--runs RUN` | | The session directories of a [recorded run](../guide/13-run-registry.md) (an id or a unique beginning; repeatable) |
 | `--metric TAG[:min\|:max]` | every tag, last only | A scalar tag to report; with a direction its best value too (repeatable) |
 | `--tags GLOB` | | Also report every tag matching `GLOB`, last value only (repeatable) |
 | `--last-n N` | | Also report the mean of each tag's last `N` points |
