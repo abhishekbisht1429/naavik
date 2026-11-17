@@ -304,30 +304,33 @@ def _compile(args, profile, fresh_env=False):
         facts=WorkstationFacts(repository.root),
         clock=datetime.now(timezone.utc),
         fresh_env=fresh_env,
+        code_facts=_code_facts(repository, profile),
     )
-    _check_code(compiled, repository, profile)
+    _print_code_notes(compiled)
     return compiled, repository
 
 
-def _check_code(compiled, repository, profile) -> None:
-    """Every task config checked with the batch's own code before anything
-    is staged; what it cannot check is printed once as notes."""
-    from training_framework.launcher.errors import Problems
+def _code_facts(repository, profile):
+    """The compiler's `code_facts` port: every task config checked with the
+    batch's own code before anything is staged; None (with a warning) when
+    the check is turned off."""
     from training_framework.launcher.services.evaluation import ENV_SWITCH, enabled, evaluate_batch
 
     if not enabled():
         print(f"warning: the task configs were not checked ({ENV_SWITCH}=0)", file=sys.stderr)
-        return
-    _progress(f"checking {len(compiled.plan.tasks)} task config(s) with the code of "
-              f"{compiled.plan.sha[:12]}")
-    evaluation = evaluate_batch(compiled.plan, compiled.manifest, repository, profile)
-    for note in evaluation.notes:
+        return None
+
+    def port(sha, manifest, managed, tasks):
+        _progress(f"checking {len(tasks)} task config(s) with the code of {sha[:12]}")
+        return evaluate_batch(sha, manifest, managed, tasks, repository, profile)
+
+    return port
+
+
+def _print_code_notes(compiled) -> None:
+    """What the code check could not check, once."""
+    for note in compiled.code_facts.notes if compiled.code_facts is not None else ():
         print(f"note: {note}")
-    if evaluation.problems:
-        problems = Problems()
-        for problem in evaluation.problems:
-            problems.add(problem)
-        problems.raise_if_any()
 
 
 def _cluster(profile):
@@ -759,8 +762,9 @@ def _run(args) -> int:
     compiled = compile_plan(
         manifest_path=label, repository=repository, profile=profile,
         facts=WorkstationFacts(repository.root), clock=datetime.now(timezone.utc),
-        fresh_env=args.fresh_env, manifest_data=quick_run.manifest_bytes(manifest))
-    _check_code(compiled, repository, profile)
+        fresh_env=args.fresh_env, manifest_data=quick_run.manifest_bytes(manifest),
+        code_facts=_code_facts(repository, profile))
+    _print_code_notes(compiled)
     status, receipt = _launch(profile, compiled, repository, manifest_label=label,
                               review=_review(args.yes, only_over_limit=True))
     if status != 0 or receipt is None or args.detach:

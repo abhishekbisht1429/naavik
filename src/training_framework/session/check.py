@@ -27,6 +27,9 @@ class ConfigCheck:
     problems: list[str] = field(default_factory=list)
     #: Parts of this config that could not be checked, and why.
     notes: list[str] = field(default_factory=list)
+    #: The components building the session would construct
+    #: (`PlannedComponent`), when planning got that far.
+    components: list = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -78,6 +81,7 @@ def check_session_config(config: Mapping, session_type: str | None = None) -> Co
     except Exception as error:      # what building would raise, first problem first
         result.problems.append(_message(error))
         return result
+    result.components = list(plan.components)
     for planned in plan.components:
         if planned.component_class.config_schema is None or planned.config is None:
             continue

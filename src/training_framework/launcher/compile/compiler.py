@@ -7,13 +7,14 @@ and raised together as one `PlanError`.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 
 import dataclasses
 import itertools
 import shlex
 import tomllib
 from datetime import datetime, timezone
+from dataclasses import dataclass, field
 from typing import Any
 
 import yaml
@@ -62,6 +63,40 @@ class Compiled:
     plan: ExecutionPlan
     manifest: Manifest
     suggestions: list[dict]
+    #: What the batch's own code said about its tasks; None: not asked.
+    code_facts: "CodeFacts | None" = None
+
+
+@dataclass(frozen=True)
+class TaskRequirement:
+    """Data one component of one task declares (`training_framework.data`)."""
+
+    session: int
+    component: str
+    #: The component class, dotted.
+    class_path: str
+    #: `DataRequirement.as_json()`.
+    requirement: dict
+    #: The value of the requirement's config field, as the config has it.
+    path: str
+    location: str
+
+
+@dataclass
+class CodeFacts:
+    """The answer of the `code_facts` port of `compile_plan`."""
+
+    problems: list[str] = field(default_factory=list)
+    #: Printed once by the caller; not part of the plan.
+    notes: list[str] = field(default_factory=list)
+    #: Task name -> its data requirements.
+    requirements: dict[str, tuple[TaskRequirement, ...]] = field(default_factory=dict)
+
+
+#: `code_facts(sha, manifest, managed, tasks)`, tasks being (name, config) in
+#: order: the batch's own code asked about its expanded task configs (as the
+#: manifest makes them, before data paths are rewritten for the target).
+CodeFactsPort = Callable[[str, Manifest, bool, list[tuple[str, dict]]], CodeFacts]
 
 
 def _load_yaml(data: bytes, source: str, problems: Problems) -> Any:
@@ -81,11 +116,13 @@ def compile_plan(
         clock: datetime,
         fresh_env: bool = False,
         manifest_data: bytes | None = None,
+        code_facts: CodeFactsPort | None = None,
 ) -> Compiled:
     """`manifest_data`: a manifest given as data rather than read from the
     repository (`naavik run` builds one); `manifest_path` then only names
     it in messages, and everything else is still read at the batch's
-    commit."""
+    commit. `code_facts`: asked once the tasks are expanded (problems it
+    reports stop the compile there); None: not asked."""
     problems = Problems()
 
     # The batch runs one exact tree: HEAD (worktree: commit, which must then
@@ -201,6 +238,18 @@ def compile_plan(
     # Tasks ------------------------------------------------------------------
     tasks_raw = _expand(manifest, base_session, dialect, problems)
     problems.raise_if_any()
+
+    facts_found = None
+    if code_facts is not None:
+        facts_found = code_facts(sha, manifest, bool(environment["managed"]), [
+            (name, {**base_config, "sessions": [
+                _with_sessions_dir(session, f"{batch_dir}/tasks/{name}/sessions")]})
+            for name, session in (
+                (f"{group.name}/{experiment.name}/{number:03d}", session)
+                for group, experiment, number, _, session, _ in tasks_raw)])
+        for problem in facts_found.problems:
+            problems.add(problem)
+        problems.raise_if_any()
 
     sessions = [session for _, _, _, _, session, _ in tasks_raw]
     sources = data_module.parse_sources(manifest.data_sources, problems, profile)
@@ -354,7 +403,7 @@ def compile_plan(
         base_sha=snapshot.base if snapshot is not None and snapshot.snapshot else None,
         description=manifest.description,
     )
-    return Compiled(plan, manifest, suggestions)
+    return Compiled(plan, manifest, suggestions, facts_found)
 
 
 # Helpers -----------------------------------------------------------------------

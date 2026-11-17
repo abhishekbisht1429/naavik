@@ -18,7 +18,6 @@ import re
 import subprocess
 import sys
 import tempfile
-from dataclasses import dataclass, field
 from pathlib import Path
 
 from training_framework.launcher.errors import HpcError
@@ -49,12 +48,6 @@ def _checkout_version(location: str | None) -> str | None:
     return None
 
 
-@dataclass
-class Evaluation:
-    problems: list[str] = field(default_factory=list)
-    notes: list[str] = field(default_factory=list)
-
-
 def _interpreter(profile) -> str:
     if profile.local and profile.env.existing:
         return f"{profile.env.existing}/bin/python"
@@ -72,18 +65,18 @@ def _pythonpath(tree: Path, manifest, interpreter: str) -> list[str]:
     return paths
 
 
-def framework_mismatch(manifest, plan, repository, framework: dict, tree: Path) -> str | None:
+def framework_mismatch(manifest, sha, managed, repository, framework: dict, tree: Path) -> str | None:
     """Why the framework that checked is not the one the target will run."""
     if manifest.code_framework == "checkout":
         location = Path(framework.get("location") or "/")
         return None if location.is_relative_to(tree.resolve()) else (
             f"the check used the framework at {location}, not the batch's own checkout "
             f"({tree}); is it in code.paths?")
-    if not plan.environment.get("managed"):
+    if not managed:
         return None                        # an existing environment is the target's own
     from training_framework.launcher.config.requirements import parse_requirements
 
-    raw = repository.read(plan.sha, manifest.requirements) if manifest.requirements else None
+    raw = repository.read(sha, manifest.requirements) if manifest.requirements else None
     if raw is None:
         return None
     pins = parse_requirements(raw.decode(), manifest.requirements).pins_named("training-framework")
@@ -108,9 +101,9 @@ def framework_mismatch(manifest, plan, repository, framework: dict, tree: Path) 
     return None
 
 
-def checkout_note(manifest, plan, framework: dict) -> str | None:
+def checkout_note(manifest, managed, framework: dict) -> str | None:
     """A version pin checked with a checkout that declares that version."""
-    if manifest.code_framework != "dependency" or not plan.environment.get("managed"):
+    if manifest.code_framework != "dependency" or not managed:
         return None
     if framework.get("version") is None and framework.get("sha"):
         version = _checkout_version(framework.get("location"))
@@ -121,18 +114,21 @@ def checkout_note(manifest, plan, framework: dict) -> str | None:
     return None
 
 
-def evaluate_batch(plan, manifest, repository, profile) -> Evaluation:
-    """Check every task of `plan` with the batch's code."""
+def evaluate_batch(sha, manifest, managed, tasks, repository, profile):
+    """The `code_facts` port of `compile_plan`: check every task (name,
+    config) with the code of commit `sha`, and collect its data
+    requirements."""
+    from training_framework.launcher.compile.compiler import CodeFacts, TaskRequirement
     from training_framework.launcher.ports.source_tree import source_tree
 
-    result = Evaluation()
-    tree = source_tree(repository.root, plan.sha)
+    result = CodeFacts()
+    tree = source_tree(repository.root, sha)
     interpreter = _interpreter(profile)
     env = {**os.environ, "PYTHONPATH": os.pathsep.join(_pythonpath(tree, manifest, interpreter))}
     with tempfile.TemporaryDirectory() as directory:
         given, answer = Path(directory, "tasks.json"), Path(directory, "result.json")
-        given.write_text(json.dumps({"tasks": [{"name": task.name, "config": task.config}
-                                               for task in plan.tasks]}, default=str))
+        given.write_text(json.dumps({"tasks": [{"name": name, "config": config}
+                                               for name, config in tasks]}, default=str))
         try:
             completed = subprocess.run(
                 [interpreter, "-m", "training_framework.launcher.evaluate", str(given), str(answer)],
@@ -145,17 +141,21 @@ def evaluate_batch(plan, manifest, repository, profile) -> Evaluation:
                                    f"{completed.returncode}):\n{tail}")
             return result
         found = json.loads(answer.read_text())
-    mismatch = framework_mismatch(manifest, plan, repository, found["framework"], tree)
+    mismatch = framework_mismatch(manifest, sha, managed, repository, found["framework"], tree)
     if mismatch:
         result.problems.append(mismatch)
-    elif note := checkout_note(manifest, plan, found["framework"]):
+    elif note := checkout_note(manifest, managed, found["framework"]):
         result.notes.append(note)
     seen_notes = set()
-    for task in plan.tasks:
-        outcome = found["tasks"].get(task.name, {})
-        result.problems += [f"{task.name}: {problem}" for problem in outcome.get("problems", [])]
+    for name, _ in tasks:
+        outcome = found["tasks"].get(name, {})
+        result.problems += [f"{name}: {problem}" for problem in outcome.get("problems", [])]
         for note in outcome.get("notes", []):
             if note not in seen_notes:
                 seen_notes.add(note)
-                result.notes.append(f"{task.name}: {note}")
+                result.notes.append(f"{name}: {note}")
+        result.requirements[name] = tuple(
+            TaskRequirement(item["session"], item["component"], item["class"],
+                            item["requirement"], item["path"], item["location"])
+            for item in outcome.get("requirements", []))
     return result
