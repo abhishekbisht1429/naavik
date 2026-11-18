@@ -153,7 +153,7 @@ def test_a_git_pin_must_be_the_framework_that_checks(tmp_path, capsys):
     root = project(tmp_path, session(), requirements=pin)
     assert validate(root, _managed(tmp_path / "targets.yaml", tmp_path)) == 2
     err = capsys.readouterr().err
-    assert f"the target runs training-framework at commit {'a' * 12}" in err
+    assert f"the host runs training-framework at commit {'a' * 12}" in err
     assert "install the pinned framework here" in err
 
 
@@ -164,7 +164,7 @@ def test_a_version_pin_accepts_a_checkout_of_that_version_with_a_note(tmp_path, 
     assert f"checked with a training-framework checkout" in capsys.readouterr().out
     other = project(tmp_path / "other", session(), requirements="training-framework==0.1.0\ntorch==2.13.0\n")
     assert validate(other, _managed(tmp_path / "targets2.yaml", tmp_path)) == 2
-    assert "the target runs training-framework 0.1.0" in capsys.readouterr().err
+    assert "the host runs training-framework 0.1.0" in capsys.readouterr().err
 
 
 def test_checkout_mode_checks_with_the_framework_in_the_tree(tmp_path, here, capsys):

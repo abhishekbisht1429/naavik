@@ -63,7 +63,7 @@ def test_missing_partitions_are_reported():
 
 def test_owned_directives_are_refused_in_profile_defaults():
     dialect = SlurmDialect(SlurmSettings({"time": "1:00:00", "account": "lab"}, {}, 10))
-    assert dialect.check_profile() == ["profile slurm.defaults: 'time' is not allowed"]
+    assert dialect.check_profile() == ["scheduler.sbatch_options: 'time' is not allowed"]
 
 
 def test_the_signal_lead_covers_the_join_timeout_and_grace():

@@ -122,8 +122,8 @@ def test_an_earlier_hpc_yaml_is_still_read_with_a_note(tmp_path, config_home, ca
     (config_home / "hpc.yaml").write_text(yaml.safe_dump(PROFILE))
     assert _validate(root) == 0
     err = capsys.readouterr().err
-    assert f"reading targets from {config_home / 'hpc.yaml'}" in err
-    assert f"rename it to {config_home / 'targets.yaml'}" in err
+    assert f"reading hosts from {config_home / 'hpc.yaml'}" in err
+    assert f"rename it to {config_home / 'hosts.yaml'}" in err
 
 
 def test_targets_yaml_wins_and_the_ignored_hpc_yaml_is_named(tmp_path, config_home, capsys):
@@ -138,7 +138,7 @@ def test_targets_yaml_wins_and_the_ignored_hpc_yaml_is_named(tmp_path, config_ho
 def test_no_target_file_names_the_file_to_create(tmp_path, config_home, capsys):
     root = make_repo(tmp_path)
     assert _validate(root) == 2
-    assert str(config_home / "targets.yaml") in capsys.readouterr().err
+    assert str(config_home / "hosts.yaml") in capsys.readouterr().err
 
 
 def test_a_target_file_may_name_its_entries_targets(tmp_path, capsys):

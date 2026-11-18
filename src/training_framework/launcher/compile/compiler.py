@@ -201,8 +201,8 @@ def compile_plan(
         if not repository.is_clean():
             problems.add(
                 "the repository has uncommitted changes or untracked files; "
-                "commit or ignore them (batches run an exact commit), or set "
-                "worktree: snapshot in the target's profile"
+                "commit or ignore them (missions run an exact commit), or set "
+                "run_code_from: working_tree on the host (hosts.yaml)"
             )
         head = repository.resolve("HEAD")
     head_bytes = manifest_data if manifest_data is not None else repository.read(head, manifest_path)
@@ -232,8 +232,8 @@ def compile_plan(
 
     if snapshot is not None:
         if manifest.source_ref != "HEAD":
-            problems.add(f"source.ref '{manifest.source_ref}' cannot be used with worktree: "
-                         "snapshot (the snapshot is of the working tree on HEAD)")
+            problems.add(f"source.ref '{manifest.source_ref}' cannot be used with run_code_from: "
+                         "working_tree (the working tree is taken on HEAD)")
         if manifest.source_strategy == "fetch":
             problems.add("source.strategy 'fetch' cannot stage a snapshot (it exists only in "
                          "this repository); use 'bundle'")
@@ -306,8 +306,9 @@ def compile_plan(
 
     if profile.env.conda_run and profile.env.existing is None and profile.env.backend != "conda":
         problems.add(
-            "profile env.conda_run needs a conda environment (env.backend: conda, "
-            "or env.existing pointing to one); with a venv it would have no effect"
+            "python_environment.activate_with_conda_run needs a conda environment "
+            "(python_environment.kind: conda, or use_existing pointing to one); with a "
+            "venv it would have no effect"
         )
     environment, setup_context = _environment(
         manifest, profile, requirements, expectation, batch_id, batch_dir, fresh_env,
@@ -414,7 +415,8 @@ def compile_plan(
 
     for node in nodes:
         if node.kind != "task_set" and node.resources is not None:
-            where = "profile setup_resources" if node.kind == "setup" else f"prepare node {node.id}"
+            where = ("environment_build.allocation" if node.kind == "setup"
+                     else f"data preparation step {node.id}")
             for problem in dialect.check_resources(node.resources, where):
                 problems.add(problem)
 
@@ -551,7 +553,7 @@ def _requirements(manifest, repository, sha, managed, problems) -> Requirements 
         if managed:
             problems.add(
                 "environment.requirements is required for a managed "
-                "environment (or set env.existing in the profile)"
+                "environment (or set python_environment.use_existing on the host)"
             )
         return None
     raw = repository.read(sha, manifest.requirements)
@@ -680,7 +682,7 @@ def _data_requirements(tasks_raw, sessions, sources, profile, facts, code_facts,
              for group, experiment, number, _, _, _ in tasks_raw]
     if code_facts is None:
         if profile.data is not None:
-            problems.add(f"target '{profile.name}' manages data (data_modes in its profile), which "
+            problems.add(f"host '{profile.name}' manages data (dataset_delivery), which "
                          "needs the data requirements the code check finds; the code check "
                          "is off (TRAINING_FRAMEWORK_CODE_CHECK=0)")
         return
@@ -689,8 +691,8 @@ def _data_requirements(tasks_raw, sessions, sources, profile, facts, code_facts,
         found = sorted({item.requirement["name"] for items in per_task for item in items})
         if found:
             code_facts.notes.append(
-                f"data requirement(s) {', '.join(found)} are not managed on target "
-                f"'{profile.name}' (its profile has no data_modes); each task reads what is at "
+                f"data requirement(s) {', '.join(found)} are not managed on host "
+                f"'{profile.name}' (it has no dataset_delivery); each experiment reads what is at "
                 "its config's path")
         return
     data_module.compile_requirements(per_task, sessions, sources, profile, facts, problems, data)

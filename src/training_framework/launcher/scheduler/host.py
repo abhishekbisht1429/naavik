@@ -36,9 +36,16 @@ class HostSettings:
     busy_gpus: str = "wait"
 
 
-def parse_settings(raw, where, problems, reader_class) -> HostSettings:
-    """The profile's `host:` block (may be empty)."""
-    reader = reader_class(raw if raw is not None else {}, where, problems, {"gpus", "busy_gpus"})
+#: `scheduler.when_gpus_busy` as written -> its value inside.
+WHEN_GPUS_BUSY = {"wait": "wait", "use_anyway": "use"}
+
+
+def parse_settings(raw, where, problems, reader_class, names: str = "hosts_file") -> HostSettings:
+    """The settings of a host with `scheduler: {kind: builtin, ...}`
+    (`names="plan"`: as a plan records them: `busy_gpus: wait|use`)."""
+    busy_key, busy_values = (("when_gpus_busy", WHEN_GPUS_BUSY) if names == "hosts_file"
+                             else ("busy_gpus", {mode: mode for mode in BUSY_GPU_MODES}))
+    reader = reader_class(raw if raw is not None else {}, where, problems, {"gpus", busy_key})
     gpus = reader.get("gpus", [])
     if (not isinstance(gpus, (list, tuple))
             or not all(isinstance(item, int) and not isinstance(item, bool) and item >= 0
@@ -47,8 +54,8 @@ def parse_settings(raw, where, problems, reader_class) -> HostSettings:
         gpus = []
     elif len(set(gpus)) != len(gpus):
         problems.add(f"{where}.gpus lists a GPU more than once")
-    busy = reader.choice("busy_gpus", BUSY_GPU_MODES, "wait")
-    return HostSettings(gpus=tuple(gpus), busy_gpus=busy or "wait")
+    busy = reader.choice(busy_key, tuple(busy_values), "wait")
+    return HostSettings(gpus=tuple(gpus), busy_gpus=busy_values[busy or "wait"])
 
 
 def _unsafe(value) -> bool:

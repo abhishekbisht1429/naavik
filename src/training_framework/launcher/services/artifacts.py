@@ -85,10 +85,11 @@ class EnvironmentCache:
         found = probe_identity(self.executor, context)
         if any(found.get(field) != declared.get(field) for field in IDENTITY_FIELDS):
             raise HpcError(
-                "the cluster's site interpreter does not match the profile's "
-                f"site_python_identity:\n  declared: {json.dumps(declared, sort_keys=True)}\n"
+                "the host's site interpreter does not match its "
+                f"python_environment.site_interpreter:\n"
+                f"  declared: {json.dumps(declared, sort_keys=True)}\n"
                 f"  found:    {json.dumps(found, sort_keys=True)}\n"
-                "If the site changed its Python, update the profile with:\n"
+                "If the site changed its Python, update the host with:\n"
                 + identity_block(found)
             )
 

@@ -115,18 +115,18 @@ def target_check(executor, settings) -> list[str]:
     result = executor.run(["sh", "-c", f'{RUNNER_PYTHON} -c "import sys; '
                            'print(sys.version_info >= (3, 8))"'])
     if result.status != 0 or result.stdout.strip() != "True":
-        problems.append(f"the target needs {RUNNER_PYTHON} 3.8 or newer for the host "
+        problems.append(f"the host needs {RUNNER_PYTHON} 3.8 or newer for the builtin "
                         f"scheduler's runner ({(result.stderr or result.stdout).strip() or 'too old'})")
     if settings.gpus:
         result = executor.run(["sh", "-c", "nvidia-smi --query-gpu=index --format=csv,noheader"])
         if result.status != 0:
-            problems.append("the profile's host.gpus pool needs nvidia-smi on the target "
+            problems.append("scheduler.gpus needs nvidia-smi on the host "
                             f"({result.stderr.strip() or 'not found'})")
         else:
             present = {int(line) for line in result.stdout.split() if line.strip().isdigit()}
             missing = [index for index in settings.gpus if index not in present]
             if missing:
-                problems.append(f"host.gpus lists GPU(s) {missing} that the target does not "
+                problems.append(f"scheduler.gpus lists GPU(s) {missing} that the host does not "
                                 f"have (it has {sorted(present)})")
     return problems
 

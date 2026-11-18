@@ -22,7 +22,7 @@ def test_the_selected_profile_wins_over_the_default():
     data = copy.deepcopy(PROFILE)
     data["profiles"]["other"] = copy.deepcopy(data["profiles"]["cluster"])
     assert parse_profiles(data, "other", "p.yaml").name == "other"
-    with pytest.raises(PlanError, match="profile 'nope' not found"):
+    with pytest.raises(PlanError, match="host 'nope' not found"):
         parse_profiles(data, "nope", "p.yaml")
 
 

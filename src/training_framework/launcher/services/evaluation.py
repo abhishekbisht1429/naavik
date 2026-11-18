@@ -86,7 +86,7 @@ def framework_mismatch(manifest, sha, managed, repository, framework: dict, tree
     commit = _FULL_SHA.search(pin.url or "")
     if commit is not None:
         if mine.get("sha") != commit.group(1) or mine.get("dirty"):
-            return (f"the target runs training-framework at commit {commit.group(1)[:12]}, but the "
+            return (f"the host runs training-framework at commit {commit.group(1)[:12]}, but the "
                     f"framework here is {(mine.get('sha') or 'not a Git checkout')[:12]}"
                     f"{' with uncommitted changes' if mine.get('dirty') else ''} "
                     f"({mine.get('location')}); install the pinned framework here "
@@ -95,7 +95,7 @@ def framework_mismatch(manifest, sha, managed, repository, framework: dict, tree
     if pin.version is not None and mine.get("version") != pin.version:
         if mine.get("version") is None and _checkout_version(mine.get("location")) == pin.version:
             return None                    # a checkout of the pinned release (noted by the caller)
-        return (f"the target runs training-framework {pin.version}, but the framework here is "
+        return (f"the host runs training-framework {pin.version}, but the framework here is "
                 f"{mine.get('version') or 'not an installed release'} ({mine.get('location')}); "
                 "install the pinned framework here (guide 10, step 5)")
     return None
@@ -110,7 +110,7 @@ def checkout_note(manifest, managed, framework: dict) -> str | None:
         if version:
             return (f"the configs were checked with a training-framework checkout "
                     f"({framework['sha'][:12]}{', with uncommitted changes' if framework.get('dirty') else ''}) "
-                    f"that declares {version}; the target installs the pinned release")
+                    f"that declares {version}; the host installs the pinned release")
     return None
 
 

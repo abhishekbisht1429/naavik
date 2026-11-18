@@ -20,7 +20,9 @@ from training_framework.launcher.errors import HpcError
 @dataclass(frozen=True)
 class SchedulerBundle:
     name: str
-    parse_settings: Callable[..., Any]     # (raw, where, problems, reader_class) -> settings
+    # (raw, where, problems, reader_class, names="hosts_file"|"plan") -> settings;
+    # "plan": the names a plan records (launcher-internal, kept for resume).
+    parse_settings: Callable[..., Any]
     dialect: Callable[[Any], Any]          # settings -> SchedulerDialect
     submitter: Callable[[Any], Any]        # RemoteExecutor -> SchedulerSubmitter
     owner_probe: Callable[[Any], Any]      # RemoteExecutor -> LeaseOwnerProbe

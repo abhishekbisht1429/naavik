@@ -61,7 +61,7 @@ def test_a_snapshot_that_cannot_be_made_is_reported_not_raised(tmp_path, monkeyp
     root = make_repo(tmp_path)
     (root / "big.bin").write_bytes(b"x" * 4096)
     identity = code_identity(root, new_run_id(), limit=1024)
-    assert identity["dirty"] is True and "exceed snapshot_limit" in identity["error"]
+    assert identity["dirty"] is True and "exceed working_tree_untracked_limit" in identity["error"]
 
 
 def test_outside_a_repository_there_is_no_code_identity(tmp_path):

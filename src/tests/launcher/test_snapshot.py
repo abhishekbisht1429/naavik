@@ -92,7 +92,7 @@ def test_untracked_files_over_the_limit_are_refused_by_name(tmp_path):
     root = make_repo(tmp_path)
     (root / "data.bin").write_bytes(b"x" * 2048)
     (root / "small.txt").write_text("x")
-    with pytest.raises(PlanError, match=r"exceed snapshot_limit \(1\.0 KiB\).*data\.bin \(2\.0 KiB\)"):
+    with pytest.raises(PlanError, match=r"exceed working_tree_untracked_limit \(1\.0 KiB\).*data\.bin \(2\.0 KiB\)"):
         compile_repo(root, profile_data=_snapshot_profile(snapshot_limit="1K"))
 
 
@@ -111,7 +111,7 @@ def test_a_snapshot_is_staged_only_from_head_by_bundle(tmp_path, changes, messag
 def test_commit_mode_still_refuses_a_dirty_tree_and_says_how_to_snapshot(tmp_path):
     root = make_repo(tmp_path)
     (root / "my_project" / "__init__.py").write_text("CHANGED = True\n")
-    with pytest.raises(PlanError, match="worktree: snapshot"):
+    with pytest.raises(PlanError, match="run_code_from: working_tree"):
         compile_repo(root)
 
 
@@ -134,7 +134,7 @@ def test_a_changed_submodule_is_refused(tmp_path):
 def test_an_unknown_worktree_mode_is_refused():
     from training_framework.launcher.config.schema import parse_profiles
 
-    with pytest.raises(PlanError, match="worktree must be one of commit, snapshot"):
+    with pytest.raises(PlanError, match="run_code_from must be one of commit, working_tree"):
         parse_profiles(profile(worktree="stash"), None, "targets.yaml")
 
 

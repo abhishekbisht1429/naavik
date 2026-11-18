@@ -173,7 +173,7 @@ def test_launch_stops_before_staging_when_the_target_lacks_a_pool_gpu(tmp_path, 
     root = repo(tmp_path, session(), [1])
     assert naavik(["launch", str(root / "batch.yaml"), "--targets", str(here), "--yes"]) == 2
     error = capsys.readouterr().err
-    assert "the target cannot run this batch" in error and "[42]" in error
+    assert "the host cannot run this mission" in error and "[42]" in error
     assert not (tmp_path / "here" / "batches").exists()            # nothing staged
 
 

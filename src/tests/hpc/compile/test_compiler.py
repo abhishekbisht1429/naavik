@@ -227,7 +227,7 @@ def test_declared_interpreter_identities_change_the_environment_key(tmp_path):
 def test_a_missing_site_identity_is_a_compiler_error(tmp_path):
     data = profile()
     del data["profiles"]["cluster"]["env"]["site_python_identity"]
-    assert "site_python_identity is required" in problems_of(make_repo(tmp_path), profile_data=data)
+    assert "python_environment.site_interpreter is required" in problems_of(make_repo(tmp_path), profile_data=data)
 
 
 def test_a_fresh_environment_gets_its_own_location(tmp_path):
@@ -470,7 +470,7 @@ def test_a_found_bootstrap_interpreter_is_linked_to_a_fixed_path(tmp_path, sourc
 def test_validate_refuses_a_conda_backend_on_the_site_interpreter(tmp_path):
     data = copy.deepcopy(PROFILE)
     data["profiles"]["cluster"]["env"]["backend"] = "conda"
-    with pytest.raises(PlanError, match="cannot use python_source 'site'"):
+    with pytest.raises(PlanError, match="cannot use interpreter_from 'site'"):
         compile_repo(make_repo(tmp_path), profile_data=data)
 
 
@@ -553,5 +553,5 @@ def test_a_file_in_code_paths_is_refused(tmp_path):
 def test_malformed_slurm_defaults_are_validation_errors(tmp_path, defaults):
     data = profile()
     data["profiles"]["cluster"]["slurm"]["defaults"] = defaults
-    assert "slurm.defaults must map option names (strings) to string or integer values" in \
+    assert "scheduler.sbatch_options must map option names (strings) to string or integer values" in \
         problems_of(make_repo(tmp_path), profile_data=data)

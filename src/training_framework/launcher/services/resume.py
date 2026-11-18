@@ -252,7 +252,8 @@ def plan_dialect(plan: dict):
                           "needs (its scheduler settings in plan.json); submit a new batch")
     bundle = get_scheduler(plan["scheduler"])
     problems = Problems()
-    settings = bundle.parse_settings(raw, "plan.json scheduler_settings", problems, _Reader)
+    settings = bundle.parse_settings(raw, "plan.json scheduler_settings", problems, _Reader,
+                                     names="plan")
     if problems:
         raise ResumeError(f"plan.json scheduler settings are not valid: {problems}")
     return bundle.dialect(settings)

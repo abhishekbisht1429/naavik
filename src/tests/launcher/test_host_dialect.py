@@ -59,7 +59,7 @@ def test_the_host_block_names_a_gpu_pool_and_what_to_do_with_busy_gpus():
     ({"gpus": [-1]}, "list of GPU indices"),
     ({"gpus": "4,5"}, "list of GPU indices"),
     ({"gpus": [True]}, "list of GPU indices"),
-    ({"busy_gpus": "maybe"}, "busy_gpus must be one of wait, use"),
+    ({"busy_gpus": "maybe"}, "when_gpus_busy must be one of wait, use_anyway"),
     ({"partitions": {}}, "unknown"),
 ])
 def test_a_bad_host_block_is_refused(host, message):

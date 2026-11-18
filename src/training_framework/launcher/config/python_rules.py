@@ -80,11 +80,11 @@ def interpreter_expectation(
         # it is never the site interpreter preflight would compare it with,
         # and 'site' does not require the pin conda needs.
         problems.append(
-            "profile env.backend 'conda' installs its own Python "
+            "python_environment.kind 'conda' installs its own Python "
             "(conda create python=<environment.python>), so it cannot use "
-            "python_source 'site'; set env.python_source to 'conda' (or "
-            "'uv') and environment.python in the experiment file, or use "
-            "backend 'venv' with the site interpreter"
+            "interpreter_from 'site'; set python_environment.interpreter_from to "
+            "'conda' (or 'uv') and environment.python in the experiment file, or "
+            "use kind 'venv' with the site interpreter"
         )
         return InterpreterExpectation("site", None, None), problems
 
@@ -92,16 +92,15 @@ def interpreter_expectation(
         identity = env.site_python_identity
         if identity is None:
             problems.append(
-                "profile env.site_python_identity is required for a managed "
-                "environment with python_source 'site' (run "
-                "`python -m training_framework.hpc probe-python` and paste "
-                "its output)"
+                "python_environment.site_interpreter is required for a managed "
+                "environment with interpreter_from 'site' (run "
+                "`naavik probe-python` and paste its output)"
             )
             return InterpreterExpectation("site", None, None), problems
         if pin is not None and not _matches_pin(identity.version, pin):
             problems.append(
-                f"environment.python pins {pin}, but the profile's "
-                f"site_python_identity is Python {identity.version}"
+                f"environment.python pins {pin}, but the host's "
+                f"site_interpreter is Python {identity.version}"
             )
         if requires_python is not None and not requires_python.contains(
                 identity.version, prereleases=True,
@@ -114,7 +113,7 @@ def interpreter_expectation(
 
     if pin is None:
         problems.append(
-            f"environment.python is required with python_source "
+            f"environment.python is required with interpreter_from "
             f"'{env.python_source}' (the interpreter it installs must be "
             "known offline)"
         )

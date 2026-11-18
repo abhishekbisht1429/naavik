@@ -23,9 +23,12 @@ from training_framework.launcher.ports.repository import GitRepository
 from training_framework.launcher.ports.ssh import SSH_HINT, TransportError
 
 
-TARGETS_FILE = "targets.yaml"
-#: The target file's earlier name, still read when `targets.yaml` is absent.
-LEGACY_TARGETS_FILE = "hpc.yaml"
+HOSTS_FILE = "hosts.yaml"
+#: The hosts file's earlier names, newest first; still read when
+#: `hosts.yaml` is absent.
+EARLIER_HOSTS_FILES = ("targets.yaml", "hpc.yaml")
+#: Kept for code that imports the earlier names.
+TARGETS_FILE, LEGACY_TARGETS_FILE = EARLIER_HOSTS_FILES
 
 
 def _config_dir() -> Path:
@@ -34,18 +37,22 @@ def _config_dir() -> Path:
 
 
 def default_profiles_path() -> Path:
-    """The target file: `targets.yaml`, else the earlier `hpc.yaml` if only
-    that exists (with a note on stderr), else `targets.yaml` (to create)."""
+    """The hosts file: `hosts.yaml`, else an earlier name (`targets.yaml`,
+    then `hpc.yaml`) if only that exists (with a note on stderr), else
+    `hosts.yaml` (to create)."""
     directory = _config_dir()
-    current, legacy = directory / TARGETS_FILE, directory / LEGACY_TARGETS_FILE
+    current = directory / HOSTS_FILE
+    earlier = [directory / name for name in EARLIER_HOSTS_FILES if (directory / name).exists()]
     if current.exists():
-        if legacy.exists():
-            print(f"note: {legacy} is ignored; targets are read from {current}", file=sys.stderr)
+        for path in earlier:
+            print(f"note: {path} is ignored; hosts are read from {current}", file=sys.stderr)
         return current
-    if legacy.exists():
-        print(f"note: reading targets from {legacy}; rename it to {current} "
-              f"({LEGACY_TARGETS_FILE} is the earlier name)", file=sys.stderr)
-        return legacy
+    if earlier:
+        print(f"note: reading hosts from {earlier[0]}; rename it to {current} "
+              f"({earlier[0].name} is an earlier name)", file=sys.stderr)
+        for path in earlier[1:]:
+            print(f"note: {path} is ignored; hosts are read from {earlier[0]}", file=sys.stderr)
+        return earlier[0]
     return current
 
 
@@ -291,11 +298,14 @@ def _profile(args):
     path = args.profiles or default_profiles_path()
     if not path.exists():
         if args.profiles is None:
-            legacy = _config_dir() / LEGACY_TARGETS_FILE
-            raise HpcError(f"no target file: {path} does not exist (and the earlier "
-                           f"{legacy} does not exist either)")
-        raise HpcError(f"target file {path} does not exist")
-    return parse_profiles(yaml.safe_load(path.read_text()), args.profile, str(path))
+            raise HpcError(f"no hosts file: {path} does not exist (nor do its earlier names "
+                           f"{', '.join(EARLIER_HOSTS_FILES)})")
+        raise HpcError(f"hosts file {path} does not exist")
+    profile = parse_profiles(yaml.safe_load(path.read_text()), args.profile, str(path))
+    if profile.renamed:
+        print(f"warning: {path} uses earlier names ({'; '.join(profile.renamed)}); "
+              f"`naavik migrate {path}` rewrites them", file=sys.stderr)
+    return profile
 
 
 def _compile(args, profile, fresh_env=False, fetch_here=False):
@@ -478,7 +488,7 @@ def _launch(profile, compiled, repository, *, manifest_label: str, review):
     if bundle.target_check is not None:
         problems = bundle.target_check(ports["executor"], profile.scheduler_settings)
         if problems:
-            raise HpcError("the target cannot run this batch:\n  " + "\n  ".join(problems))
+            raise HpcError("the host cannot run this mission:\n  " + "\n  ".join(problems))
     manifest = compiled.manifest
     snapshot_info = {}
     if plan.base_sha:
@@ -680,7 +690,7 @@ def _batches(args) -> int:
         print(f"error: cannot reach {host} over SSH: {reason}", file=sys.stderr)
         print(f"hint: {SSH_HINT.format(host=host)}", file=sys.stderr)
     for target in unreachable_targets:
-        print(f"error: cannot list target '{target.name}': {target.reason}", file=sys.stderr)
+        print(f"error: cannot list host '{target.name}': {target.reason}", file=sys.stderr)
     return 1 if unreachable or unreachable_targets else 0
 
 

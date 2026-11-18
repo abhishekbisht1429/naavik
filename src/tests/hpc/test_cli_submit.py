@@ -71,7 +71,7 @@ def test_an_identity_mismatch_stops_submit_with_the_block_to_paste(fake_cluster,
     root, path = setup(tmp_path / "second", monkeypatch, stale)
     assert main(["submit", str(root / "batch.yaml"), "--profiles", str(path), "--yes"]) == 2
     error = capsys.readouterr().err
-    assert "does not match the profile's site_python_identity" in error
+    assert "does not match its python_environment.site_interpreter" in error
     assert "site_python_identity:" in error
     assert not submitted_jobs(fake_cluster)
 

@@ -35,7 +35,7 @@ def compare(facts: Dict, expected: Dict, source_dir: str) -> List[str]:
             if interpreter.get(field) != identity.get(field):
                 problems.append(
                     "interpreter {} is {!r}, expected {!r} (update the "
-                    "profile's site_python_identity)".format(
+                    "host's python_environment.site_interpreter)".format(
                         field, interpreter.get(field), identity.get(field))
                 )
     elif prefix:

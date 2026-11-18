@@ -12,7 +12,7 @@ import posixpath
 import re
 import sys
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from training_framework.launcher.errors import Problems
@@ -24,14 +24,29 @@ _WALLTIME = re.compile(r"\A(?:(\d+)-)?(\d{1,2}):(\d{2}):(\d{2})\Z")
 _DURATION = re.compile(r"\A(\d+)([smh])\Z")
 _DURATION_FACTORS = {"s": 1, "m": 60, "h": 3600}
 
-PROFILE_KEYS = frozenset({
-    "ssh_host", "local", "roots", "scheduler", "slurm", "hooks", "env",
-    "setup_location", "prepare_location", "path_map", "upload_limit",
-    "setup_resources", "worktree", "snapshot_limit", "data_modes",
+#: The keys of one host in the hosts file (`hosts.yaml`).
+HOST_KEYS = frozenset({
+    "connection", "scheduler", "directories", "shell_commands_before",
+    "python_environment", "environment_build", "data_preparation",
+    "local_to_host_paths", "confirm_uploads_over", "run_code_from",
+    "working_tree_untracked_limit", "dataset_delivery",
 })
-#: How a data requirement reaches a target (profile `data_modes:`; not
-#: `data:`, which is the manifest's data sources).
-DATA_MODES = ("fetch", "upload", "present")
+#: Every key a host has had, current and earlier: a mission file refuses
+#: them all (they are site settings).
+PROFILE_KEYS = HOST_KEYS | frozenset({
+    "ssh_host", "local", "roots", "slurm", "hooks", "env", "setup_location",
+    "prepare_location", "path_map", "upload_limit", "setup_resources",
+    "worktree", "snapshot_limit", "data_modes",
+})
+#: How a data requirement reaches a host (`dataset_delivery`), and the
+#: name each has inside the launcher.
+DATASET_DELIVERY = {"download_on_host": "fetch", "copy_from_here": "upload",
+                    "already_on_host": "present"}
+DATA_MODES = tuple(DATASET_DELIVERY.values())
+#: `environment_build.on` / `data_preparation.on`, and the launcher's names.
+STEP_LOCATIONS = {"compute_node": "job", "login_node": "login"}
+#: `run_code_from`, and the launcher's names.
+CODE_FROM = {"commit": "commit", "working_tree": "snapshot"}
 #: How a batch takes your code: the commit you made (`commit`), or a commit
 #: made of your working tree as it is (`snapshot`).
 WORKTREE_MODES = ("commit", "snapshot")
@@ -170,11 +185,11 @@ CURRENT_ENVIRONMENT = "current"
 
 
 def _existing_environment(env_reader, local: bool, where: str, problems) -> str | None:
-    if env_reader.raw.get("existing") != CURRENT_ENVIRONMENT:
-        return env_reader.absolute_path("existing")
+    if env_reader.raw.get("use_existing") != CURRENT_ENVIRONMENT:
+        return env_reader.absolute_path("use_existing")
     if not local:
-        problems.add(f"{where}.env.existing: 'current' (this interpreter's environment) "
-                     "needs a target on this machine (local: true)")
+        problems.add(f"{where}.python_environment.use_existing: 'current' (this interpreter's "
+                     "environment) needs a host on this machine (connection: local)")
         return None
     # Resolved now, so the plan records the path the tasks will use.
     return sys.prefix
@@ -229,8 +244,13 @@ class Profile:
     worktree: str = "commit"
     #: Most bytes of untracked files a snapshot may take into Git.
     snapshot_limit: int = 50 * 1024 ** 2
-    #: How data requirements reach this target; None: not managed.
+    #: How data requirements reach this host; None: not managed.
     data: "DataModes | None" = None
+    #: What a data-preparation job is given (`data_preparation.allocation`).
+    preparation_resources: "Resources | None" = None
+    #: Earlier names this host's settings were written with (`old -> new`),
+    #: for one warning.
+    renamed: tuple[str, ...] = ()
 
     @property
     def slurm(self):
@@ -242,7 +262,8 @@ class Profile:
 
 @dataclass(frozen=True)
 class DataModes:
-    """Profile `data_modes: {default: MODE, <requirement name>: MODE}`."""
+    """`dataset_delivery: {default: MODE, <requirement name>: MODE}` (the
+    launcher's names for the modes: fetch, upload, present)."""
 
     default: str
     named: tuple[tuple[str, str], ...]
@@ -254,14 +275,16 @@ class DataModes:
 def _parse_data_modes(raw: Any, where: str, problems: Problems) -> DataModes | None:
     if raw is None:
         return None
+    modes = ", ".join(DATASET_DELIVERY)
     if not isinstance(raw, Mapping):
         problems.add(f"{where} must be a mapping of a requirement name (or 'default') to "
-                     f"one of {', '.join(DATA_MODES)}")
+                     f"one of {modes}")
         return None
     default, named = "fetch", []
-    for key, mode in raw.items():
-        if mode not in DATA_MODES:
-            problems.add(f"{where}.{key} must be one of {', '.join(DATA_MODES)}; got {mode!r}")
+    for key, written in raw.items():
+        mode = DATASET_DELIVERY.get(written)
+        if mode is None:
+            problems.add(f"{where}.{key} must be one of {modes}; got {written!r}")
             continue
         if key == "default":
             default = mode
@@ -273,104 +296,102 @@ def _parse_data_modes(raw: Any, where: str, problems: Problems) -> DataModes | N
 
 
 def parse_profiles(raw: Any, selected: str | None, source: str) -> Profile:
-    """Select a profile from a target file: `{default: <name>, targets:
-    {<name>: {...}}}` (`profiles:` is the earlier name of `targets:`; a file
-    has exactly one of them); `selected` (from `--target`) wins over
-    `default`."""
+    """Select a host from a hosts file: `{default_host: <name>, hosts: {<name>:
+    {...}}}`; `selected` (from `--host`) wins over `default_host`. A file
+    written with the earlier names (`targets:` / `profiles:`, `default`, the
+    earlier keys of a host) is read too; the host says what was renamed."""
+    from training_framework.launcher.config.names import hosts_file_from_earlier
+    from training_framework.launcher.scheduler import SCHEDULERS
+
     problems = Problems()
-    top = _Reader(raw, source, problems, {"default", "profiles", "targets"})
-    keys = [key for key in ("targets", "profiles") if key in top.raw]
-    if len(keys) == 2:
-        problems.add(f"{source}: has both 'targets' and 'profiles' ('profiles' is the "
-                     "earlier name of 'targets'); keep one")
+    raw, renamed, renaming_problems = hosts_file_from_earlier(raw, source, tuple(SCHEDULERS))
+    for problem in renaming_problems:
+        problems.add(problem)
+    problems.raise_if_any()
+    top = _Reader(raw, source, problems, {"default_host", "hosts"})
+    hosts = top.get("hosts", required=True)
+    if not isinstance(hosts, Mapping) or not hosts:
+        if hosts is not None:
+            problems.add(f"{source}.hosts must be a non-empty mapping")
         problems.raise_if_any()
-    entries_key = keys[0] if keys else "targets"
-    profiles = top.get(entries_key, required=True)
-    if not isinstance(profiles, Mapping) or not profiles:
-        if profiles is not None:
-            problems.add(f"{source}.{entries_key} must be a non-empty mapping")
-        problems.raise_if_any()
-    name = selected or top.string("default")
+    name = selected or top.string("default_host")
     if name is None:
-        problems.add(
-            f"{source}: no profile selected; pass --profile or set 'default'"
-        )
-    elif name not in profiles:
-        problems.add(
-            f"{source}: profile '{name}' not found (have: "
-            f"{', '.join(sorted(profiles))})"
-        )
+        problems.add(f"{source}: no host selected; pass --host or set default_host")
+    elif name not in hosts:
+        problems.add(f"{source}: host '{name}' not found (have: {', '.join(sorted(hosts))})")
     problems.raise_if_any()
-    profile = _parse_profile(profiles[name], f"{source}:profiles.{name}", name, problems)
+    profile = _parse_profile(hosts[name], f"{source}:hosts.{name}", name, problems)
     problems.raise_if_any()
-    return profile
+    mine = tuple(item for item in renamed if not item.startswith("hosts.")
+                 or item.startswith(f"hosts.{name}:"))
+    return replace(profile, renamed=mine)
 
 
 def target_names(raw: Any) -> list[str]:
-    """The names of every target in a target file (`targets:` or its
-    earlier name `profiles:`), sorted; [] when it has none."""
+    """The names of every host in a hosts file (`hosts:`, or its earlier
+    names `targets:` / `profiles:`), sorted; [] when it has none."""
     if not isinstance(raw, Mapping):
         return []
-    entries = raw.get("targets", raw.get("profiles"))
+    entries = raw.get("hosts", raw.get("targets", raw.get("profiles")))
     return sorted(entries) if isinstance(entries, Mapping) else []
 
 
 def _parse_profile(raw, where, name, problems) -> Profile:
+    """One host, in the current names (`config/names.py` turned earlier ones
+    into these)."""
     from training_framework.launcher.scheduler import SCHEDULERS
 
-    reader = _Reader(raw, where, problems, PROFILE_KEYS | set(SCHEDULERS))
-    # How the target is reached: exactly one of `ssh_host` and `local: true`.
-    ssh_host = reader.string("ssh_host")
-    local = False
-    if "local" in reader.raw:
-        if reader.raw["local"] is not True:
-            problems.add(f"{where}.local must be true (to use this machine) or left out")
+    reader = _Reader(raw, where, problems, HOST_KEYS)
+    # How the host is reached.
+    connection = reader.get("connection", required=True)
+    ssh_host, local = None, False
+    if connection == "local":
+        local = True
+    elif isinstance(connection, Mapping) and set(connection) == {"ssh"} \
+            and isinstance(connection["ssh"], str) and connection["ssh"]:
+        ssh_host = connection["ssh"]
+    elif connection is not None:
+        problems.add(f"{where}.connection must be `local` (this machine) or "
+                     f"{{ssh: <host or ~/.ssh/config alias>}}; got {connection!r}")
+
+    directories = _Reader(reader.get("directories", {}, required=True), f"{where}.directories",
+                          problems, {"missions", "python_environments", "datasets"})
+    roots = {inside: directories.absolute_path(written, required=True)
+             for written, inside in (("missions", "batches"), ("python_environments", "envs"),
+                                     ("datasets", "data"))}
+
+    # `scheduler.kind` as written -> the scheduler's id (builtin -> host).
+    kinds = {_kind_name(scheduler): scheduler for scheduler in SCHEDULERS}
+    scheduler_raw = reader.get("scheduler", required=True)
+    scheduler = settings = None
+    if scheduler_raw is not None and not isinstance(scheduler_raw, Mapping):
+        problems.add(f"{where}.scheduler must be a mapping: {{kind: {' | '.join(sorted(kinds))}, ...}}")
+    elif scheduler_raw is not None:
+        kind = scheduler_raw.get("kind")
+        if kind not in kinds:
+            problems.add(f"{where}.scheduler.kind must be one of {', '.join(sorted(kinds))}; got {kind!r}")
         else:
-            local = True
-    if local and ssh_host is not None:
-        problems.add(f"{where}: set either ssh_host (a machine reached over SSH) or "
-                     "local: true (this machine), not both")
-    elif not local and ssh_host is None and "ssh_host" not in reader.raw:
-        problems.add(f"{where}: set ssh_host (a machine reached over SSH) or "
-                     "local: true (this machine)")
+            scheduler = kinds[kind]
+            settings = SCHEDULERS[scheduler].parse_settings(
+                {key: value for key, value in scheduler_raw.items() if key != "kind"},
+                f"{where}.scheduler", problems, _Reader)
 
-    roots_reader = _Reader(
-        reader.get("roots", {}, required=True), f"{where}.roots", problems,
-        {"batches", "envs", "data"},
-    )
-    roots = {
-        key: roots_reader.absolute_path(key, required=True)
-        for key in ("batches", "envs", "data")
-    }
-
-    from training_framework.launcher.scheduler import SCHEDULERS
-
-    scheduler = reader.choice("scheduler", tuple(SCHEDULERS), required=True)
-    settings = None
-    if scheduler is not None:
-        settings = SCHEDULERS[scheduler].parse_settings(
-            reader.get(scheduler, {}, required=True), f"{where}.{scheduler}", problems, _Reader,
-        )
-    for other in SCHEDULERS:
-        if other != scheduler and other in reader.raw:
-            problems.add(f"{where}.{other}: settings for scheduler '{other}', but "
-                         f"the profile uses '{scheduler}'")
-
-    hooks_reader = _Reader(
-        reader.get("hooks", {}), f"{where}.hooks", problems, set(HOOK_PHASES),
-    )
-    hooks = {phase: hooks_reader.strings(phase) for phase in HOOK_PHASES}
+    shell = _Reader(reader.get("shell_commands_before", {}), f"{where}.shell_commands_before",
+                    problems, {"everything", "environment_build", "data_preparation", "experiments"})
+    hooks = {inside: shell.strings(written) for written, inside in (
+        ("everything", "common"), ("environment_build", "setup"),
+        ("data_preparation", "prepare"), ("experiments", "task"))}
 
     env_reader = _Reader(
-        reader.get("env", {}), f"{where}.env", problems,
-        {"backend", "python_source", "site_python_identity", "existing",
-         "conda_packages", "conda_run", "bootstrap_python"},
+        reader.get("python_environment", {}), f"{where}.python_environment", problems,
+        {"kind", "interpreter_from", "site_interpreter", "use_existing",
+         "conda_packages", "activate_with_conda_run", "bootstrap_interpreter"},
     )
     identity = None
-    if "site_python_identity" in env_reader.raw:
+    if "site_interpreter" in env_reader.raw:
         id_reader = _Reader(
-            env_reader.raw["site_python_identity"],
-            f"{where}.env.site_python_identity", problems,
+            env_reader.raw["site_interpreter"],
+            f"{where}.python_environment.site_interpreter", problems,
             {"implementation", "version", "executable", "platform"},
         )
         fields = {
@@ -380,44 +401,49 @@ def _parse_profile(raw, where, name, problems) -> Profile:
         if all(fields.values()):
             identity = PythonIdentity(**fields)
     env = EnvSettings(
-        backend=env_reader.choice("backend", ("venv", "conda"), "venv"),
-        python_source=env_reader.choice(
-            "python_source", ("site", "uv", "conda"), "site",
-        ),
+        backend=env_reader.choice("kind", ("venv", "conda"), "venv"),
+        python_source=env_reader.choice("interpreter_from", ("site", "uv", "conda"), "site"),
         site_python_identity=identity,
         existing=_existing_environment(env_reader, local, where, problems),
         conda_packages=env_reader.strings("conda_packages"),
-        conda_run=env_reader.boolean("conda_run", False),
-        bootstrap_python=env_reader.string("bootstrap_python"),
+        conda_run=env_reader.boolean("activate_with_conda_run", False),
+        bootstrap_python=env_reader.string("bootstrap_interpreter"),
     )
 
-    path_map_raw = reader.get("path_map", {})
+    def step(key):
+        """(location, resources) of `environment_build` / `data_preparation`."""
+        step_reader = _Reader(reader.get(key, {}), f"{where}.{key}", problems, {"on", "allocation"})
+        location = STEP_LOCATIONS[step_reader.choice("on", tuple(STEP_LOCATIONS), "compute_node")
+                                  or "compute_node"]
+        resources = parse_resources(step_reader.get("allocation", DEFAULT_SETUP_RESOURCES),
+                                    f"{where}.{key}.allocation", problems)
+        return location, resources
+
+    setup_location, setup_resources = step("environment_build")
+    prepare_location, preparation_resources = step("data_preparation")
+
+    path_map_raw = reader.get("local_to_host_paths", {})
     path_map = []
     if not isinstance(path_map_raw, Mapping):
-        problems.add(f"{where}.path_map must map local prefixes to cluster prefixes")
+        problems.add(f"{where}.local_to_host_paths must map local prefixes to prefixes on the host")
     else:
-        for local, remote in path_map_raw.items():
-            if not (isinstance(local, str) and posixpath.isabs(local)
+        for local_prefix, remote in path_map_raw.items():
+            if not (isinstance(local_prefix, str) and posixpath.isabs(local_prefix)
                     and isinstance(remote, str) and posixpath.isabs(remote)):
                 problems.add(
-                    f"{where}.path_map: '{local}' -> '{remote}' must map an "
-                    "absolute local prefix to an absolute cluster prefix"
+                    f"{where}.local_to_host_paths: '{local_prefix}' -> '{remote}' must map an "
+                    "absolute local prefix to an absolute prefix on the host"
                 )
                 continue
-            path_map.append((local.rstrip("/") or "/", remote.rstrip("/") or "/"))
+            path_map.append((local_prefix.rstrip("/") or "/", remote.rstrip("/") or "/"))
 
-    upload_limit = parse_size(reader.get("upload_limit", "20G"))
+    upload_limit = parse_size(reader.get("confirm_uploads_over", "20G"))
     if upload_limit is None:
-        problems.add(f"{where}.upload_limit must be a size such as 20G")
-
-    snapshot_limit = parse_size(reader.get("snapshot_limit", DEFAULT_SNAPSHOT_LIMIT))
+        problems.add(f"{where}.confirm_uploads_over must be a size such as 20G")
+    snapshot_limit = parse_size(reader.get("working_tree_untracked_limit", DEFAULT_SNAPSHOT_LIMIT))
     if snapshot_limit is None:
-        problems.add(f"{where}.snapshot_limit must be a size such as 50M")
-
-    setup_resources = parse_resources(
-        reader.get("setup_resources", DEFAULT_SETUP_RESOURCES),
-        f"{where}.setup_resources", problems,
-    )
+        problems.add(f"{where}.working_tree_untracked_limit must be a size such as 50M")
+    code_from = reader.choice("run_code_from", tuple(CODE_FROM), "commit") or "commit"
 
     return Profile(
         name=name,
@@ -427,16 +453,24 @@ def _parse_profile(raw, where, name, problems) -> Profile:
         scheduler_settings=settings,
         hooks=hooks,
         env=env,
-        setup_location=reader.choice("setup_location", LOCATIONS, "job"),
-        prepare_location=reader.choice("prepare_location", LOCATIONS, "job"),
+        setup_location=setup_location,
+        prepare_location=prepare_location,
         path_map=tuple(sorted(path_map)),
         upload_limit=upload_limit or 0,
         setup_resources=setup_resources,
         local=local,
-        worktree=reader.choice("worktree", WORKTREE_MODES, "commit"),
+        worktree=CODE_FROM[code_from],
         snapshot_limit=snapshot_limit or 0,
-        data=_parse_data_modes(reader.get("data_modes"), f"{where}.data_modes", problems),
+        data=_parse_data_modes(reader.get("dataset_delivery"), f"{where}.dataset_delivery",
+                               problems),
+        preparation_resources=preparation_resources,
     )
+
+
+def _kind_name(scheduler: str) -> str:
+    from training_framework.launcher.config.names import kind_of
+
+    return kind_of(scheduler)
 
 
 # Experiment file (a batch's experiments; was called the manifest) ----------

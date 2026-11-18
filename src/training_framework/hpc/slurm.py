@@ -43,21 +43,26 @@ class SlurmSettings:
     max_array_size: int
 
 
-def parse_settings(raw, where, problems, reader_class) -> SlurmSettings:
-    """The profile's `slurm:` block."""
-    reader = reader_class(raw, where, problems, {"defaults", "partitions", "max_array_size"})
-    defaults = reader.get("defaults", {})
+def parse_settings(raw, where, problems, reader_class, names: str = "hosts_file") -> SlurmSettings:
+    """The settings of a host with `scheduler: {kind: slurm, ...}`
+    (`names="plan"`: as a plan records them: `defaults`, `partitions: {gpu,
+    cpu}`)."""
+    options_key, partition_suffix = (("sbatch_options", "_jobs") if names == "hosts_file"
+                                     else ("defaults", ""))
+    reader = reader_class(raw, where, problems, {options_key, "partitions", "max_array_size"})
+    defaults = reader.get(options_key, {})
     if not isinstance(defaults, Mapping) or not all(
             isinstance(key, str) and key
             and isinstance(value, (str, int)) and not isinstance(value, bool)
             for key, value in defaults.items()
     ):
-        problems.add(f"{where}.defaults must map option names (strings) to string "
+        problems.add(f"{where}.{options_key} must map option names (strings) to string "
                      "or integer values")
         defaults = {}
     partitions_reader = reader_class(reader.get("partitions", {}), f"{where}.partitions",
-                                     problems, {"gpu", "cpu"})
-    partitions = {kind: partitions_reader.string(kind) for kind in ("gpu", "cpu")}
+                                     problems, {f"gpu{partition_suffix}", f"cpu{partition_suffix}"})
+    # Kept inside as `gpu` / `cpu` (plans name them so).
+    partitions = {kind: partitions_reader.string(f"{kind}{partition_suffix}") for kind in ("gpu", "cpu")}
     return SlurmSettings(
         defaults=dict(defaults),
         partitions={kind: name for kind, name in partitions.items() if name is not None},
@@ -79,14 +84,14 @@ class SlurmDialect:
         problems = []
         for key, value in self.settings.defaults.items():
             if _unsafe(key) or _unsafe(value):
-                problems.append(f"profile slurm.defaults: '{key}' contains a control character")
+                problems.append(f"scheduler.sbatch_options: '{key}' contains a control character")
             elif key in PROFILE_DIRECTIVES:
                 continue
             elif not _DIRECTIVE.match(key) or key in OWNED_DIRECTIVES:
-                problems.append(f"profile slurm.defaults: '{key}' is not allowed")
+                problems.append(f"scheduler.sbatch_options: '{key}' is not allowed")
         for kind, partition in self.settings.partitions.items():
             if _unsafe(partition):
-                problems.append(f"profile slurm.partitions.{kind} contains a control character")
+                problems.append(f"scheduler.partitions.{kind}_jobs contains a control character")
         return problems
 
     def check_resources(self, resources: Resources, where: str) -> list[str]:

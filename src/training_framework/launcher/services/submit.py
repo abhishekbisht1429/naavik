@@ -185,8 +185,9 @@ def _submit(plan, manifest_raw, receipt, environment, preparer, uploader, stager
             elif node.location == "login" and not env_ready and \
                     plan.node("setup").location != "login":
                 raise HpcError(
-                    f"prepare step {node.id} runs on the login node but the environment "
-                    "is built by a job; set setup_location: login as well"
+                    f"data preparation step {node.id} runs on the login node but the "
+                    "environment is built by a job; set environment_build.on: login_node "
+                    "as well (earlier name: setup_location: login)"
                 )
         if env_ready and environment.managed:
             skipped.add("setup")
@@ -217,7 +218,7 @@ def _submit(plan, manifest_raw, receipt, environment, preparer, uploader, stager
         environment_ready=env_ready,
     )
     if not (review(plan, summary) and confirm(plan)):
-        reason = ("upload exceeds upload_limit and was not confirmed"
+        reason = ("upload exceeds confirm_uploads_over and was not confirmed"
                   if summary.over_limit else "declined at confirmation")
         receipt.finish(receipts.STAGED, f"not submitted: {reason}")
         return receipt

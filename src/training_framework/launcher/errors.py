@@ -34,6 +34,9 @@ class Problems:
     def __bool__(self) -> bool:
         return bool(self._items)
 
+    def __str__(self) -> str:
+        return "; ".join(self._items)
+
     def raise_if_any(self) -> None:
         if self._items:
             raise PlanError(self._items)

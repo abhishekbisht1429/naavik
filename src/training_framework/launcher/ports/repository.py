@@ -136,7 +136,7 @@ class GitRepository:
         problems = self._submodule_changes()
         if problems:
             raise HpcError("a snapshot cannot take submodule changes: " + "; ".join(problems)
-                           + " (commit them, or use worktree: commit)")
+                           + " (commit them, or set run_code_from: commit on the host)")
         untracked = [name for name in self._must(
             ["ls-files", "--others", "--exclude-standard", "-z"], "git ls-files").split("\0") if name]
         sizes = {name: os.path.getsize(self.root / name) for name in untracked
@@ -145,7 +145,7 @@ class GitRepository:
         if total > limit:
             largest = sorted(sizes.items(), key=lambda item: -item[1])[:5]
             raise HpcError(
-                f"untracked files ({_human_size(total)}) exceed snapshot_limit "
+                f"untracked files ({_human_size(total)}) exceed working_tree_untracked_limit "
                 f"({_human_size(limit)}); add them to .gitignore or raise the limit. Largest: "
                 + ", ".join(f"{name} ({_human_size(size)})" for name, size in largest))
         index = self._must(["rev-parse", "--git-path", "index"], "git rev-parse").strip()

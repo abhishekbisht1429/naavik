@@ -51,8 +51,8 @@ def test_a_local_profile_targets_this_machine():
 
 @pytest.mark.parametrize("changes, message", [
     ({"ssh_host": "cluster"}, "set either ssh_host"),
-    ({"local": False}, "local must be true"),
-    ({"local": "yes"}, "local must be true"),
+    ({"local": False}, "connection must be `local`"),
+    ({"local": "yes"}, "connection must be `local`"),
 ])
 def test_a_profile_names_exactly_one_way_to_reach_its_target(changes, message):
     with pytest.raises(PlanError, match=message):
@@ -62,7 +62,7 @@ def test_a_profile_names_exactly_one_way_to_reach_its_target(changes, message):
 def test_a_profile_without_a_target_says_how_to_name_one():
     data = copy.deepcopy(PROFILE)
     del data["profiles"]["cluster"]["ssh_host"]
-    with pytest.raises(PlanError, match=r"set ssh_host .* or local: true"):
+    with pytest.raises(PlanError, match=r"connection is required"):
         parse_profiles(data, None, "targets.yaml")
 
 
@@ -214,5 +214,5 @@ def test_a_local_target_can_use_the_environment_running_naavik():
 def test_the_current_environment_is_refused_for_a_remote_target():
     data = copy.deepcopy(PROFILE)
     data["profiles"]["cluster"]["env"] = {"existing": "current"}
-    with pytest.raises(PlanError, match=r"'current' .* needs a target on this machine"):
+    with pytest.raises(PlanError, match=r"'current' .* needs a host on this machine"):
         parse_profiles(data, None, "targets.yaml")

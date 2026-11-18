@@ -131,13 +131,14 @@ def _check_spec(kind, spec, where, problems, profile) -> Resources | None:
     if "resources" in spec:
         if profile.prepare_location == "login":
             problems.add(
-                f"{where}.resources: the profile runs prepare steps on the "
-                "login node (prepare_location: login), where resources mean nothing"
+                f"{where}.resources: the host prepares data on the login node "
+                "(data_preparation.on: login_node), where resources mean nothing"
             )
         else:
             resources = parse_resources(spec["resources"], f"{where}.resources", problems)
     elif profile.prepare_location == "job":
-        problems.add(f"{where}.resources is required when prepare steps run as jobs")
+        problems.add(f"{where}.resources is required when data preparation runs on compute "
+                     "nodes (data_preparation.on: compute_node)")
     return resources
 
 
@@ -480,13 +481,14 @@ def compile_requirements(
             if not requirement.fetchable:
                 problems.add(
                     f"data '{requirement.name}' ({item.component}) cannot be fetched: it is "
-                    f"obtained by hand; on target '{profile.name}' set data_modes: "
-                    f"{{{requirement.name}: upload}} or {{{requirement.name}: present}}")
+                    f"obtained by hand; on host '{profile.name}' set dataset_delivery: "
+                    f"{{{requirement.name}: copy_from_here}} or "
+                    f"{{{requirement.name}: already_on_host}}")
                 continue
             mapped = map_path(item.path, profile) or item.path
             if not posixpath.isabs(mapped):
                 problems.add(f"data '{requirement.name}' ({item.component}): {item.path!r} is "
-                             "not an absolute path on the target")
+                             "not an absolute path on the host")
                 continue
             location = posixpath.join(mapped, requirement.subpath) if requirement.subpath else mapped
             key = requirement_key(requirement)
@@ -517,7 +519,7 @@ def compile_requirements(
             in enumerate(sorted(fetches.items())):
         name = unique(requirement.name)
         source = Source(name, address, "prepare", {},
-                        resources=profile.setup_resources if profile.prepare_location == "job" else None)
+                        resources=profile.preparation_resources if profile.prepare_location == "job" else None)
         artifact = Artifact("prepare", name, key, location, "user-chosen", {
             "command": fetch_command(class_path, entry, requirement.name),
             "requirement": requirement.as_json(), "component": class_path,

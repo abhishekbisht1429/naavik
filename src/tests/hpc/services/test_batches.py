@@ -210,7 +210,7 @@ def test_batches_needs_no_profile_for_the_offline_list(tmp_path, monkeypatch, ca
     assert main(["batches", "--receipts", str(tmp_path / "receipts")]) == 0
     assert capsys.readouterr().out.splitlines()[1].split()[0] == "solo"
     assert main(["batches", "--remote", "--receipts", str(tmp_path / "receipts")]) == 2
-    assert "hpc.yaml does not exist" in capsys.readouterr().err      # --remote needs the profile
+    assert "hosts.yaml does not exist" in capsys.readouterr().err      # --remote needs the profile
 
 
 def test_pending_array_ranges_count_for_each_element():

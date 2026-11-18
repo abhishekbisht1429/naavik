@@ -68,9 +68,10 @@ def test_modes_name_requirements_with_a_default():
 
 
 @pytest.mark.parametrize("modes, message", [
-    ({"cifar10": "download"}, "data_modes.cifar10 must be one of fetch, upload, present"),
+    ({"cifar10": "download"}, "dataset_delivery.cifar10 must be one of download_on_host, "
+                              "copy_from_here, already_on_host"),
     ({"has space": "fetch"}, "a requirement name"),
-    (["fetch"], "data_modes must be a mapping"),
+    (["fetch"], "dataset_delivery must be a mapping"),
 ])
 def test_bad_modes_are_refused(modes, message):
     with pytest.raises(PlanError, match=message):
@@ -86,8 +87,8 @@ def test_without_data_modes_nothing_changes_but_it_is_said(tmp_path):
     declared = compile_with(root, port([requirement()]), profile())
     assert plan_files(declared.plan, declared.manifest.raw) == plan_files(plain.plan, plain.manifest.raw)
     assert declared.code_facts.notes == [
-        "data requirement(s) flowers102 are not managed on target 'cluster' (its profile has "
-        "no data_modes); each task reads what is at its config's path"]
+        "data requirement(s) flowers102 are not managed on host 'cluster' (it has "
+        "no dataset_delivery); each experiment reads what is at its config's path"]
 
 
 def test_managed_data_needs_the_code_check(tmp_path):
@@ -142,7 +143,7 @@ def test_a_new_commit_fetches_nothing_again(tmp_path):
 def test_data_obtained_by_hand_cannot_be_fetched(tmp_path):
     by_hand = DataRequirement("imagenet", "root", "1", fetchable=False)
     with pytest.raises(PlanError, match=r"data 'imagenet' \(flowers102\) cannot be fetched: .*"
-                                        r"set data_modes: \{imagenet: upload\} or \{imagenet: present\}"):
+                                        r"set dataset_delivery: \{imagenet: copy_from_here\} or \{imagenet: already_on_host\}"):
         compile_with(make_repo(tmp_path), port([requirement(by_hand)]), profile({"default": "fetch"}))
 
 
@@ -154,7 +155,7 @@ def test_different_content_at_one_location_is_refused(tmp_path):
 
 
 def test_a_relative_path_cannot_be_fetched(tmp_path):
-    with pytest.raises(PlanError, match="'data/flowers' is not an absolute path on the target"):
+    with pytest.raises(PlanError, match="'data/flowers' is not an absolute path on the host"):
         compile_with(make_repo(tmp_path), port([requirement(path="data/flowers")]),
                      profile({"default": "fetch"}))
 

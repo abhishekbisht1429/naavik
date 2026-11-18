@@ -91,7 +91,7 @@ def run(compiled, tmp_path, submitter=None, executor=None, **kwargs):
 def test_an_identity_mismatch_fails_before_any_cache_lookup(tmp_path):
     compiled = compiled_for(tmp_path)
     other = dict(IDENTITY, version="3.12.9")
-    with pytest.raises(HpcError, match="does not match the profile's site_python_identity") as error:
+    with pytest.raises(HpcError, match="does not match its python_environment.site_interpreter") as error:
         run(compiled, tmp_path, executor=ScriptedExecutor(compiled.plan, identity=other))
     assert 'version: "3.12.9"' in str(error.value)          # the block to paste
     assert not Path(compiled.plan.batch_dir).exists()        # nothing created
@@ -181,7 +181,7 @@ def test_an_upload_over_the_limit_is_declined_by_default(tmp_path):
     local = local_data(tmp_path)
     compiled = upload_batch(tmp_path, local)()
     receipt, submitter = run(compiled, tmp_path, upload_limit=5)
-    assert receipt.status == "staged" and "upload_limit" in receipt.data["error"]
+    assert receipt.status == "staged" and "confirm_uploads_over" in receipt.data["error"]
     upload = next(a for a in compiled.plan.artifacts if a.kind == "upload")
     assert not Path(upload.location).exists() and not submitter.submitted
 

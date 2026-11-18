@@ -31,7 +31,7 @@ def test_different_declared_identities_give_different_key_parts():
 
 def test_site_without_a_declared_identity_is_refused():
     _, problems = expect(EnvSettings())
-    assert "site_python_identity is required" in problems[0]
+    assert "python_environment.site_interpreter is required" in problems[0]
     assert "probe-python" in problems[0]
 
 
@@ -74,9 +74,9 @@ def test_an_invalid_requires_python_is_reported():
 def test_a_conda_backend_cannot_use_the_site_interpreter():
     env = EnvSettings(backend="conda", python_source="site", site_python_identity=IDENTITY)
     _, problems = expect(env, pin="3.12")
-    assert len(problems) == 1 and "cannot use python_source 'site'" in problems[0]
+    assert len(problems) == 1 and "cannot use interpreter_from 'site'" in problems[0]
     _, problems = expect(EnvSettings(backend="conda"))      # nor without a pin
-    assert "cannot use python_source 'site'" in problems[0]
+    assert "cannot use interpreter_from 'site'" in problems[0]
 
 
 @pytest.mark.parametrize("source", ["uv", "conda"])

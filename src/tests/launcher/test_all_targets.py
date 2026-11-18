@@ -66,8 +66,8 @@ def test_every_target_is_listed_and_the_unreachable_is_one_row(targets, capsys):
     assert any("far" in line and "(cannot list:" in line and "naavik-test-host.invalid" in line
                for line in unreachable)
     assert any("broken" in line and "colour" in line for line in unreachable)
-    assert "error: cannot list target 'far':" in captured.err
-    assert "error: cannot list target 'broken':" in captured.err
+    assert "error: cannot list host 'far':" in captured.err
+    assert "error: cannot list host 'broken':" in captured.err
 
 
 @pytest.mark.skipif(shutil.which("ssh") is None, reason="needs ssh")
