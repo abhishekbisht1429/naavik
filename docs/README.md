@@ -30,7 +30,7 @@ A task-ordered path. It picks up where the
 7. [Analysis sessions](guide/07-analysis-sessions.md) — driving a trained
    checkpoint through an analysis workflow.
 8. [Running batches: here, over SSH, or on a cluster](guide/08-hpc-batches.md) — sweeps of
-   experiments from one manifest on this machine, a machine over SSH, or a
+   experiments from one experiment file on this machine, a machine over SSH, or a
    Slurm cluster (committed or as a snapshot of your working tree), and
    keeping track of every batch you launched.
 9. [First runs on Big Red 200](guide/09-hpc-big-red-200.md) — SSH, profile,
@@ -51,7 +51,7 @@ A task-ordered path. It picks up where the
 ## Look it up
 
 - [HPC configuration](reference/hpc-configuration.md) — every key of the HPC
-  profile and batch manifest, with defaults and rules.
+  profile and experiment file, with defaults and rules.
 - [Built-in components](reference/builtin-components.md) — every component the
   framework ships with, and its configuration keys.
 - [Generic steps](reference/generic-steps.md) — `load_batch`, `forward` and

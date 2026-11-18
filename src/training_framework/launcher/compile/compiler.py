@@ -48,7 +48,13 @@ from training_framework.launcher.config.requirements import (
     RequirementsError,
     parse_requirements,
 )
-from training_framework.launcher.config.schema import Manifest, Profile, parse_manifest, parse_project, with_project
+from training_framework.launcher.config.schema import (
+    ExperimentFile,
+    Profile,
+    parse_experiment_file,
+    parse_project,
+    with_project,
+)
 from training_framework.launcher.ports.shell import exec_script
 from training_framework.launcher.scheduler import get_scheduler
 from training_framework.launcher.config.topology import check_topology, parse_engine_options
@@ -61,7 +67,7 @@ FRAMEWORK_DISTRIBUTION = "training-framework"
 @dataclasses.dataclass(frozen=True)
 class Compiled:
     plan: ExecutionPlan
-    manifest: Manifest
+    manifest: ExperimentFile
     suggestions: list[dict]
     #: What the batch's own code said about its tasks; None: not asked.
     code_facts: "CodeFacts | None" = None
@@ -95,7 +101,7 @@ class CodeFacts:
 
 @dataclass(frozen=True)
 class Selection:
-    """Part of a manifest: whole groups, and `GROUP/EXPERIMENT`s."""
+    """Part of an experiment file: whole groups, and `GROUP/EXPERIMENT`s."""
 
     groups: tuple[str, ...] = ()
     experiments: tuple[str, ...] = ()
@@ -108,7 +114,7 @@ class Selection:
                 (("groups", self.groups), ("experiments", self.experiments)) if value}
 
 
-def _select(manifest: Manifest, selection: Selection | None, problems: Problems) -> Manifest:
+def _select(manifest: ExperimentFile, selection: Selection | None, problems: Problems) -> ExperimentFile:
     """The manifest with only the chosen groups and experiments (task names
     and numbers stay as the whole manifest makes them)."""
     import dataclasses as _dataclasses
@@ -118,7 +124,7 @@ def _select(manifest: Manifest, selection: Selection | None, problems: Problems)
     groups = {group.name: group for group in manifest.groups}
     for name in selection.groups:
         if name not in groups:
-            problems.add(f"--group {name}: the manifest has no such group "
+            problems.add(f"--group {name}: the experiment file has no such group "
                          f"(it has: {', '.join(groups)})")
     chosen: dict[str, set[str] | None] = {name: None for name in selection.groups if name in groups}
     for item in selection.experiments:
@@ -127,7 +133,7 @@ def _select(manifest: Manifest, selection: Selection | None, problems: Problems)
             problems.add(f"--experiment {item}: name it GROUP/EXPERIMENT")
             continue
         if group not in groups:
-            problems.add(f"--experiment {item}: the manifest has no group '{group}' "
+            problems.add(f"--experiment {item}: the experiment file has no group '{group}' "
                          f"(it has: {', '.join(groups)})")
             continue
         names = [e.name for e in groups[group].experiments]
@@ -150,7 +156,7 @@ def _select(manifest: Manifest, selection: Selection | None, problems: Problems)
 #: `code_facts(sha, manifest, managed, tasks)`, tasks being (name, config) in
 #: order: the batch's own code asked about its expanded task configs (as the
 #: manifest makes them, before data paths are rewritten for the target).
-CodeFactsPort = Callable[[str, Manifest, bool, list[tuple[str, dict]]], CodeFacts]
+CodeFactsPort = Callable[[str, ExperimentFile, bool, list[tuple[str, dict]]], CodeFacts]
 
 
 def _load_yaml(data: bytes, source: str, problems: Problems) -> Any:
@@ -222,7 +228,7 @@ def compile_plan(
         problems.raise_if_any()
         raw_manifest = with_project(raw_manifest, parse_project(project_raw, project_path),
                                     manifest_path, project_path)
-    manifest = parse_manifest(raw_manifest, manifest_path)
+    manifest = parse_experiment_file(raw_manifest, manifest_path)
 
     if snapshot is not None:
         if manifest.source_ref != "HEAD":

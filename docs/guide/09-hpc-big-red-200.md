@@ -205,7 +205,7 @@ installs its own Python at `environment.python`, so it is refused with
 | `python_source` | Python from | Needs |
 |---|---|---|
 | `site` (default) | the site module (`module load python/...` in `hooks.common`) | `env.site_python_identity`, from `probe-python` |
-| `uv` | `uv python install <environment.python>` | `uv` on `PATH` (via a hook), `environment.python` in the manifest |
+| `uv` | `uv python install <environment.python>` | `uv` on `PATH` (via a hook), `environment.python` in the experiment file |
 | `conda` | conda's base interpreter | conda on `PATH` (via a hook, e.g. `module load conda`), `environment.python` |
 
 Start with `site`. Record the interpreter's identity once and paste the
@@ -232,7 +232,7 @@ must match it.
 Step by step, including installing uv and a project that depends on
 training-framework: [Setting up a project for HPC batches](10-hpc-projects.md).
 
-The manifest names a fully pinned file:
+The experiment file names a fully pinned file:
 
 ```yaml
 environment:
@@ -268,7 +268,7 @@ requirement. Anything else is reported with its line number by `validate`.
   `--extra-index-url https://download.pytorch.org/whl/cu124` (or compile
   with `--emit-index-url`), and pin `torch` to that index's version.
 
-Commit the requirements file with the manifest.
+Commit the requirements file with the experiment file.
 
 ### D1. Build on the login node
 

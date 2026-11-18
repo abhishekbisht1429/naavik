@@ -83,7 +83,7 @@ def interpreter_expectation(
             "profile env.backend 'conda' installs its own Python "
             "(conda create python=<environment.python>), so it cannot use "
             "python_source 'site'; set env.python_source to 'conda' (or "
-            "'uv') and environment.python in the manifest, or use "
+            "'uv') and environment.python in the experiment file, or use "
             "backend 'venv' with the site interpreter"
         )
         return InterpreterExpectation("site", None, None), problems

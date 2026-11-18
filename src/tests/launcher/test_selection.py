@@ -65,7 +65,7 @@ def test_the_selection_is_in_the_plan_and_the_whole_manifest_is_staged(tmp_path)
     files = plan_files(compiled.plan, compiled.manifest.raw)
     assert json.loads(files["plan.json"])["selection"] == {"groups": ["long"],
                                                            "experiments": ["probes/frozen"]}
-    assert set(yaml.safe_load(files["manifest.yaml"])["groups"]) == {"probes", "long"}
+    assert set(yaml.safe_load(files["experiments.yaml"])["groups"]) == {"probes", "long"}
 
 
 def test_without_a_selection_the_plan_says_nothing(tmp_path):
@@ -82,9 +82,9 @@ def test_config_files_are_recorded_as_for_the_whole_manifest(tmp_path):
 
 
 @pytest.mark.parametrize("groups, experiments, message", [
-    (["nope"], [], r"--group nope: the manifest has no such group \(it has: long, probes\)"),
+    (["nope"], [], r"--group nope: the experiment file has no such group \(it has: long, probes\)"),
     ([], ["probes"], "--experiment probes: name it GROUP/EXPERIMENT"),
-    ([], ["nope/full"], "--experiment nope/full: the manifest has no group 'nope'"),
+    ([], ["nope/full"], "--experiment nope/full: the experiment file has no group 'nope'"),
     ([], ["probes/nope"], r"group 'probes' has no experiment 'nope' \(it has: frozen, unfrozen\)"),
 ])
 def test_an_unknown_name_is_refused(tmp_path, groups, experiments, message):

@@ -151,7 +151,7 @@ The CLI runs locally, from the same commit, with the `hpc` extra:
 pip install "training-framework[hpc] @ git+https://github.com/abhishekbisht1429/training-framework.git@<the same sha>"
 ```
 
-### 6. The manifest
+### 6. The experiment file
 
 ```yaml
 version: 1
@@ -192,7 +192,7 @@ framework commit and its dependencies (install them there with the same
 
 ### A profile for this machine
 
-To run the same manifest on your workstation, without committing each
+To run the same experiment file on your workstation, without committing each
 change and in the environment your IDE already uses:
 
 ```yaml

@@ -93,7 +93,7 @@ python -m training_framework.reporting summarize runs/baseline runs/sweep-2 --me
 
 A run's id is its path below the root. An HPC task is called by its task
 name, `<group>/<experiment>/<NNN>`, and its matrix values from `variant.json`
-are columns too, labelled like the batch manifest (`optimizer:optimizer.kwargs.lr`).
+are columns too, labelled like the experiment file (`optimizer:optimizer.kwargs.lr`).
 `--include GLOB` and `--exclude GLOB` choose runs by id.
 
 ## The values
@@ -135,7 +135,7 @@ python -m training_framework.reporting summarize runs/ --metric loss:min \
 ```
 
 A seed key is a config path (`resources.data_manager.seed`) or, like a
-matrix address in a batch manifest, `component:path`: the path inside that
+matrix address in an experiment file, `component:path`: the path inside that
 component's entry, wherever the entry is listed in each run's config (the
 top level or a `resources`/`hooks`/`steps` group). Matrix values match
 either form.
@@ -190,7 +190,7 @@ each task was made from, under the same rules (`unknown` when not
 recorded, `--ignore-key config` to leave it out).
 
 **Notes are shown, not compared.** A run whose batch has a note (`naavik
-run --note`, a manifest's `description`), or whose run record has one, gets
+run --note`, an experiment file's `description`), or whose run record has one, gets
 it in a `note` column of the runs table (and `note` in JSON), only when
 some run has one. Runs with different notes still share a seed group.
 

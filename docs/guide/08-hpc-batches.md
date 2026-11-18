@@ -6,7 +6,7 @@ reach over SSH, or a Slurm cluster. Each group of experiments that share
 resources is one job array (on Slurm) or one runner (elsewhere); each task
 is a single-node run of the engine (with DDP inside the node if
 configured). Everything is decided on your workstation; the target only
-checks and executes. The same manifest runs on every target: pick one with
+checks and executes. The same experiment file runs on every target: pick one with
 `--target`.
 
 ```bash
@@ -23,8 +23,12 @@ naavik logs     <batch-id> <task> --follow     # a task's log
 naavik cancel   <batch-id> [--task <task>]    # stop jobs, or some tasks
 ```
 
-Every key of the profile and the manifest is described in the
+Every key of the profile and the experiment file is described in the
 [HPC configuration reference](../reference/hpc-configuration.md).
+
+The **experiment file** is the committed YAML file of your experiments
+(earlier releases called it the *manifest*; checkpoints have a
+`manifest.json` of their own, which is a different thing).
 
 **Earlier names still work.** `naavik` (also `navik`) is installed with the
 package; `python -m training_framework.hpc <command>` runs the same
@@ -43,7 +47,7 @@ For a first run on Big Red 200, follow the staged checklist in
 ## 1. The profile (site settings, on your machine)
 
 `~/.config/training-framework/targets.yaml` (or `--targets PATH`) holds
-everything specific to a cluster, so the committed manifest runs unchanged
+everything specific to a cluster, so the committed experiment file runs unchanged
 elsewhere. Pick one with `--target NAME`, else `default`.
 
 ```yaml
@@ -142,7 +146,7 @@ prints its directory (`--dest` copies it).
 
 With `worktree: snapshot` in a profile, `validate`, `render`, and `launch`
 take your working tree as it is: tracked changes, and untracked files that
-`.gitignore` does not exclude (the manifest and configs too). They become a
+`.gitignore` does not exclude (the experiment file and configs too). They become a
 commit on HEAD, made with a temporary index, so your index, branch, and
 files are untouched; the same tree on the same HEAD always gives the same
 commit. Before confirming, `launch` prints `note: snapshot of the working
@@ -158,7 +162,7 @@ Refused, with the reason: untracked files above `snapshot_limit` (default
 Git), changed submodules, a `source.ref` other than HEAD, and
 `source.strategy: fetch`.
 
-## 2. The manifest (experiments, committed)
+## 2. The experiment file (committed)
 
 ```yaml
 version: 1
@@ -213,7 +217,7 @@ groups:
 
 `source`, `code`, `environment`, and `data` are usually the same for every
 batch of a project. Put them once in `naavik-project.yaml` at the root of
-the repository, and name it from each manifest:
+the repository, and name it from each experiment file:
 
 ```yaml
 # naavik-project.yaml
@@ -236,10 +240,11 @@ training: {config: configs/fine-tuning.yaml}
 groups: {...}
 ```
 
-The project file is read from the batch's commit, like the manifest, and
+The project file is read from the batch's commit, like the experiment file, and
 must be identical at `source.ref`. A key set in both files is an error (each
-setting has one place). The staged `manifest.yaml` is the two merged, and
-the batch's manifest hash covers both. `run_defaults` is only read by
+setting has one place). The staged `experiments.yaml` is the two merged
+(batches before this release staged it as `manifest.yaml`), and the
+batch's hash of its experiment file (`manifest_hash`) covers both. `run_defaults` is only read by
 `naavik run`.
 
 ## 3. Data
@@ -248,8 +253,8 @@ Data reaches a target in one of two ways. **Declared data**: a dataset
 component says what it needs (the built-in datasets do; see
 [Image datasets](../reference/datasets.md#its-data-fetched-once)), and the
 target's profile says how it gets there. **Data sources**: config values
-you list in the manifest's `data.sources`. A source wins on the address it
-names, so existing manifests keep working.
+you list in the experiment file's `data.sources`. A source wins on the address it
+names, so existing experiment files keep working.
 
 ### Declared data: `data_modes` in the profile
 
@@ -359,10 +364,10 @@ concerns, instead of stopping at the first. In order, it checks:
    the Slurm settings (no options the HPC layer owns, no control
    characters).
 2. **The repository**: the working tree is clean (no uncommitted or
-   untracked files), the manifest is committed and identical at `HEAD` and
+   untracked files), the experiment file is committed and identical at `HEAD` and
    `source.ref`, and the ref resolves to one commit. Everything after this
    is read from that commit, not from your working files.
-3. **The manifest**: every key strictly; site keys (`account`, `partition`,
+3. **The experiment file**: every key strictly; site keys (`account`, `partition`,
    ...) are refused; `code.paths` exist in the commit.
 4. **The environment**: the interpreter (`site_python_identity` or
    `environment.python`) against `requires-python`; a valid
@@ -426,7 +431,7 @@ next: the site interpreter's identity over SSH, which environments and data
 are already on the cluster, that `cluster` paths exist (preflight), and
 whether Slurm accepts the account, partition, and limits.
 
-**Part of a manifest.** `--group GROUP` and `--experiment GROUP/EXPERIMENT`
+**Part of an experiment file.** `--group GROUP` and `--experiment GROUP/EXPERIMENT`
 (each repeatable, on `validate`, `render`, and `launch`) make only those
 experiments into tasks, for example the short ones here and the long ones
 on a cluster:
@@ -436,8 +441,8 @@ naavik launch experiments/arch.yaml --group short --target workstation
 naavik launch experiments/arch.yaml --experiment long/full --target cluster
 ```
 
-Tasks keep the names and numbers the whole manifest gives them, and the
-config files they record are the whole manifest's, so the parts compare as
+Tasks keep the names and numbers the whole experiment file gives them, and the
+config files they record are the whole file's, so the parts compare as
 one batch. The receipt records the `selection`.
 
 `render` runs the same checks and writes the batch directory it would
@@ -500,7 +505,7 @@ asks only when the upload exceeds `upload_limit` (`--yes` skips that too).
 
 - `--override PATH=VALUE` sets a path in the session;
   `--override component:PATH=VALUE` a path inside that component's entry,
-  wherever it is listed (the manifest's [addresses](#2-the-manifest-experiments-committed)).
+  wherever it is listed (the experiment file's [addresses](#2-the-experiment-file-committed)).
   `VALUE` is YAML, read like a config file: `3e-4` is the *string*
   `"3e-4"`, `3.0e-4` the number. Repeatable.
 - `--note TEXT` is the batch's `description`: kept in the receipt and in
@@ -640,7 +645,7 @@ state, and a detail. `--tasks` implies `--live`. Task states:
 | Option | Lists |
 |---|---|
 | `--since 30m` / `12h` / `7d` / `2w` | batches submitted within that time |
-| `--name TEXT` | batches whose ID contains `TEXT` (IDs start with the manifest's `name`) |
+| `--name TEXT` | batches whose ID contains `TEXT` (IDs start with the experiment file's `name`) |
 | `--active` | only batches with queued or running tasks (implies `--live`) |
 | `--limit N` | the newest `N` |
 | `--json` | the same information as JSON (with `--tasks`, every task), for scripts and notebooks |
@@ -684,7 +689,7 @@ a mistake in its settings) is one `?` row giving the reason and an
 1. It combines with `--live`, `--tasks`, and `--json`, not with `--target`
 or `--remote`.
 
-The `note` column shows a batch's note (`naavik run --note`, a manifest's
+The `note` column shows a batch's note (`naavik run --note`, an experiment file's
 `description`) when some batch has one; `status` prints it as a `note:`
 line.
 

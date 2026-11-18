@@ -65,9 +65,9 @@ reading results is one separate command, installed with the package as
 
 | Command | Does | Guide |
 |---|---|---|
-| `naavik validate / render / launch MANIFEST` | check, preview, or launch a batch | [Running batches](../guide/08-hpc-batches.md) |
+| `naavik validate / render / launch EXPERIMENT_FILE` | check, preview, or launch a batch | [Running batches](../guide/08-hpc-batches.md) |
 | `naavik run CONFIG [--override PATH=VALUE] [--note TEXT] [--gpus N] [--walltime T] [--detach]` | one config as a one-task batch, followed to its end | [`naavik run`](../guide/08-hpc-batches.md#one-config-followed-naavik-run) |
-| `naavik validate / render / launch MANIFEST --group G --experiment G/E` | only part of a manifest | [Running batches](../guide/08-hpc-batches.md#5-checking-a-batch-validate-and-render) |
+| `naavik validate / render / launch EXPERIMENT_FILE --group G --experiment G/E` | only part of an experiment file | [Running batches](../guide/08-hpc-batches.md#5-checking-a-batch-validate-and-render) |
 | `naavik batches / status / logs / cancel / resume / fetch` | follow, stop, continue, and collect batches | [Running batches](../guide/08-hpc-batches.md#7-keeping-track-of-your-batches) |
 | `naavik batches --all-targets` | the batches on every target | [Every target at once](../guide/08-hpc-batches.md#every-target-at-once---all-targets) |
 | `naavik probe-python` | print a site interpreter's identity | [Running batches](../guide/08-hpc-batches.md#1-the-profile-site-settings-on-your-machine) |

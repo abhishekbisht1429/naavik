@@ -133,7 +133,7 @@ A batch task records its batch's commit (and snapshot base) instead.
 `naavik summarize` uses these records to tell runs on different code apart
 (see [Comparing runs](12-comparing-runs.md#which-settings-are-compared)).
 A batch launched with a description (`naavik run --note TEXT`, or the
-manifest's `description`) keeps it in each task's record; `naavik runs
+experiment file's `description`) keeps it in each task's record; `naavik runs
 show` prints it as `note`.
 
 ## Across machines

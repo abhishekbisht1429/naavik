@@ -144,7 +144,7 @@ def _parser(prog: str = "python -m training_framework.hpc") -> argparse.Argument
     ):
         aliases = [old for old, new in COMMAND_ALIASES.items() if new == name]
         command = commands.add_parser(name, help=help_text, aliases=aliases)
-        command.add_argument("batch", help="path to the committed batch manifest")
+        command.add_argument("batch", help="path to the committed experiment file")
         profile_options(command)
         command.add_argument("--group", action="append", default=[], metavar="GROUP",
                              help="only this group's experiments (repeatable)")

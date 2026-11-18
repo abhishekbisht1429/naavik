@@ -37,16 +37,16 @@ DATA_MODES = ("fetch", "upload", "present")
 WORKTREE_MODES = ("commit", "snapshot")
 DEFAULT_SNAPSHOT_LIMIT = "50M"
 DEFAULT_SETUP_RESOURCES = {"walltime": "01:00:00", "cpus": 4, "memory": "16G"}
-MANIFEST_KEYS = frozenset({
+EXPERIMENT_FILE_KEYS = frozenset({
     "version", "name", "source", "code", "environment", "training", "data",
     "groups", "project", "description",
 })
 #: The project file (`naavik-project.yaml`): what a project's batches share.
 PROJECT_FILE = "naavik-project.yaml"
-#: Manifest keys a project file may hold (a manifest naming the project may
+#: Experiment-file keys a project file may hold (a manifest naming the project may
 #: not repeat them: one source per key).
-PROJECT_MANIFEST_KEYS = ("source", "code", "environment", "data")
-PROJECT_KEYS = frozenset(PROJECT_MANIFEST_KEYS) | {"run_defaults"}
+PROJECT_EXPERIMENT_FILE_KEYS = ("source", "code", "environment", "data")
+PROJECT_KEYS = frozenset(PROJECT_EXPERIMENT_FILE_KEYS) | {"run_defaults"}
 HOOK_PHASES = ("common", "setup", "prepare", "task")
 LOCATIONS = ("job", "login")
 
@@ -439,7 +439,7 @@ def _parse_profile(raw, where, name, problems) -> Profile:
     )
 
 
-# Manifest -----------------------------------------------------------------
+# Experiment file (a batch's experiments; was called the manifest) ----------
 
 
 @dataclass(frozen=True)
@@ -471,7 +471,7 @@ class Group:
 
 
 @dataclass(frozen=True)
-class Manifest:
+class ExperimentFile:
     version: int
     name: str
     source_strategy: str
@@ -492,7 +492,7 @@ class Manifest:
 
 
 _PROFILE_KEY_MESSAGE = (
-    "is a site concern and belongs in the profile, not the committed manifest"
+    "is a site concern and belongs in the profile, not the committed experiment file"
 )
 
 
@@ -544,7 +544,7 @@ class RunDefaults:
 @dataclass(frozen=True)
 class Project:
     #: The manifest keys it provides, as written.
-    manifest_keys: dict
+    experiment_file_keys: dict
     run_defaults: RunDefaults
 
 
@@ -566,7 +566,7 @@ def parse_project(raw: Any, source: str) -> Project:
     target = defaults.string("target")
     problems.raise_if_any()
     return Project(
-        manifest_keys={key: reader.raw[key] for key in PROJECT_MANIFEST_KEYS if key in reader.raw},
+        experiment_file_keys={key: reader.raw[key] for key in PROJECT_EXPERIMENT_FILE_KEYS if key in reader.raw},
         run_defaults=RunDefaults(dict(resources), max_parallel, target),
     )
 
@@ -577,22 +577,22 @@ def with_project(raw_manifest: Any, project: Project, manifest_source: str,
     error (one source per key)."""
     if not isinstance(raw_manifest, Mapping):
         return raw_manifest
-    both = sorted(key for key in project.manifest_keys if key in raw_manifest)
+    both = sorted(key for key in project.experiment_file_keys if key in raw_manifest)
     if both:
         problems = Problems()
         problems.add(f"{manifest_source} and its project file {project_source} both set "
                      f"{', '.join(both)}; keep each in one of them")
         problems.raise_if_any()
-    return {**raw_manifest, **project.manifest_keys}
+    return {**raw_manifest, **project.experiment_file_keys}
 
 
-def parse_manifest(raw: Any, source: str) -> Manifest:
+def parse_experiment_file(raw: Any, source: str) -> ExperimentFile:
     problems = Problems()
     refused = {
         key: _PROFILE_KEY_MESSAGE
         for key in PROFILE_KEYS | {"profile", "account", "partition", "qos"}
     }
-    reader = _Reader(raw, source, problems, MANIFEST_KEYS, refused=refused)
+    reader = _Reader(raw, source, problems, EXPERIMENT_FILE_KEYS, refused=refused)
 
     version = reader.get("version", required=True)
     if version is not None and version != 1:
@@ -676,7 +676,7 @@ def parse_manifest(raw: Any, source: str) -> Manifest:
                     groups.append(group)
 
     problems.raise_if_any()
-    return Manifest(
+    return ExperimentFile(
         version=version,
         name=name,
         source_strategy=strategy,
@@ -773,6 +773,14 @@ def _parse_experiment(raw, where, problems) -> Experiment | None:
     if name is None or not isinstance(overrides, list) or not isinstance(matrix, list):
         return None
     return Experiment(name, tuple(overrides), tuple(matrix), config)
+
+
+
+# The earlier names (the experiment file was called the manifest, a word a
+# checkpoint's `manifest.json` already used), kept for code that imports them.
+Manifest = ExperimentFile
+parse_manifest = parse_experiment_file
+MANIFEST_KEYS = EXPERIMENT_FILE_KEYS
 
 
 def __getattr__(name):

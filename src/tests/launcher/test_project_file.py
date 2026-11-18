@@ -59,7 +59,7 @@ def test_the_batch_keeps_the_manifest_as_compiled(tmp_path):
     from training_framework.launcher.compile.render import plan_files
 
     compiled = compile_repo(project_repo(tmp_path))
-    staged = yaml.safe_load(plan_files(compiled.plan, compiled.manifest.raw)["manifest.yaml"])
+    staged = yaml.safe_load(plan_files(compiled.plan, compiled.manifest.raw)["experiments.yaml"])
     assert staged["code"] == SHARED["code"] and staged["project"] == PROJECT_FILE
 
 
@@ -101,7 +101,7 @@ def test_run_defaults_are_read():
     project = parse_project(dict(SHARED, run_defaults={
         "resources": {"gpus": 1, "walltime": "04:00:00"}, "max_parallel": 2, "target": "here"}),
         PROJECT_FILE)
-    assert project.manifest_keys == SHARED
+    assert project.experiment_file_keys == SHARED
     assert project.run_defaults == RunDefaults({"gpus": 1, "walltime": "04:00:00"}, 2, "here")
     assert parse_project(SHARED, PROJECT_FILE).run_defaults == RunDefaults({}, None, None)
 

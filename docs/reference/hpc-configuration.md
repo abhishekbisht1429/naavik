@@ -7,7 +7,8 @@ silently ignored.
 
 - The **profile** holds everything specific to one cluster and one user. It
   lives on your machine and is never committed.
-- The **manifest** holds the experiments. It is committed with your code
+- The **experiment file** holds the experiments (earlier called the
+  *manifest*; not a checkpoint's `manifest.json`). It is committed with your code
   and runs unchanged on any cluster that has a profile.
 
 Sizes are an integer with an optional `K`, `M`, `G`, or `T` suffix (powers
@@ -105,7 +106,7 @@ a new environment or prepared dataset.
 | Key | Default | Meaning |
 |---|---|---|
 | `existing` | | Absolute path of an environment you manage yourself on the target. Tasks use `<existing>/bin/python`; nothing is built and the other keys below (except `conda_run`) do not apply. In `dependency` mode it must contain `training-framework`. With `local: true`, `current` means the environment of the interpreter running `naavik` (e.g. your IDE's project interpreter), resolved into the plan. |
-| `python_source` | `site` | Where a managed environment's interpreter comes from: `site` (`python3` after the hooks, e.g. a module), `uv` (`uv python install <environment.python>`), or `conda` (conda's base Python). `uv` and `conda` need `environment.python` in the manifest. |
+| `python_source` | `site` | Where a managed environment's interpreter comes from: `site` (`python3` after the hooks, e.g. a module), `uv` (`uv python install <environment.python>`), or `conda` (conda's base Python). `uv` and `conda` need `environment.python` in the experiment file. |
 | `site_python_identity` | | Required with `python_source: site`: the site interpreter's `{implementation, version, executable, platform}`, printed by `naavik probe-python`. `submit` checks it against the cluster and stops with the new block if the site changed it. |
 | `backend` | `venv` | Kind of managed environment: `venv` (from the interpreter above) or `conda` (`conda create -p <env> -c conda-forge python=<environment.python>`). A `conda` environment installs its own Python, so it needs `python_source: conda` (or `uv`) and `environment.python`; with `site` it is refused. |
 | `conda_packages` | `[]` | With `backend: conda`: extra conda packages for `conda create` (e.g. `["cudatoolkit=11.8"]`); part of the environment key. |
@@ -128,7 +129,7 @@ prefix wins. Used to translate config values of [data sources](#data): a
 is prepared at the mapped path, and an `upload` goes to the mapped path
 instead of `roots.data/<key>/...`.
 
-## The manifest
+## The experiment file
 
 A YAML file committed in your repository; its path is the argument of
 `validate`, `render`, and `launch`. Site keys (`ssh_host`, `roots`,
@@ -136,7 +137,7 @@ A YAML file committed in your repository; its path is the argument of
 
 | Key | Required | Default | Meaning |
 |---|---|---|---|
-| `version` | yes | | Manifest format version; must be `1`. |
+| `version` | yes | | Experiment file format version; must be `1`. |
 | `name` | yes | | Batch name; batch IDs are `<name>-<UTC time>-<short commit>`. |
 | `source` | no | bundle of `HEAD` | Which commit runs and how it reaches the cluster; see [source](#source). |
 | `code` | yes | | How tasks find the framework and your code; see [code](#code). |
@@ -147,18 +148,18 @@ A YAML file committed in your repository; its path is the argument of
 | `project` | no | | A project file (a path in the repository) adding `source`, `code`, `environment`, and `data`; see [The project file](#the-project-file). |
 | `description` | no | | Why the batch runs; kept in the receipt and each task's run record (`naavik run --note`). |
 
-`code` is required in the manifest or its project file.
+`code` is required in the experiment file or its project file.
 
 ### The project file
 
-`naavik-project.yaml` at the repository root (any path, when a manifest
+`naavik-project.yaml` at the repository root (any path, when an experiment file
 names it with `project:`): what a project's batches share. Read from the
 batch's commit; it must be identical at `source.ref`. A key in both the
-manifest and the project file is an error.
+experiment file and the project file is an error.
 
 | Key | Meaning |
 |---|---|
-| `source`, `code`, `environment`, `data` | As in the manifest. |
+| `source`, `code`, `environment`, `data` | As in the experiment file. |
 | `run_defaults.resources` | [resources](#resources) of a `naavik run` task (`--gpus`, `--walltime` override). |
 | `run_defaults.max_parallel` | `max_parallel` of a `naavik run` group (a positive integer). |
 | `run_defaults.target` | The target `naavik run` uses when no `--target` is given. |
@@ -168,7 +169,7 @@ manifest and the project file is an error.
 | Key | Default | Meaning |
 |---|---|---|
 | `strategy` | `bundle` | `bundle`: a Git bundle of the commit is copied over SSH (no Git credentials needed on the cluster). `fetch`: the cluster clones `url` itself. |
-| `ref` | `HEAD` | The commit to run (branch, tag, or SHA), resolved on your machine. The manifest must be identical at `HEAD` and at `ref`. |
+| `ref` | `HEAD` | The commit to run (branch, tag, or SHA), resolved on your machine. The experiment file must be identical at `HEAD` and at `ref`. |
 | `url` | | Repository URL the cluster clones from; required with `fetch`, refused with `bundle`. |
 
 The working tree must be clean: uncommitted or untracked files are an
@@ -213,7 +214,7 @@ left as written. Each source has:
 
 | Key | Meaning |
 |---|---|
-| `name` | Name of the source, unique in the manifest. |
+| `name` | Name of the source, unique in the experiment file. |
 | `target` | [Address](#addresses) of the config value holding the path. |
 | exactly one of `upload`, `cluster`, `prepare` | What kind of data it is (below). |
 
