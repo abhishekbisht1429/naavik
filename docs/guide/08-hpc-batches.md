@@ -192,6 +192,13 @@ groups:
 - Each experiment is: base config, then `overrides`, then one combination of
   the `matrix` (the last entry varies fastest). The example gives four tasks,
   `probes/frozen-backbone/000` to `003`.
+- An experiment may have its own training config, for a change of structure
+  (other components or wiring) rather than of values:
+  `{name: attnpool, config: configs/model/vit-attnpool.yaml, matrix: [...]}`.
+  Its overrides and matrix are checked against its own session (the same
+  `training.session`). When any experiment sets `config:`, every task
+  records the file it was made from, and `summarize` compares it as
+  `config`, so two structures are never one seed group.
 - `resources` are portable; partitions, QoS, and account come from the
   profile. Scheduler-specific options go under `scheduler_options: {slurm: {...}}`.
 - `ddp.world_size` must be set explicitly: with `nccl` it must equal `gpus`;
@@ -419,6 +426,20 @@ next: the site interpreter's identity over SSH, which environments and data
 are already on the cluster, that `cluster` paths exist (preflight), and
 whether Slurm accepts the account, partition, and limits.
 
+**Part of a manifest.** `--group GROUP` and `--experiment GROUP/EXPERIMENT`
+(each repeatable, on `validate`, `render`, and `launch`) make only those
+experiments into tasks, for example the short ones here and the long ones
+on a cluster:
+
+```bash
+naavik launch experiments/arch.yaml --group short --target workstation
+naavik launch experiments/arch.yaml --experiment long/full --target cluster
+```
+
+Tasks keep the names and numbers the whole manifest gives them, and the
+config files they record are the whole manifest's, so the parts compare as
+one batch. The receipt records the `selection`.
+
 `render` runs the same checks and writes the batch directory it would
 stage (job scripts, task configs, `plan.json`, `tasks.tsv`) to `--output`,
 which must be empty or missing, so you can read exactly what would be sent.
@@ -644,6 +665,28 @@ naavik batches --remote --live
 `--remote` needs a profile (`--target`, or the default in your profile
 file). So do `--live` and `--tasks` for receipts written before receipts
 recorded their cluster; newer receipts carry their SSH host.
+
+### Every target at once: `--all-targets`
+
+```text
+$ naavik batches --all-targets
+batch                       submitted         profile      from          tasks  note               submit
+arch-20261118T0900Z-...     2026-11-18 09:00  workstation  this machine  6      attn pool vs base  submitted
+arch-20261118T0905Z-...     2026-11-18 09:05  cluster      laptop        8      attn pool vs base  submitted
+?                                             lab-box                                              (cannot list: cannot reach lab-box over SSH: ...)
+```
+
+Every target of the target file, one connection each: the batches in its
+`roots.batches` beside the receipts here (each batch once), with the
+`from` column of `--remote`. A target that cannot be listed (out of reach,
+a mistake in its settings) is one `?` row giving the reason and an
+`error:` line; the others are listed all the same, and the exit status is
+1. It combines with `--live`, `--tasks`, and `--json`, not with `--target`
+or `--remote`.
+
+The `note` column shows a batch's note (`naavik run --note`, a manifest's
+`description`) when some batch has one; `status` prints it as a `note:`
+line.
 
 ### One batch in detail: `status`
 

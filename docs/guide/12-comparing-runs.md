@@ -80,6 +80,10 @@ session directory, an HPC batch directory, or `hpc-results/<batch-id>/`.
 `--runs RUN` (repeatable) adds the session directories of a
 [recorded run](13-run-registry.md) by its id, so no root is needed:
 `naavik summarize --runs 01M7KMT17KHK --runs 01M7KMT4A2T9`.
+`--batch BATCH` (a batch id or its receipt; repeatable) adds a batch: its
+batch directory when it ran on this machine, else its copy fetched by
+`naavik fetch` (in `hpc-results/<batch-id>`; `--fetched DIR` for another
+place). It never downloads: a batch not fetched yet is an error saying so.
 Several roots go in one report; each run's id then starts with its root's
 name:
 
@@ -179,6 +183,16 @@ before these records) shows `unknown`; when no run's code is known, the
 report is as it was. `--ignore-key code` leaves the code out. A config that
 has a `code` setting of its own is reported as a problem and the code is
 not compared.
+
+**So is the config file**, for batches whose experiments use more than one
+training config (an experiment's `config:`): a setting `config`, the file
+each task was made from, under the same rules (`unknown` when not
+recorded, `--ignore-key config` to leave it out).
+
+**Notes are shown, not compared.** A run whose batch has a note (`naavik
+run --note`, a manifest's `description`), or whose run record has one, gets
+it in a `note` column of the runs table (and `note` in JSON), only when
+some run has one. Runs with different notes still share a seed group.
 
 ## Problems and `--strict`
 

@@ -285,8 +285,9 @@ profile.
 | `name` | yes | Unique within the group; tasks are `<group>/<name>/000`, `001`, ... |
 | `overrides` | no | List of `{component?, path, value}`: values set for every task of the experiment. |
 | `matrix` | no | List of `{component?, path, values}`: one task per combination of the values; the last entry varies fastest. Without a matrix the experiment is one task. |
+| `config` | no | Its own training config (a repository path; default `training.config`), for a change of structure. Its session is `training.session`, and its overrides and matrix are checked against it. When any experiment sets it, every task records its file (`config_file`), compared as `config` by `summarize`. |
 
-Each task's config is: the training config (with its includes merged),
+Each task's config is: its training config (with its includes merged),
 then the experiment's `overrides`, then its combination of matrix values.
 A `${...}` interpolation brought in by an override or matrix value is
 refused, as in the training config itself.

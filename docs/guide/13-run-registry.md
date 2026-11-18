@@ -30,7 +30,8 @@ run                         started           host    state  code               
 
 Newest first, at most 50 (`--limit N`, `0` for all). `what` is the config
 file, the checkpoint a resume or extension started from, or a batch task
-(`<batch-id> <task>`). `code` is the commit; `(snapshot)` when the working
+(`<batch-id> <task>`). A `note` column (before `what`) shows a batch
+task's note when some run has one. `code` is the commit; `(snapshot)` when the working
 tree was taken as a snapshot commit, `(dirty)` when it had changes and no
 snapshot was kept (see [The code](#the-code)).
 
