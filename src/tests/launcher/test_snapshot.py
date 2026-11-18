@@ -97,9 +97,9 @@ def test_untracked_files_over_the_limit_are_refused_by_name(tmp_path):
 
 
 @pytest.mark.parametrize("changes, message", [
-    ({"source": {"strategy": "bundle", "ref": "main"}}, "source.ref 'main' cannot be used"),
+    ({"source": {"strategy": "bundle", "ref": "main"}}, "code_transfer.commit 'main' cannot be used"),
     ({"source": {"strategy": "fetch", "url": "https://example.org/x.git"}},
-     "source.strategy 'fetch' cannot stage a snapshot"),
+     "code_transfer.method 'git_clone' cannot stage a working tree"),
 ])
 def test_a_snapshot_is_staged_only_from_head_by_bundle(tmp_path, changes, message):
     root = make_repo(tmp_path, manifest=manifest(**changes))

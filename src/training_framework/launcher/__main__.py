@@ -151,7 +151,7 @@ def _parser(prog: str = "python -m training_framework.hpc") -> argparse.Argument
     ):
         aliases = [old for old, new in COMMAND_ALIASES.items() if new == name]
         command = commands.add_parser(name, help=help_text, aliases=aliases)
-        command.add_argument("batch", help="path to the committed experiment file")
+        command.add_argument("batch", help="path to the committed mission file")
         profile_options(command)
         command.add_argument("--group", action="append", default=[], metavar="GROUP",
                              help="only this group's experiments (repeatable)")
@@ -160,7 +160,7 @@ def _parser(prog: str = "python -m training_framework.hpc") -> argparse.Argument
                              help="only this experiment (repeatable)")
         if name == "validate":
             command.add_argument("--suggest-data", action="store_true",
-                                 help="print data.sources entries for uncovered local paths")
+                                 help="print data_sources entries for uncovered local paths")
         elif name == "render":
             command.add_argument("--output", type=Path, required=True)
         else:
@@ -179,8 +179,8 @@ def _parser(prog: str = "python -m training_framework.hpc") -> argparse.Argument
                      help="set PATH (in the session) or component:PATH (inside that "
                           "component's entry) to VALUE, read as YAML; repeatable")
     run.add_argument("--note", help="why this run: kept in its receipt and run record")
-    run.add_argument("--gpus", type=int, help="GPUs for the task (default: run_defaults)")
-    run.add_argument("--walltime", help="walltime of the task, [D-]HH:MM:SS (default: run_defaults)")
+    run.add_argument("--gpus", type=int, help="GPUs for the experiment (default: quick_run_defaults)")
+    run.add_argument("--walltime", help="walltime of the experiment, [D-]HH:MM:SS (default: quick_run_defaults)")
     run.add_argument("--detach", action="store_true", help="return once launched; do not follow")
     run.add_argument("--fresh-env", action="store_true",
                      help="build a managed environment for this run only")
@@ -325,6 +325,7 @@ def _compile(args, profile, fresh_env=False, fetch_here=False):
         code_facts=_code_facts(repository, profile, fetch_here=fetch_here),
         selection=Selection(tuple(args.group), tuple(args.experiment)),
     )
+    _warn_earlier_names(compiled, repository)
     _print_code_notes(compiled)
     return compiled, repository
 
@@ -359,7 +360,7 @@ def _fetch_uploads_here(sha, manifest, tasks, facts, repository, profile) -> Non
 
     covered = set()
     for item in manifest.data_sources:
-        target, _ = addresses.parse_address(item.get("target") if isinstance(item, dict) else None, "")
+        target, _ = addresses.parse_address(item.get("address") if isinstance(item, dict) else None, "")
         covered.add(target)
     done = set()
     for name, config in tasks:
@@ -383,6 +384,22 @@ def _ready_here(requirement) -> bool:
 
     key = requirement_key(DataRequirement(**requirement.requirement))
     return read_marker(StdlibFilesystem(), requirement.location) == key
+
+
+def _warn_earlier_names(compiled, repository) -> None:
+    """One warning for mission and project files written with earlier names
+    (their paths as they are from here, for the command it suggests)."""
+    if not compiled.renamed:
+        return
+    files = sorted({item.split(": ", 1)[0] for item in compiled.renamed})
+    here = []
+    for name in files:
+        path = Path(repository.root, name).resolve()
+        # Relative when it is under the current directory, else absolute.
+        here.append(str(path.relative_to(Path.cwd().resolve()))
+                    if path.is_relative_to(Path.cwd().resolve()) else str(path))
+    print(f"warning: {', '.join(files)} use earlier names ({'; '.join(compiled.renamed)}); "
+          f"`naavik migrate {' '.join(here)}` rewrites them", file=sys.stderr)
 
 
 def _print_code_notes(compiled) -> None:
@@ -850,7 +867,7 @@ def _run(args) -> int:
     project_file = root / PROJECT_FILE
     if not project_file.is_file():
         raise HpcError(f"naavik run needs a project file: {project_file} does not exist "
-                       "(it holds the code, environment, and run_defaults of the project)")
+                       "(it holds the code, python_packages, and quick_run_defaults of the project)")
     try:
         project = parse_project(yaml.safe_load(project_file.read_text()), PROJECT_FILE)
     except yaml.YAMLError as error:
@@ -869,6 +886,7 @@ def _run(args) -> int:
         facts=WorkstationFacts(repository.root), clock=datetime.now(timezone.utc),
         fresh_env=args.fresh_env, manifest_data=quick_run.manifest_bytes(manifest),
         code_facts=_code_facts(repository, profile, fetch_here=True))
+    _warn_earlier_names(compiled, repository)
     _print_code_notes(compiled)
     status, receipt = _launch(profile, compiled, repository, manifest_label=label,
                               review=_review(args.yes, only_over_limit=True))
@@ -1092,7 +1110,7 @@ def _probe_python(profile) -> int:
 
     if profile.env.python_source != "site":
         raise HpcError("probe-python reports a 'site' interpreter; uv and conda "
-                       "identities come from environment.python")
+                       "identities come from python_packages.python_version")
     interpreter, _ = bootstrap_interpreter(profile.env, None, ".")
     context = ExecutionContext(
         phase="setup", interpreter=interpreter, environment=None, working_directory=".",
@@ -1146,7 +1164,7 @@ def main(argv: list[str] | None = None, prog: str | None = None) -> int:
               f"group(s); commit {plan.sha[:12]}; environment "
               f"{plan.environment['key'] or plan.environment['location']}")
         if args.suggest_data and compiled.suggestions:
-            print(yaml.safe_dump({"data": {"sources": compiled.suggestions}}, sort_keys=False))
+            print(yaml.safe_dump({"data_sources": compiled.suggestions}, sort_keys=False))
         return 0
     from training_framework.launcher.compile.render import write_plan
 

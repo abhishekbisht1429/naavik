@@ -44,7 +44,7 @@ def test_site_identity_must_satisfy_requires_python_and_the_pin():
 @pytest.mark.parametrize("source", ["uv", "conda"])
 def test_uv_and_conda_need_a_pin_and_derive_identity_from_it(source):
     _, problems = expect(EnvSettings(python_source=source))
-    assert "environment.python is required" in problems[0]
+    assert "python_packages.python_version is required" in problems[0]
     expectation, problems = expect(EnvSettings(python_source=source), pin="3.13")
     assert not problems
     assert expectation.version_prefix == "3.13"
@@ -82,7 +82,7 @@ def test_a_conda_backend_cannot_use_the_site_interpreter():
 @pytest.mark.parametrize("source", ["uv", "conda"])
 def test_a_conda_backend_needs_a_pinned_python_from_uv_or_conda(source):
     _, problems = expect(EnvSettings(backend="conda", python_source=source))
-    assert "environment.python is required" in problems[0]
+    assert "python_packages.python_version is required" in problems[0]
     expectation, problems = expect(EnvSettings(backend="conda", python_source=source), pin="3.12")
     assert not problems and expectation.version_prefix == "3.12"
 

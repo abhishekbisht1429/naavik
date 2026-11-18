@@ -249,7 +249,7 @@ def test_an_existing_environment_needs_no_requirements_or_setup(tmp_path):
 
 def test_a_managed_environment_needs_requirements(tmp_path):
     root = make_repo(tmp_path, requirements=None, manifest=manifest(environment={}))
-    assert "environment.requirements is required" in problems_of(root)
+    assert "python_packages.requirements_file is required" in problems_of(root)
 
 
 def test_dependency_mode_expects_the_pinned_framework(tmp_path):
@@ -414,7 +414,7 @@ def test_prepare_rules(tmp_path):
     root = make_repo(tmp_path, manifest=with_data([bad]), config=flowers_config("/data/flowers"))
     text = problems_of(root)
     assert "unknown placeholder {other}" in text
-    assert "resources is required" in text
+    assert "allocation is required" in text
 
 
 def test_prepare_resources_are_refused_on_the_login_node(tmp_path):
@@ -428,8 +428,8 @@ def test_uncovered_local_paths_are_suggested_and_noted(tmp_path):
     compiled = compile_repo(root, facts=FakeFacts(root, existing={"/data/flowers"}))
     assert compiled.suggestions == [{
         "name": "flowers102_root",
-        "target": {"component": "flowers102", "path": ["root"]},
-        "upload": {},
+        "address": {"component": "flowers102", "path": ["root"]},
+        "copy_from_here": {},
     }]
     assert any("not data sources" in note for note in compiled.plan.notes)
 
@@ -490,7 +490,7 @@ def test_suggested_names_are_valid_unique_and_compile_when_pasted(tmp_path):
     assert "imagenet_train_root" in names and "imagenet_val_root" in names
     assert len(set(names)) == len(names) == 4
     assert all(re.fullmatch(r"[A-Za-z0-9_-]+", name) for name in names)
-    assert {"component": "imagenet#train", "path": ["root"]} in [s["target"] for s in suggestions]
+    assert {"component": "imagenet#train", "path": ["root"]} in [s["address"] for s in suggestions]
 
     pasted = make_repo(tmp_path / "second", manifest=with_data(suggestions), config=config)
     contents = {path: (f"K{index}", 1, 1) for index, path in enumerate(sorted(existing))}

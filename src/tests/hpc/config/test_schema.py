@@ -30,7 +30,7 @@ def test_the_selected_profile_wins_over_the_default():
 def test_site_keys_are_refused_in_a_manifest(key):
     data = copy.deepcopy(MANIFEST)
     data[key] = "x"
-    with pytest.raises(PlanError, match="belongs in the profile"):
+    with pytest.raises(PlanError, match="belongs in hosts.yaml"):
         parse_manifest(data, "m.yaml")
 
 
@@ -38,7 +38,7 @@ def test_site_keys_are_refused_in_a_manifest(key):
 def test_site_placement_is_refused_in_portable_resources(key):
     data = copy.deepcopy(MANIFEST)
     data["groups"]["probes"]["resources"][key] = "x"
-    with pytest.raises(PlanError, match="belongs in the profile"):
+    with pytest.raises(PlanError, match="belongs in hosts.yaml"):
         parse_manifest(data, "m.yaml")
 
 

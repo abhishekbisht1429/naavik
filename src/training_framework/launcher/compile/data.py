@@ -1,5 +1,6 @@
-"""Data sources (plan section 8): only addresses listed in `data.sources`
-are data. Each source is exactly one of `upload`, `cluster`, `prepare`."""
+"""Data sources (plan section 8): only addresses listed in `data_sources`
+are data. Each source is exactly one of `copy_from_here`, `already_on_host`,
+`prepare_on_host` (inside: `upload`, `cluster`, `prepare`)."""
 
 from __future__ import annotations
 
@@ -19,6 +20,12 @@ from training_framework.launcher.config.schema import Profile, Resources, parse_
 from training_framework.launcher.errors import Problems
 
 KINDS = ("upload", "cluster", "prepare")
+#: A data source's kind as written -> its name inside.
+WRITTEN_KINDS = {"copy_from_here": "upload", "already_on_host": "cluster",
+                 "prepare_on_host": "prepare"}
+#: A kind's settings as written -> their names inside (`Source.spec`).
+WRITTEN_SPEC = {"content_version": "version", "path": "path", "command": "command",
+                "rerun_when_changed": "inputs", "allocation": "resources"}
 _PLACEHOLDER = re.compile(r"\{\{|\}\}|\{[^{}]*\}")
 
 
@@ -60,11 +67,11 @@ def parse_sources(raw: tuple, problems: Problems, profile: Profile) -> list[Sour
     sources: list[Source] = []
     names = set()
     for index, item in enumerate(raw):
-        where = f"data.sources[{index}]"
+        where = f"data_sources[{index}]"
         if not isinstance(item, Mapping):
             problems.add(f"{where} must be a mapping")
             continue
-        unknown = set(item) - {"name", "target", *KINDS}
+        unknown = set(item) - {"name", "address", *WRITTEN_KINDS}
         if unknown:
             problems.add(f"{where}: unknown field(s) {', '.join(sorted(unknown))}")
         name = item.get("name")
@@ -74,21 +81,27 @@ def parse_sources(raw: tuple, problems: Problems, profile: Profile) -> list[Sour
         if name in names:
             problems.add(f"{where}: source name '{name}' is used twice")
         names.add(name)
-        target, target_problems = addresses.parse_address(item.get("target"), f"{where}.target")
+        target, target_problems = addresses.parse_address(item.get("address"), f"{where}.address")
         for problem in target_problems:
             problems.add(problem)
-        kinds = [kind for kind in KINDS if kind in item]
+        kinds = [written for written in WRITTEN_KINDS if written in item]
         if len(kinds) != 1:
-            problems.add(f"{where} must have exactly one of {', '.join(KINDS)}")
+            problems.add(f"{where} must have exactly one of {', '.join(WRITTEN_KINDS)}")
             continue
-        kind = kinds[0]
-        spec = item[kind] if item[kind] is not None else {}
+        written = kinds[0]
+        spec = item[written] if item[written] is not None else {}
         if not isinstance(spec, Mapping):
-            problems.add(f"{where}.{kind} must be a mapping")
+            problems.add(f"{where}.{written} must be a mapping")
             continue
-        resources = _check_spec(kind, dict(spec), f"{where}.{kind}", problems, profile)
+        unknown = set(spec) - set(WRITTEN_SPEC)
+        if unknown:
+            problems.add(f"{where}.{written}: unknown field(s) {', '.join(sorted(unknown))}")
+            continue
+        kind = WRITTEN_KINDS[written]
+        inside = {WRITTEN_SPEC[key]: value for key, value in spec.items()}
+        resources = _check_spec(kind, inside, f"{where}.{written}", problems, profile)
         if target is not None:
-            sources.append(Source(name, target, kind, dict(spec), resources))
+            sources.append(Source(name, target, kind, inside, resources))
     return sources
 
 
@@ -100,13 +113,15 @@ def _check_spec(kind, spec, where, problems, profile) -> Resources | None:
     }[kind]
     unknown = set(spec) - allowed
     if unknown:
-        problems.add(f"{where}: unknown field(s) {', '.join(sorted(unknown))}")
+        written = {inside: name for name, inside in WRITTEN_SPEC.items()}
+        problems.add(f"{where}: unknown field(s) "
+                     f"{', '.join(sorted(written.get(key, key) for key in unknown))}")
     if kind == "upload" and "version" in spec and (
             not isinstance(spec["version"], str) or not spec["version"]):
-        problems.add(f"{where}.version must be a non-empty string")
+        problems.add(f"{where}.content_version must be a non-empty string")
     if kind == "cluster" and "path" in spec and (
             not isinstance(spec["path"], str) or not posixpath.isabs(spec["path"])):
-        problems.add(f"{where}.path must be an absolute cluster path")
+        problems.add(f"{where}.path must be an absolute path on the host")
     if kind != "prepare":
         return None
     command = spec.get("command")
@@ -122,22 +137,22 @@ def _check_spec(kind, spec, where, problems, profile) -> Resources | None:
                         "{path}; write {{ and }} for literal braces)"
                     )
     if not isinstance(spec.get("version"), str) or not spec.get("version"):
-        problems.add(f"{where}.version is required (a non-empty string)")
+        problems.add(f"{where}.content_version is required (a non-empty string)")
     inputs = spec.get("inputs")
     if inputs is not None and (not isinstance(inputs, list) or not inputs or not all(
             isinstance(path, str) and path and not posixpath.isabs(path) for path in inputs)):
-        problems.add(f"{where}.inputs must be a non-empty list of repository paths")
+        problems.add(f"{where}.rerun_when_changed must be a non-empty list of repository paths")
     resources = None
     if "resources" in spec:
         if profile.prepare_location == "login":
             problems.add(
-                f"{where}.resources: the host prepares data on the login node "
+                f"{where}.allocation: the host prepares data on the login node "
                 "(data_preparation.on: login_node), where resources mean nothing"
             )
         else:
-            resources = parse_resources(spec["resources"], f"{where}.resources", problems)
+            resources = parse_resources(spec["resources"], f"{where}.allocation", problems)
     elif profile.prepare_location == "job":
-        problems.add(f"{where}.resources is required when data preparation runs on compute "
+        problems.add(f"{where}.allocation is required when data preparation runs on compute "
                      "nodes (data_preparation.on: compute_node)")
     return resources
 
@@ -399,8 +414,8 @@ def suggest_sources(
             if target is None:
                 target = {"path": list(path)}
             if path not in suggestions:
-                suggestions[path] = {"name": _suggested_name(path, taken), "target": target,
-                                     "upload": {}}
+                suggestions[path] = {"name": _suggested_name(path, taken), "address": target,
+                                     "copy_from_here": {}}
     return list(suggestions.values())
 
 

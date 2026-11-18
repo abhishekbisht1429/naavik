@@ -17,9 +17,10 @@ def plan_files(plan: ExecutionPlan, manifest_raw: dict) -> dict[str, str]:
     """Relative path -> content of every file the plan stages."""
     files: dict[str, str] = {
         "plan.json": json.dumps(plan.as_json(), indent=2, sort_keys=True) + "\n",
-        # The experiment file as compiled (merged with its project file);
-        # batches before this name staged it as `manifest.yaml`.
-        "experiments.yaml": yaml.safe_dump(manifest_raw, sort_keys=False),
+        # The mission file as compiled (merged with its project file, in the
+        # current names); earlier missions staged it as `experiments.yaml`
+        # or `manifest.yaml`.
+        "mission.yaml": yaml.safe_dump(manifest_raw, sort_keys=False),
     }
     if plan.environment["managed"]:
         from training_framework.launcher.remote.bootstrap import render_bootstrap

@@ -232,3 +232,118 @@ def hosts_file_from_earlier(raw: Any, source: str, schedulers=()) -> tuple[Any, 
             renaming.problems += problems
         raw["hosts"] = converted
     return raw, renaming.renamed, renaming.problems
+
+
+# Mission files and the project file -----------------------------------------
+#
+# The mission file was the experiment file and, before that, the manifest;
+# a job was a group, a recipe an experiment. The project file shares the
+# mission file's names for what both may hold.
+
+_CODE_TRANSFER = {"strategy": "method", "ref": "commit", "url": "clone_url"}
+_TRANSFER_METHODS = {"bundle": "git_bundle", "fetch": "git_clone"}
+_CODE = {"framework": "framework_from", "paths": "python_paths"}
+_FRAMEWORK_FROM = {"dependency": "installed", "checkout": "this_repository"}
+_PYTHON_PACKAGES = {"requirements": "requirements_file", "python": "python_version"}
+_BASE = {"config": "config_file", "session": "session_index"}
+_JOB = {"resources": "per_experiment", "max_parallel": "max_parallel_experiments",
+        "stop_grace": "stop_grace_period", "experiments": "recipes"}
+_RECIPE = {"config": "config_file", "matrix": "vary"}
+_SOURCE_KINDS = {"upload": "copy_from_here", "cluster": "already_on_host",
+                 "prepare": "prepare_on_host"}
+_SOURCE_SPEC = {"version": "content_version", "inputs": "rerun_when_changed",
+                "resources": "allocation"}
+_QUICK_RUN = {"resources": "per_experiment", "max_parallel": "max_parallel_experiments",
+              "target": "host"}
+
+
+def _section(entry: dict, old: str, new: str, names: Mapping, renaming: _Renaming) -> None:
+    """Rename section `old` to `new` and its keys by `names` (in place)."""
+    if renaming.clash(entry, old, new) or old not in entry:
+        return
+    renaming.note(old, new)
+    entry[new] = _renamed_keys(entry.pop(old), names, renaming, new)
+
+
+def _shared_sections(entry: dict, renaming: _Renaming) -> None:
+    """What a mission file and the project file both hold (in place)."""
+    _section(entry, "source", "code_transfer", _CODE_TRANSFER, renaming)
+    transfer = entry.get("code_transfer")
+    if isinstance(transfer, Mapping) and "method" in transfer:
+        transfer["method"] = _renamed_value(transfer["method"], _TRANSFER_METHODS, renaming,
+                                            "code_transfer.method")
+    code = entry.get("code")
+    if isinstance(code, Mapping):
+        code = entry["code"] = _renamed_keys(code, _CODE, renaming, "code")
+        if "framework_from" in code:
+            code["framework_from"] = _renamed_value(code["framework_from"], _FRAMEWORK_FROM,
+                                                    renaming, "code.framework_from")
+    _section(entry, "environment", "python_packages", _PYTHON_PACKAGES, renaming)
+    if "data" in entry:
+        if renaming.clash(entry, "data", "data_sources"):
+            return
+        data = entry.pop("data")
+        renaming.note("data.sources", "data_sources")
+        sources = data.get("sources", []) if isinstance(data, Mapping) else data
+        if isinstance(data, Mapping) and set(data) - {"sources"}:
+            renaming.problems.append(f"{renaming.where}.data: unknown key(s) "
+                                     f"{', '.join(sorted(set(data) - {'sources'}))}")
+        entry["data_sources"] = sources
+    if isinstance(entry.get("data_sources"), list):
+        entry["data_sources"] = [_data_source(item, index, renaming)
+                                 for index, item in enumerate(entry["data_sources"])]
+
+
+def _data_source(item: Any, index: int, renaming: _Renaming) -> Any:
+    if not isinstance(item, Mapping):
+        return item
+    item = dict(item)
+    where = f"data_sources[{index}]"
+    if not renaming.clash(item, "target", "address") and "target" in item:
+        renaming.note(f"{where}.target", f"{where}.address")
+        item["address"] = item.pop("target")
+    for old, new in _SOURCE_KINDS.items():
+        if not renaming.clash(item, old, new) and old in item:
+            renaming.note(f"{where}.{old}", f"{where}.{new}")
+            item[new] = _renamed_keys(item.pop(old), _SOURCE_SPEC, renaming, f"{where}.{new}")
+    return item
+
+
+def mission_file_from_earlier(raw: Any, source: str) -> tuple[Any, list[str], list[str]]:
+    """A mission file with current names: (file, what was renamed, problems)."""
+    if not isinstance(raw, Mapping):
+        return raw, [], []
+    renaming = _Renaming(source)
+    entry = dict(raw)
+    for old, new in (("version", "format_version"), ("description", "note"),
+                     ("project", "project_file")):
+        if not renaming.clash(entry, old, new) and old in entry:
+            renaming.note(old, new)
+            entry[new] = entry.pop(old)
+    _shared_sections(entry, renaming)
+    _section(entry, "training", "base", _BASE, renaming)
+    if not renaming.clash(entry, "groups", "jobs") and "groups" in entry:
+        renaming.note("groups", "jobs")
+        entry["jobs"] = entry.pop("groups")
+    jobs = entry.get("jobs")
+    if isinstance(jobs, Mapping):
+        renamed_jobs = {}
+        for name, job in jobs.items():
+            job = _renamed_keys(job, _JOB, renaming, f"jobs.{name}")
+            if isinstance(job, Mapping) and isinstance(job.get("recipes"), list):
+                job["recipes"] = [_renamed_keys(recipe, _RECIPE, renaming, f"jobs.{name}.recipes")
+                                  for recipe in job["recipes"]]
+            renamed_jobs[name] = job
+        entry["jobs"] = renamed_jobs
+    return entry, renaming.renamed, renaming.problems
+
+
+def project_file_from_earlier(raw: Any, source: str) -> tuple[Any, list[str], list[str]]:
+    """The project file with current names: (file, what was renamed, problems)."""
+    if not isinstance(raw, Mapping):
+        return raw, [], []
+    renaming = _Renaming(source)
+    entry = dict(raw)
+    _shared_sections(entry, renaming)
+    _section(entry, "run_defaults", "quick_run_defaults", _QUICK_RUN, renaming)
+    return entry, renaming.renamed, renaming.problems

@@ -71,7 +71,7 @@ def framework_mismatch(manifest, sha, managed, repository, framework: dict, tree
         location = Path(framework.get("location") or "/")
         return None if location.is_relative_to(tree.resolve()) else (
             f"the check used the framework at {location}, not the batch's own checkout "
-            f"({tree}); is it in code.paths?")
+            f"({tree}); is it in code.python_paths?")
     if not managed:
         return None                        # an existing environment is the target's own
     from training_framework.launcher.config.requirements import parse_requirements

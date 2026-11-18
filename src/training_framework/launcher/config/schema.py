@@ -47,21 +47,25 @@ DATA_MODES = tuple(DATASET_DELIVERY.values())
 STEP_LOCATIONS = {"compute_node": "job", "login_node": "login"}
 #: `run_code_from`, and the launcher's names.
 CODE_FROM = {"commit": "commit", "working_tree": "snapshot"}
+#: `code_transfer.method` and `code.framework_from`, and the launcher's names.
+TRANSFER_METHODS = {"git_bundle": "bundle", "git_clone": "fetch"}
+FRAMEWORK_FROM = {"installed": "dependency", "this_repository": "checkout"}
 #: How a batch takes your code: the commit you made (`commit`), or a commit
 #: made of your working tree as it is (`snapshot`).
 WORKTREE_MODES = ("commit", "snapshot")
 DEFAULT_SNAPSHOT_LIMIT = "50M"
 DEFAULT_SETUP_RESOURCES = {"walltime": "01:00:00", "cpus": 4, "memory": "16G"}
-EXPERIMENT_FILE_KEYS = frozenset({
-    "version", "name", "source", "code", "environment", "training", "data",
-    "groups", "project", "description",
+#: The keys of a mission file (`missions/*.yaml`).
+MISSION_FILE_KEYS = frozenset({
+    "format_version", "name", "note", "project_file", "code_transfer", "code",
+    "python_packages", "base", "data_sources", "jobs",
 })
 #: The project file (`naavik-project.yaml`): what a project's batches share.
 PROJECT_FILE = "naavik-project.yaml"
-#: Experiment-file keys a project file may hold (a manifest naming the project may
-#: not repeat them: one source per key).
-PROJECT_EXPERIMENT_FILE_KEYS = ("source", "code", "environment", "data")
-PROJECT_KEYS = frozenset(PROJECT_EXPERIMENT_FILE_KEYS) | {"run_defaults"}
+#: Keys a project file shares with mission files (a mission file naming the
+#: project file may not repeat them: one setting has one place).
+PROJECT_MISSION_FILE_KEYS = ("code_transfer", "code", "python_packages", "data_sources")
+PROJECT_KEYS = frozenset(PROJECT_MISSION_FILE_KEYS) | {"quick_run_defaults"}
 HOOK_PHASES = ("common", "setup", "prepare", "task")
 LOCATIONS = ("job", "login")
 
@@ -505,7 +509,7 @@ class Group:
 
 
 @dataclass(frozen=True)
-class ExperimentFile:
+class MissionFile:
     version: int
     name: str
     source_strategy: str
@@ -521,12 +525,14 @@ class ExperimentFile:
     data_sources: tuple[Any, ...]
     groups: tuple[Group, ...]
     raw: dict = field(repr=False)
-    #: Free text: why this batch runs (`naavik run --note`).
+    #: Free text: why this mission runs (`note`; `naavik run --note`).
     description: str | None = None
+    #: Earlier names it was written with (`old -> new`), for one warning.
+    renamed: tuple[str, ...] = ()
 
 
 _PROFILE_KEY_MESSAGE = (
-    "is a site concern and belongs in the profile, not the committed experiment file"
+    "is a site setting: it belongs in hosts.yaml, not in the committed mission file"
 )
 
 
@@ -577,78 +583,101 @@ class RunDefaults:
 
 @dataclass(frozen=True)
 class Project:
-    #: The manifest keys it provides, as written.
-    experiment_file_keys: dict
+    #: The mission-file keys it provides (current names).
+    mission_file_keys: dict
     run_defaults: RunDefaults
+    #: Earlier names it was written with (`old -> new`), for one warning.
+    renamed: tuple[str, ...] = ()
 
 
 def parse_project(raw: Any, source: str) -> Project:
-    """A project file: `source`, `code`, `environment`, `data` (as in a
-    manifest) and `run_defaults: {resources, max_parallel, target}`."""
+    """A project file: `code_transfer`, `code`, `python_packages`,
+    `data_sources` (as in a mission file) and `quick_run_defaults:
+    {per_experiment, max_parallel_experiments, host}`. Earlier names are
+    read too (`config/names.py`)."""
+    from training_framework.launcher.config.names import project_file_from_earlier
+
     problems = Problems()
+    raw, renamed, renaming_problems = project_file_from_earlier(raw, source)
+    for problem in renaming_problems:
+        problems.add(problem)
+    problems.raise_if_any()
     reader = _Reader(raw, source, problems, PROJECT_KEYS)
-    defaults = _Reader(reader.get("run_defaults", {}), f"{source}.run_defaults", problems,
-                       {"resources", "max_parallel", "target"})
-    resources = defaults.get("resources", {})
+    defaults = _Reader(reader.get("quick_run_defaults", {}), f"{source}.quick_run_defaults",
+                       problems, {"per_experiment", "max_parallel_experiments", "host"})
+    resources = defaults.get("per_experiment", {})
     if not isinstance(resources, Mapping):
-        problems.add(f"{source}.run_defaults.resources must be a mapping")
+        problems.add(f"{source}.quick_run_defaults.per_experiment must be a mapping")
         resources = {}
-    max_parallel = defaults.get("max_parallel")
+    max_parallel = defaults.get("max_parallel_experiments")
     if max_parallel is not None and (isinstance(max_parallel, bool)
                                      or not isinstance(max_parallel, int) or max_parallel < 1):
-        problems.add(f"{source}.run_defaults.max_parallel must be a positive integer")
-    target = defaults.string("target")
+        problems.add(f"{source}.quick_run_defaults.max_parallel_experiments must be a positive "
+                     "integer")
+    host = defaults.string("host")
     problems.raise_if_any()
     return Project(
-        experiment_file_keys={key: reader.raw[key] for key in PROJECT_EXPERIMENT_FILE_KEYS if key in reader.raw},
-        run_defaults=RunDefaults(dict(resources), max_parallel, target),
+        mission_file_keys={key: reader.raw[key] for key in PROJECT_MISSION_FILE_KEYS
+                           if key in reader.raw},
+        run_defaults=RunDefaults(dict(resources), max_parallel, host),
+        renamed=tuple(renamed),
     )
 
 
-def with_project(raw_manifest: Any, project: Project, manifest_source: str,
+def with_project(raw_mission: Any, project: Project, mission_source: str,
                  project_source: str) -> dict:
-    """The manifest with the project file's keys added; a key in both is an
-    error (one source per key)."""
-    if not isinstance(raw_manifest, Mapping):
-        return raw_manifest
-    both = sorted(key for key in project.experiment_file_keys if key in raw_manifest)
+    """The mission file (current names) with the project file's keys added;
+    a key in both is an error (one setting has one place)."""
+    if not isinstance(raw_mission, Mapping):
+        return raw_mission
+    both = sorted(key for key in project.mission_file_keys if key in raw_mission)
     if both:
         problems = Problems()
-        problems.add(f"{manifest_source} and its project file {project_source} both set "
+        problems.add(f"{mission_source} and its project file {project_source} both set "
                      f"{', '.join(both)}; keep each in one of them")
         problems.raise_if_any()
-    return {**raw_manifest, **project.experiment_file_keys}
+    return {**raw_mission, **project.mission_file_keys}
 
 
-def parse_experiment_file(raw: Any, source: str) -> ExperimentFile:
+def parse_mission_file(raw: Any, source: str) -> MissionFile:
+    """A mission file, in the current names (earlier ones are read too, and
+    listed in `renamed`)."""
+    from training_framework.launcher.config.names import mission_file_from_earlier
+
     problems = Problems()
+    raw, renamed, renaming_problems = mission_file_from_earlier(raw, source)
+    for problem in renaming_problems:
+        problems.add(problem)
+    problems.raise_if_any()
     refused = {
         key: _PROFILE_KEY_MESSAGE
         for key in PROFILE_KEYS | {"profile", "account", "partition", "qos"}
     }
-    reader = _Reader(raw, source, problems, EXPERIMENT_FILE_KEYS, refused=refused)
+    reader = _Reader(raw, source, problems, MISSION_FILE_KEYS, refused=refused)
 
-    version = reader.get("version", required=True)
+    version = reader.get("format_version", required=True)
     if version is not None and version != 1:
-        problems.add(f"{source}.version must be 1; got {version!r}")
+        problems.add(f"{source}.format_version must be 1; got {version!r}")
     name = reader.get("name", required=True)
     if name is not None and (problem := check_name(name, f"{source}.name")):
         problems.add(problem)
 
-    src = _Reader(reader.get("source", {}), f"{source}.source", problems,
-                  {"strategy", "ref", "url"})
-    strategy = src.choice("strategy", ("bundle", "fetch"), "bundle")
-    ref = src.string("ref", "HEAD")
-    url = src.string("url")
+    transfer = _Reader(reader.get("code_transfer", {}), f"{source}.code_transfer", problems,
+                       {"method", "commit", "clone_url"})
+    method = transfer.choice("method", tuple(TRANSFER_METHODS), "git_bundle")
+    strategy = TRANSFER_METHODS[method or "git_bundle"]
+    ref = transfer.string("commit", "HEAD")
+    url = transfer.string("clone_url")
     if strategy == "fetch" and url is None:
-        problems.add(f"{source}.source.url is required with strategy 'fetch'")
+        problems.add(f"{source}.code_transfer.clone_url is required with method 'git_clone'")
     if strategy == "bundle" and url is not None:
-        problems.add(f"{source}.source.url is only used with strategy 'fetch'")
+        problems.add(f"{source}.code_transfer.clone_url is only used with method 'git_clone'")
 
     code = _Reader(reader.get("code", {}, required=True), f"{source}.code",
-                   problems, {"framework", "paths"})
-    framework = code.choice("framework", ("checkout", "dependency"), required=True)
-    paths = code.get("paths", required=True)
+                   problems, {"framework_from", "python_paths"})
+    framework_from = code.choice("framework_from", tuple(FRAMEWORK_FROM), required=True)
+    framework = FRAMEWORK_FROM.get(framework_from)
+    paths = code.get("python_paths", required=True)
     code_paths: tuple[str, ...] = ()
     if paths is not None:
         if not isinstance(paths, list) or not paths or not all(
@@ -657,60 +686,55 @@ def parse_experiment_file(raw: Any, source: str) -> ExperimentFile:
                 for path in paths
         ):
             problems.add(
-                f"{source}.code.paths must be a non-empty list of relative "
+                f"{source}.code.python_paths must be a non-empty list of relative "
                 "paths inside the repository"
             )
         else:
             code_paths = tuple(posixpath.normpath(path) for path in paths)
 
-    environment = _Reader(reader.get("environment", {}),
-                          f"{source}.environment", problems,
-                          {"requirements", "python"})
-    requirements = environment.string("requirements")
-    python_pin = environment.get("python")
+    packages = _Reader(reader.get("python_packages", {}), f"{source}.python_packages", problems,
+                       {"requirements_file", "python_version"})
+    requirements = packages.string("requirements_file")
+    python_pin = packages.get("python_version")
     if python_pin is not None:
         if isinstance(python_pin, (int, float)) and not isinstance(python_pin, bool):
             problems.add(
-                f"{source}.environment.python must be a quoted string such as "
+                f"{source}.python_packages.python_version must be a quoted string such as "
                 f"\"3.13\" (YAML reads {python_pin!r} as a number)"
             )
             python_pin = None
         elif not isinstance(python_pin, str) or not re.match(
                 r"\A\d+\.\d+(\.\d+)?\Z", python_pin):
             problems.add(
-                f"{source}.environment.python must be X.Y or X.Y.Z; got "
+                f"{source}.python_packages.python_version must be X.Y or X.Y.Z; got "
                 f"{python_pin!r}"
             )
             python_pin = None
 
-    training = _Reader(reader.get("training", {}, required=True),
-                       f"{source}.training", problems,
-                       {"config", "session", "engine_options"})
-    config = training.string("config", required=True)
-    session = training.positive_int("session", 0, minimum=0)
-    engine_options = training.strings("engine_options")
+    base = _Reader(reader.get("base", {}, required=True), f"{source}.base", problems,
+                   {"config_file", "session_index", "engine_options"})
+    config = base.string("config_file", required=True)
+    session = base.positive_int("session_index", 0, minimum=0)
+    engine_options = base.strings("engine_options")
 
-    data = _Reader(reader.get("data", {}), f"{source}.data", problems,
-                   {"sources"})
-    sources = data.get("sources", [])
+    sources = reader.get("data_sources", [])
     if not isinstance(sources, list):
-        problems.add(f"{source}.data.sources must be a list")
+        problems.add(f"{source}.data_sources must be a list")
         sources = []
 
-    groups_raw = reader.get("groups", required=True)
+    jobs_raw = reader.get("jobs", required=True)
     groups = []
-    if groups_raw is not None:
-        if not isinstance(groups_raw, Mapping) or not groups_raw:
-            problems.add(f"{source}.groups must be a non-empty mapping")
+    if jobs_raw is not None:
+        if not isinstance(jobs_raw, Mapping) or not jobs_raw:
+            problems.add(f"{source}.jobs must be a non-empty mapping")
         else:
-            for group_name, group_raw in groups_raw.items():
-                group = _parse_group(group_name, group_raw,
-                                     f"{source}.groups.{group_name}", problems)
+            for job_name, job_raw in jobs_raw.items():
+                group = _parse_group(job_name, job_raw, f"{source}.jobs.{job_name}", problems)
                 if group is not None:
                     groups.append(group)
 
     problems.raise_if_any()
-    return ExperimentFile(
+    return MissionFile(
         version=version,
         name=name,
         source_strategy=strategy,
@@ -726,42 +750,40 @@ def parse_experiment_file(raw: Any, source: str) -> ExperimentFile:
         data_sources=tuple(sources),
         groups=tuple(groups),
         raw=dict(raw),
-        description=reader.string("description"),
+        description=reader.string("note"),
+        renamed=tuple(renamed),
     )
 
 
 def _parse_group(name, raw, where, problems) -> Group | None:
-    if problem := check_name(name, f"{where} (group name)"):
+    """One job (inside: a group) of a mission file."""
+    if problem := check_name(name, f"{where} (job name)"):
         problems.add(problem)
     reader = _Reader(raw, where, problems,
-                     {"resources", "scheduler_options", "max_parallel",
-                      "stop_grace", "experiments"})
-    resources = parse_resources(reader.get("resources", {}, required=True),
-                                f"{where}.resources", problems)
+                     {"per_experiment", "scheduler_options", "max_parallel_experiments",
+                      "stop_grace_period", "recipes"})
+    resources = parse_resources(reader.get("per_experiment", {}, required=True),
+                                f"{where}.per_experiment", problems)
     options = _scheduler_options(reader.get("scheduler_options"),
                                  f"{where}.scheduler_options", problems)
-    max_parallel = reader.positive_int("max_parallel")
-    grace = reader.get("stop_grace", "120s")
+    max_parallel = reader.positive_int("max_parallel_experiments")
+    grace = reader.get("stop_grace_period", "120s")
     grace_seconds = parse_duration(grace)
     if grace_seconds is None:
-        problems.add(f"{where}.stop_grace must be a duration such as 120s; got {grace!r}")
-    experiments_raw = reader.get("experiments", required=True)
+        problems.add(f"{where}.stop_grace_period must be a duration such as 120s; got {grace!r}")
+    recipes_raw = reader.get("recipes", required=True)
     experiments = []
-    if experiments_raw is not None:
-        if not isinstance(experiments_raw, list) or not experiments_raw:
-            problems.add(f"{where}.experiments must be a non-empty list")
+    if recipes_raw is not None:
+        if not isinstance(recipes_raw, list) or not recipes_raw:
+            problems.add(f"{where}.recipes must be a non-empty list")
         else:
             seen = set()
-            for index, experiment_raw in enumerate(experiments_raw):
-                experiment = _parse_experiment(
-                    experiment_raw, f"{where}.experiments[{index}]", problems,
-                )
+            for index, recipe_raw in enumerate(recipes_raw):
+                experiment = _parse_experiment(recipe_raw, f"{where}.recipes[{index}]", problems)
                 if experiment is None:
                     continue
                 if experiment.name in seen:
-                    problems.add(
-                        f"{where}: experiment name '{experiment.name}' is used twice"
-                    )
+                    problems.add(f"{where}: recipe name '{experiment.name}' is used twice")
                 seen.add(experiment.name)
                 experiments.append(experiment)
     if resources is None or grace_seconds is None:
@@ -771,16 +793,17 @@ def _parse_group(name, raw, where, problems) -> Group | None:
 
 
 def _parse_experiment(raw, where, problems) -> Experiment | None:
-    reader = _Reader(raw, where, problems, {"name", "overrides", "matrix", "config"})
+    """One recipe (inside: an experiment) of a job."""
+    reader = _Reader(raw, where, problems, {"name", "overrides", "vary", "config_file"})
     name = reader.get("name", required=True)
-    config = reader.string("config")
+    config = reader.string("config_file")
     if name is not None and (problem := check_name(name, f"{where}.name")):
         problems.add(problem)
         name = None
     overrides = reader.get("overrides", [])
-    matrix = reader.get("matrix", [])
+    matrix = reader.get("vary", [])
     for key, value, field_name in (
-            ("overrides", overrides, "value"), ("matrix", matrix, "values"),
+            ("overrides", overrides, "value"), ("vary", matrix, "values"),
     ):
         if not isinstance(value, list):
             problems.add(f"{where}.{key} must be a list")
@@ -809,12 +832,11 @@ def _parse_experiment(raw, where, problems) -> Experiment | None:
     return Experiment(name, tuple(overrides), tuple(matrix), config)
 
 
-
-# The earlier names (the experiment file was called the manifest, a word a
+# The earlier names (the mission file was called the manifest, a word a
 # checkpoint's `manifest.json` already used), kept for code that imports them.
-Manifest = ExperimentFile
-parse_manifest = parse_experiment_file
-MANIFEST_KEYS = EXPERIMENT_FILE_KEYS
+Manifest = MissionFile
+parse_manifest = parse_mission_file
+MANIFEST_KEYS = MISSION_FILE_KEYS
 
 
 def __getattr__(name):

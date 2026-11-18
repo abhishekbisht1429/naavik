@@ -43,7 +43,7 @@ def test_suggest_data_prints_entries_for_local_paths(tmp_path, monkeypatch, caps
     assert main(["validate", str(root / "batch.yaml"), "--profiles", str(profiles),
                  "--suggest-data"]) == 0
     printed = yaml.safe_load(capsys.readouterr().out.split("\n", 2)[-1])
-    assert printed["data"]["sources"][0]["target"] == {"component": "flowers102", "path": ["root"]}
+    assert printed["data_sources"][0]["address"] == {"component": "flowers102", "path": ["root"]}
 
 
 def test_render_writes_the_preview_and_refuses_a_non_empty_directory(setup, tmp_path, capsys):

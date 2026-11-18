@@ -46,22 +46,22 @@ def experiment_name(config: str) -> str:
 
 def run_manifest(*, config: str, project: str, run_defaults, overrides: list[str],
                  note: str | None, gpus: int | None, walltime: str | None) -> dict:
-    """The manifest of `naavik run` (repository-relative `config` and
-    `project`)."""
+    """The mission file of `naavik run`, in the current names
+    (repository-relative `config` and `project`)."""
     resources = dict(run_defaults.resources)
     if gpus is not None:
         resources["gpus"] = gpus
     if walltime is not None:
         resources["walltime"] = walltime
-    group = {"resources": resources,
-             "experiments": [{"name": experiment_name(config),
-                              "overrides": [parse_override(item) for item in overrides]}]}
+    job = {"per_experiment": resources,
+           "recipes": [{"name": experiment_name(config),
+                        "overrides": [parse_override(item) for item in overrides]}]}
     if run_defaults.max_parallel:
-        group["max_parallel"] = run_defaults.max_parallel
-    manifest = {"version": 1, "name": experiment_name(config), "project": project,
-                "training": {"config": config}, "groups": {GROUP: group}}
+        job["max_parallel_experiments"] = run_defaults.max_parallel
+    manifest = {"format_version": 1, "name": experiment_name(config), "project_file": project,
+                "base": {"config_file": config}, "jobs": {GROUP: job}}
     if note:
-        manifest["description"] = note
+        manifest["note"] = note
     return manifest
 
 

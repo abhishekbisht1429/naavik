@@ -179,7 +179,8 @@ def test_earlier_names_are_read_with_one_warning_naming_the_fix(tmp_path, config
     (config_home / "targets.yaml").write_text(yaml.safe_dump(PROFILE))
     assert validate(make_repo(tmp_path)) == 0
     err = capsys.readouterr().err
-    warnings = [line for line in err.splitlines() if line.startswith("warning:") and "earlier names" in line]
+    warnings = [line for line in err.splitlines() if line.startswith("warning:")
+                and "earlier names" in line and "targets.yaml uses" in line]
     assert len(warnings) == 1
     assert "roots -> directories" in warnings[0] and f"naavik migrate {config_home / 'targets.yaml'}" in warnings[0]
 

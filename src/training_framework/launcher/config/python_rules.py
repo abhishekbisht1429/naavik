@@ -81,9 +81,9 @@ def interpreter_expectation(
         # and 'site' does not require the pin conda needs.
         problems.append(
             "python_environment.kind 'conda' installs its own Python "
-            "(conda create python=<environment.python>), so it cannot use "
+            "(conda create python=<python_packages.python_version>), so it cannot use "
             "interpreter_from 'site'; set python_environment.interpreter_from to "
-            "'conda' (or 'uv') and environment.python in the experiment file, or "
+            "'conda' (or 'uv') and python_packages.python_version in the mission file, or "
             "use kind 'venv' with the site interpreter"
         )
         return InterpreterExpectation("site", None, None), problems
@@ -99,7 +99,7 @@ def interpreter_expectation(
             return InterpreterExpectation("site", None, None), problems
         if pin is not None and not _matches_pin(identity.version, pin):
             problems.append(
-                f"environment.python pins {pin}, but the host's "
+                f"python_packages.python_version pins {pin}, but the host's "
                 f"site_interpreter is Python {identity.version}"
             )
         if requires_python is not None and not requires_python.contains(
@@ -113,7 +113,7 @@ def interpreter_expectation(
 
     if pin is None:
         problems.append(
-            f"environment.python is required with interpreter_from "
+            f"python_packages.python_version is required with interpreter_from "
             f"'{env.python_source}' (the interpreter it installs must be "
             "known offline)"
         )
@@ -121,7 +121,7 @@ def interpreter_expectation(
     if requires_python is not None:
         if pin.count(".") == 1 and not _decidable(requires_python, pin):
             problems.append(
-                f"environment.python '{pin}' cannot decide requires-python "
+                f"python_packages.python_version '{pin}' cannot decide requires-python "
                 f"'{requires_python}' (it has a patch-level bound); pin a "
                 "full version X.Y.Z"
             )
@@ -129,7 +129,7 @@ def interpreter_expectation(
             probe = pin if pin.count(".") == 2 else f"{pin}.0"
             if not requires_python.contains(probe, prereleases=True):
                 problems.append(
-                    f"environment.python '{pin}' does not satisfy "
+                    f"python_packages.python_version '{pin}' does not satisfy "
                     f"requires-python '{requires_python}'"
                 )
     return InterpreterExpectation(env.python_source, None, pin), problems

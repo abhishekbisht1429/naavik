@@ -48,10 +48,11 @@ from training_framework.launcher.config.requirements import (
     RequirementsError,
     parse_requirements,
 )
+from training_framework.launcher.config.names import mission_file_from_earlier
 from training_framework.launcher.config.schema import (
-    ExperimentFile,
+    MissionFile,
     Profile,
-    parse_experiment_file,
+    parse_mission_file,
     parse_project,
     with_project,
 )
@@ -67,10 +68,13 @@ FRAMEWORK_DISTRIBUTION = "training-framework"
 @dataclasses.dataclass(frozen=True)
 class Compiled:
     plan: ExecutionPlan
-    manifest: ExperimentFile
+    manifest: MissionFile
     suggestions: list[dict]
     #: What the batch's own code said about its tasks; None: not asked.
     code_facts: "CodeFacts | None" = None
+    #: Earlier names the mission and project files were written with
+    #: (`file: old -> new`), for one warning.
+    renamed: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -101,7 +105,7 @@ class CodeFacts:
 
 @dataclass(frozen=True)
 class Selection:
-    """Part of an experiment file: whole groups, and `GROUP/EXPERIMENT`s."""
+    """Part of a mission file: whole jobs, and `JOB/RECIPE`s."""
 
     groups: tuple[str, ...] = ()
     experiments: tuple[str, ...] = ()
@@ -114,7 +118,7 @@ class Selection:
                 (("groups", self.groups), ("experiments", self.experiments)) if value}
 
 
-def _select(manifest: ExperimentFile, selection: Selection | None, problems: Problems) -> ExperimentFile:
+def _select(manifest: MissionFile, selection: Selection | None, problems: Problems) -> MissionFile:
     """The manifest with only the chosen groups and experiments (task names
     and numbers stay as the whole manifest makes them)."""
     import dataclasses as _dataclasses
@@ -124,7 +128,7 @@ def _select(manifest: ExperimentFile, selection: Selection | None, problems: Pro
     groups = {group.name: group for group in manifest.groups}
     for name in selection.groups:
         if name not in groups:
-            problems.add(f"--group {name}: the experiment file has no such group "
+            problems.add(f"--group {name}: the mission file has no such job "
                          f"(it has: {', '.join(groups)})")
     chosen: dict[str, set[str] | None] = {name: None for name in selection.groups if name in groups}
     for item in selection.experiments:
@@ -133,7 +137,7 @@ def _select(manifest: ExperimentFile, selection: Selection | None, problems: Pro
             problems.add(f"--experiment {item}: name it GROUP/EXPERIMENT")
             continue
         if group not in groups:
-            problems.add(f"--experiment {item}: the experiment file has no group '{group}' "
+            problems.add(f"--experiment {item}: the mission file has no job '{group}' "
                          f"(it has: {', '.join(groups)})")
             continue
         names = [e.name for e in groups[group].experiments]
@@ -156,7 +160,7 @@ def _select(manifest: ExperimentFile, selection: Selection | None, problems: Pro
 #: `code_facts(sha, manifest, managed, tasks)`, tasks being (name, config) in
 #: order: the batch's own code asked about its expanded task configs (as the
 #: manifest makes them, before data paths are rewritten for the target).
-CodeFactsPort = Callable[[str, ExperimentFile, bool, list[tuple[str, dict]]], CodeFacts]
+CodeFactsPort = Callable[[str, MissionFile, bool, list[tuple[str, dict]]], CodeFacts]
 
 
 def _load_yaml(data: bytes, source: str, problems: Problems) -> Any:
@@ -211,43 +215,51 @@ def compile_plan(
         problems.raise_if_any()
     raw_manifest = _load_yaml(head_bytes, manifest_path, problems)
     problems.raise_if_any()
-    # A project file the manifest names adds the keys a project's batches
-    # share; read at the same commit as the manifest.
+    # Earlier names become current ones first: the project file is named by
+    # `project_file` (earlier: `project`).
+    raw_manifest, renamed, renaming_problems = mission_file_from_earlier(raw_manifest, manifest_path)
+    for problem in renaming_problems:
+        problems.add(problem)
+    problems.raise_if_any()
+    renamed = [f"{manifest_path}: {item}" for item in renamed]
+    # A project file the mission file names adds the keys a project's
+    # missions share; read at the same commit as the mission file.
     project_path = project_bytes = None
-    if isinstance(raw_manifest, Mapping) and raw_manifest.get("project") is not None:
-        project_path = raw_manifest["project"]
+    if isinstance(raw_manifest, Mapping) and raw_manifest.get("project_file") is not None:
+        project_path = raw_manifest["project_file"]
         if not isinstance(project_path, str) or not project_path:
-            problems.add(f"{manifest_path}.project must be a path in the repository")
+            problems.add(f"{manifest_path}.project_file must be a path in the repository")
         else:
             project_bytes = repository.read(head, project_path)
             if project_bytes is None:
                 problems.add(f"project file '{project_path}' does not exist at {head[:12]} "
-                             f"(named by {manifest_path}.project)")
+                             f"(named by {manifest_path}.project_file)")
         problems.raise_if_any()
         project_raw = _load_yaml(project_bytes, project_path, problems)
         problems.raise_if_any()
-        raw_manifest = with_project(raw_manifest, parse_project(project_raw, project_path),
-                                    manifest_path, project_path)
-    manifest = parse_experiment_file(raw_manifest, manifest_path)
+        project = parse_project(project_raw, project_path)
+        renamed += [f"{project_path}: {item}" for item in project.renamed]
+        raw_manifest = with_project(raw_manifest, project, manifest_path, project_path)
+    manifest = parse_mission_file(raw_manifest, manifest_path)
 
     if snapshot is not None:
         if manifest.source_ref != "HEAD":
-            problems.add(f"source.ref '{manifest.source_ref}' cannot be used with run_code_from: "
-                         "working_tree (the working tree is taken on HEAD)")
+            problems.add(f"code_transfer.commit '{manifest.source_ref}' cannot be used with "
+                         "run_code_from: working_tree (the working tree is taken on HEAD)")
         if manifest.source_strategy == "fetch":
-            problems.add("source.strategy 'fetch' cannot stage a snapshot (it exists only in "
-                         "this repository); use 'bundle'")
+            problems.add("code_transfer.method 'git_clone' cannot stage a working tree (it "
+                         "exists only in this repository); use 'git_bundle'")
         sha = head
     else:
         sha = repository.resolve(manifest.source_ref)
     if manifest_data is None and sha != head and repository.read(sha, manifest_path) != head_bytes:
         problems.add(
-            f"{manifest_path} differs between HEAD and source.ref "
+            f"{manifest_path} differs between HEAD and code_transfer.commit "
             f"'{manifest.source_ref}'; check out that ref first"
         )
     if project_path and sha != head and repository.read(sha, project_path) != project_bytes:
         problems.add(
-            f"{project_path} differs between HEAD and source.ref "
+            f"{project_path} differs between HEAD and code_transfer.commit "
             f"'{manifest.source_ref}'; check out that ref first"
         )
 
@@ -263,7 +275,7 @@ def compile_plan(
             if experiment.config is not None and experiment.config not in configs:
                 configs[experiment.config] = _training_config(
                     manifest, experiment.config, repository, sha, problems,
-                    where=f"groups.{group.name}.experiments[{experiment.name}].config")
+                    where=f"jobs.{group.name}.recipes[{experiment.name}].config_file")
     several_configs = any(experiment.config is not None
                           for group in manifest.groups for experiment in group.experiments)
 
@@ -277,9 +289,9 @@ def compile_plan(
 
     for path in manifest.code_paths:
         if not repository.exists(sha, path):
-            problems.add(f"code.paths: '{path}' does not exist at {sha[:12]}")
+            problems.add(f"code.python_paths: '{path}' does not exist at {sha[:12]}")
         elif not repository.is_directory(sha, path):
-            problems.add(f"code.paths: '{path}' is a file at {sha[:12]}; code.paths are "
+            problems.add(f"code.python_paths: '{path}' is a file at {sha[:12]}; code.python_paths are "
                          "directories put on PYTHONPATH")
     problems.raise_if_any()
 
@@ -490,13 +502,13 @@ def compile_plan(
         description=manifest.description,
         selection=selection.as_json() if selection else None,
     )
-    return Compiled(plan, manifest, suggestions, facts_found)
+    return Compiled(plan, manifest, suggestions, facts_found, tuple(renamed))
 
 
 # Helpers -----------------------------------------------------------------------
 
 
-def _training_config(manifest, path, repository, sha, problems, where="training.config"):
+def _training_config(manifest, path, repository, sha, problems, where="base.config_file"):
     """(config, selected session) of the training config at `path`."""
     if repository.read(sha, path) is None:
         problems.add(f"{where} '{path}' does not exist at {sha[:12]}")
@@ -516,15 +528,15 @@ def _training_config(manifest, path, repository, sha, problems, where="training.
         return {}, {}
     if manifest.training_session >= len(sessions):
         problems.add(
-            f"training.session {manifest.training_session} is out of range "
+            f"base.session_index {manifest.training_session} is out of range "
             f"({len(sessions)} session(s)"
-            + (f" in {path})" if where != "training.config" else ")")
+            + (f" in {path})" if where != "base.config_file" else ")")
         )
         return {}, {}
     session = sessions[manifest.training_session]
     if not isinstance(session, dict):
         problems.add("the selected session must be a mapping"
-                     + (f" ({path})" if where != "training.config" else ""))
+                     + (f" ({path})" if where != "base.config_file" else ""))
         return {}, {}
     session_config = session.get("session_config")
     if not isinstance(session_config, dict) or not isinstance(
@@ -532,7 +544,7 @@ def _training_config(manifest, path, repository, sha, problems, where="training.
         problems.add(
             "the selected session needs session_config.components_package "
             "(the package that registers its components)"
-            + (f" ({path})" if where != "training.config" else "")
+            + (f" ({path})" if where != "base.config_file" else "")
         )
     return config, session
 
@@ -552,13 +564,13 @@ def _requirements(manifest, repository, sha, managed, problems) -> Requirements 
     if manifest.requirements is None:
         if managed:
             problems.add(
-                "environment.requirements is required for a managed "
+                "python_packages.requirements_file is required for a managed "
                 "environment (or set python_environment.use_existing on the host)"
             )
         return None
     raw = repository.read(sha, manifest.requirements)
     if raw is None:
-        problems.add(f"environment.requirements '{manifest.requirements}' does not exist at {sha[:12]}")
+        problems.add(f"python_packages.requirements_file '{manifest.requirements}' does not exist at {sha[:12]}")
         return None
     try:
         return parse_requirements(raw.decode(), manifest.requirements)
@@ -729,12 +741,12 @@ def _expand(manifest, session_of, dialect, problems):
     `session_of(experiment)`: the selected session of its training config."""
     tasks = []
     for group in manifest.groups:
-        where = f"groups.{group.name}"
+        where = f"jobs.{group.name}"
         for problem in dialect.check_resources(group.resources, f"{where}.resources"):
             problems.add(problem)
         array_index = 0
         for experiment in group.experiments:
-            e_where = f"{where}.experiments[{experiment.name}]"
+            e_where = f"{where}.recipes[{experiment.name}]"
             base_session = session_of(experiment)
             overrides = _parse_entries(experiment.overrides, "value", f"{e_where}.overrides", base_session, problems)
             matrix = _parse_entries(experiment.matrix, "values", f"{e_where}.matrix", base_session, problems)

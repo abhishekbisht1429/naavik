@@ -74,13 +74,13 @@ def test_overrides_are_checked_against_the_experiments_own_session(tmp_path):
     root = two_structures(tmp_path, {
         "name": "attnpool", "config": "configs/attnpool.yaml",
         "overrides": [{"component": "fine_tuned_model", "path": "frozen", "value": []}]})
-    with pytest.raises(PlanError, match=r"experiments\[attnpool\].*fine_tuned_model"):
+    with pytest.raises(PlanError, match=r"recipes\[attnpool\].*fine_tuned_model"):
         compile_repo(root)
 
 
 def test_a_missing_config_is_named_with_its_experiment(tmp_path):
     root = two_structures(tmp_path, {"name": "attnpool", "config": "configs/nowhere.yaml"})
-    with pytest.raises(PlanError, match=r"groups.probes.experiments\[attnpool\].config "
+    with pytest.raises(PlanError, match=r"jobs.probes.recipes\[attnpool\].config_file "
                                         r"'configs/nowhere.yaml' does not exist"):
         compile_repo(root)
 
@@ -88,7 +88,7 @@ def test_a_missing_config_is_named_with_its_experiment(tmp_path):
 def test_a_config_without_the_selected_session_is_named(tmp_path):
     root = two_structures(tmp_path, {"name": "attnpool", "config": "configs/attnpool.yaml"},
                           other={"sessions": []})
-    with pytest.raises(PlanError, match=r"experiments\[attnpool\].config 'configs/attnpool.yaml' "
+    with pytest.raises(PlanError, match=r"recipes\[attnpool\].config_file 'configs/attnpool.yaml' "
                                         r"has no 'sessions' list"):
         compile_repo(root)
 

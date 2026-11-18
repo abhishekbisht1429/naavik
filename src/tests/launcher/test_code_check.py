@@ -183,7 +183,7 @@ def test_checkout_mode_without_the_framework_in_its_paths_is_refused(tmp_path, h
     assert validate(root, here) == 2
     err = capsys.readouterr().err
     # Whatever framework the interpreter finds, it is not the batch's own.
-    assert "not the batch's own checkout" in err and "is it in code.paths?" in err
+    assert "not the batch's own checkout" in err and "is it in code.python_paths?" in err
 
 
 # Skipping, never silently --------------------------------------------------------------------------

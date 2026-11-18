@@ -74,11 +74,11 @@ def test_the_options_override_run_defaults():
     manifest = run_manifest(config="configs/vit attn.yaml", project=PROJECT_FILE,
                             run_defaults=defaults, overrides=[], note="why", gpus=0,
                             walltime="00:05:00")
-    group = manifest["groups"]["run"]
-    assert group["resources"] == {"gpus": 0, "walltime": "00:05:00", "memory": "8G"}
-    assert group["max_parallel"] == 2
-    assert group["experiments"] == [{"name": "vit-attn", "overrides": []}]
-    assert manifest["description"] == "why" and manifest["project"] == PROJECT_FILE
+    job = manifest["jobs"]["run"]
+    assert job["per_experiment"] == {"gpus": 0, "walltime": "00:05:00", "memory": "8G"}
+    assert job["max_parallel_experiments"] == 2
+    assert job["recipes"] == [{"name": "vit-attn", "overrides": []}]
+    assert manifest["note"] == "why" and manifest["project_file"] == PROJECT_FILE
 
 
 # Following ------------------------------------------------------------------------------------

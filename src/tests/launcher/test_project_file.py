@@ -59,8 +59,10 @@ def test_the_batch_keeps_the_manifest_as_compiled(tmp_path):
     from training_framework.launcher.compile.render import plan_files
 
     compiled = compile_repo(project_repo(tmp_path))
-    staged = yaml.safe_load(plan_files(compiled.plan, compiled.manifest.raw)["experiments.yaml"])
-    assert staged["code"] == SHARED["code"] and staged["project"] == PROJECT_FILE
+    staged = yaml.safe_load(plan_files(compiled.plan, compiled.manifest.raw)["mission.yaml"])
+    # Staged in the current names.
+    assert staged["code"] == {"framework_from": "installed", "python_paths": ["."]}
+    assert staged["project_file"] == PROJECT_FILE
 
 
 def test_a_key_in_both_files_is_refused(tmp_path):
@@ -77,8 +79,8 @@ def test_a_missing_project_file_is_named(tmp_path):
 
 @pytest.mark.parametrize("project, message", [
     (dict(SHARED, groups={}), "unknown"),
-    (dict(SHARED, run_defaults={"max_parallel": 0}), "max_parallel must be a positive integer"),
-    (dict(SHARED, run_defaults={"resources": "big"}), "resources must be a mapping"),
+    (dict(SHARED, run_defaults={"max_parallel": 0}), "max_parallel_experiments must be a positive integer"),
+    (dict(SHARED, run_defaults={"resources": "big"}), "per_experiment must be a mapping"),
     (dict(SHARED, run_defaults={"colour": "blue"}), "unknown"),
 ])
 def test_a_bad_project_file_is_refused(tmp_path, project, message):
@@ -93,7 +95,7 @@ def test_the_project_file_must_match_at_source_ref(tmp_path):
     changed = dict(SHARED, environment={"requirements": "requirements/hpc.txt", "python": "3.12"})
     (root / PROJECT_FILE).write_text(yaml.safe_dump(changed))
     commit(root)
-    with pytest.raises(PlanError, match=rf"{PROJECT_FILE} differs between HEAD and source.ref 'older'"):
+    with pytest.raises(PlanError, match=rf"{PROJECT_FILE} differs between HEAD and code_transfer.commit 'older'"):
         compile_repo(root)
 
 
@@ -101,7 +103,7 @@ def test_run_defaults_are_read():
     project = parse_project(dict(SHARED, run_defaults={
         "resources": {"gpus": 1, "walltime": "04:00:00"}, "max_parallel": 2, "target": "here"}),
         PROJECT_FILE)
-    assert project.experiment_file_keys == SHARED
+    assert set(project.mission_file_keys) == {"code", "python_packages"}    # current names
     assert project.run_defaults == RunDefaults({"gpus": 1, "walltime": "04:00:00"}, 2, "here")
     assert parse_project(SHARED, PROJECT_FILE).run_defaults == RunDefaults({}, None, None)
 
