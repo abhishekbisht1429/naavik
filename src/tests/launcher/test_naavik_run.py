@@ -4,6 +4,7 @@ file, launched like any batch and followed to its end."""
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -131,7 +132,7 @@ def test_the_first_ctrl_c_cancels_and_keeps_following():
     script = Script("cancelled", live_polls=10, interrupts=[True])
     outcome = script.follower().run()
     assert script.cancels == 1 and outcome.cancelled and outcome.state == "cancelled"
-    assert script.said == ["cancelling the task (Ctrl-C again to stop following)"]
+    assert script.said == ["cancelling the experiment (Ctrl-C again to stop following)"]
 
 
 def test_the_second_ctrl_c_detaches():
@@ -139,13 +140,13 @@ def test_the_second_ctrl_c_detaches():
     script.cancel = lambda: None                           # the task does not stop
     outcome = script.follower().run()
     assert outcome.status == DETACHED and outcome.state is None
-    assert script.said[-1] == "detached; the task was asked to stop"
+    assert script.said[-1] == "detached; the experiment was asked to stop"
 
 
 def test_an_unknown_task_is_an_error():
     follower = Follower(task="nope", rows=lambda: [], log=lambda: None, read=None,
                         cancel=None, write=None, say=None)
-    with pytest.raises(HpcError, match="'nope' is not a task"):
+    with pytest.raises(HpcError, match="'nope' is not an experiment"):
         follower.run()
 
 
@@ -191,7 +192,8 @@ def test_detach_returns_once_launched(tmp_path, here, capsys):
     root = project(tmp_path)
     assert run(root, here, "--yes", "--detach") == 0
     out = capsys.readouterr().out
-    assert "following" not in out and "follow: naavik logs " in out and "--task run/base/000" in out
+    assert "following" not in out
+    assert re.search(r"^follow: naavik logs \S+ run/base/000 --follow$", out, re.M)
 
 
 def test_run_defaults_choose_the_target(tmp_path, here, capsys):
@@ -261,7 +263,7 @@ def test_ctrl_c_cancels_the_running_task_and_waits_for_it(tmp_path, here, capsys
         signal.signal(signal.SIGALRM, previous)
     captured = capsys.readouterr()
     assert started["sent"]
-    assert "cancelling the task (Ctrl-C again to stop following)" in captured.err
+    assert "cancelling the experiment (Ctrl-C again to stop following)" in captured.err
     assert "cancelled run/base/000" in captured.out
     final = captured.out.rstrip().splitlines()[-1]
     assert final.startswith("run/base/000: ") and not final.endswith(": done"), final

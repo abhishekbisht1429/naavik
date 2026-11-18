@@ -394,7 +394,7 @@ def test_a_task_with_two_session_directories_reports_both(tmp_path):
     assert sorted(_by_id(summary)) == [
         "g/e/000/session_20261031_120000", "g/e/000/session_20261031_130000",
     ]
-    assert any("task g/e/000 has 2 session directories" in p for p in summary.problems)
+    assert any("experiment g/e/000 has 2 session directories" in p for p in summary.problems)
 
 
 # -- metrics ---------------------------------------------------------------------

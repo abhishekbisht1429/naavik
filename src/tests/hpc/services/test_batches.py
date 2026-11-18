@@ -122,7 +122,7 @@ def test_older_receipts_use_the_selected_profile_or_say_what_is_missing(tmp_path
                            lambda: ("cluster", "slurm"))
     assert with_profile.now.startswith("finished")
     listing.add_live_state([without], lambda h, s: (LocalExecutor(), None), None)
-    assert "pass --profile" in without.problem
+    assert "pass --host" in without.problem
 
 
 def test_the_table_with_tasks_and_the_json(tmp_path):
@@ -132,12 +132,12 @@ def test_the_table_with_tasks_and_the_json(tmp_path):
     listing.add_live_state([view], lambda h, s: (LocalExecutor(), lambda: {}), None)
     text = listing.format_views([view], live=True, tasks=True, origins=False)
     lines = text.splitlines()
-    assert lines[0].split() == ["batch", "submitted", "profile", "tasks", "submit", "now"]
+    assert lines[0].split() == ["mission", "launched", "host", "experiments", "submit", "now"]
     assert lines[1].split()[0] == "b" and "bigred200" in lines[1] and lines[1].endswith(view.now)
     assert any(line.startswith("    g/e/001") and "failed (exit 1)" in line for line in lines)
     (entry,) = listing.as_json([view], tasks=True)
     assert entry["now"] == view.now and entry["tasks"][0]["name"] == "setup"
-    assert listing.format_views([], live=False, tasks=False, origins=False) == "no batches"
+    assert listing.format_views([], live=False, tasks=False, origins=False) == "no missions"
 
 
 # The CLI, through the fake cluster --------------------------------------------------
@@ -178,7 +178,7 @@ def test_batches_lists_live_states_and_tasks_after_a_submit(fake_cluster, tmp_pa
 
     assert main(["batches", "--profiles", str(profiles)]) == 0
     offline = capsys.readouterr().out.splitlines()
-    assert offline[0].split() == ["batch", "submitted", "profile", "tasks", "submit"]
+    assert offline[0].split() == ["mission", "launched", "host", "experiments", "submit"]
     assert offline[1].split()[0] == batch_dir.name and offline[1].rstrip().endswith("submitted")
 
     assert main(["batches", "--tasks", "--profiles", str(profiles)]) == 0
@@ -197,10 +197,10 @@ def test_batches_remote_finds_batches_submitted_elsewhere(fake_cluster, tmp_path
     for item in receipts.iterdir():
         item.unlink()                                   # as if submitted from another machine
     assert main(["batches", "--profiles", str(profiles)]) == 0
-    assert capsys.readouterr().out.strip() == "no batches"
+    assert capsys.readouterr().out.strip() == "no missions"
     assert main(["batches", "--remote", "--profiles", str(profiles)]) == 0
     lines = capsys.readouterr().out.splitlines()
-    assert lines[0].split()[:4] == ["batch", "submitted", "profile", "from"]
+    assert lines[0].split()[:4] == ["mission", "launched", "host", "from"]
     assert lines[1].split()[0] == batch_dir.name
 
 

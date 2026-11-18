@@ -204,7 +204,7 @@ def compile_sources(
             if addresses.is_missing(value):
                 problems.add(
                     f"data source '{source.name}': {source.address.describe()} "
-                    f"has no value in task {index}"
+                    f"has no value in experiment {index}"
                 )
                 break
             if not isinstance(value, str):

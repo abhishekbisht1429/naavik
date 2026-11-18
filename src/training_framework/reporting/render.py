@@ -49,17 +49,17 @@ def render_markdown(summary: Summary, *, generated: datetime | None = None) -> s
     lines.append(
         "- Hyperparameters are from each run's `config.yaml` (its latest "
         "settings: an extended run's changed partway, see `extended`) and, "
-        "for HPC tasks, `variant.json` (`component:path` columns)."
+        "for mission experiments, `variant.json` (`component:path` columns)."
     )
     if "code" in summary.shared or any(column.name == "code" for column in summary.columns):
         lines.append(
-            "- `code` is the commit each run ran (a batch task's from its `record.json`, "
+            "- `code` is the commit each run ran (a mission experiment's from its `record.json`, "
             "a direct run's from the run registry); `unknown`: not recorded."
         )
     if "config" in summary.shared or any(column.name == "config" for column in summary.columns):
         lines.append(
-            "- `config` is the training config file a batch task was made from (its "
-            "batch's experiments used more than one); `unknown`: not recorded."
+            "- `config` is the training config file a mission experiment was made from "
+            "(its mission used more than one); `unknown`: not recorded."
         )
     lines.append("")
 

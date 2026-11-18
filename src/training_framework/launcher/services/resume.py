@@ -113,9 +113,9 @@ def select_tasks(receipt: dict, rows: list[Row], index: dict[str, tuple[str, int
         problems = []
         for name in names:
             if name not in states:
-                problems.append(f"'{name}' is not a task of this batch")
+                problems.append(f"'{name}' is not an experiment of this mission")
             elif states[name] == "done":
-                problems.append(f"'{name}' finished (done); a finished task is not resumed")
+                problems.append(f"'{name}' finished (done); a finished experiment is not resumed")
         if problems:
             raise ResumeError("cannot resume: " + "; ".join(problems))
         chosen = list(dict.fromkeys(names))
@@ -170,9 +170,9 @@ def choose_checkpoints(candidates: list[Candidate], checkpoints, configs,
                 candidate.no_checkpoint = True
                 session = (config or {}).get("sessions", [{}])[0] if config else {}
                 if not _has_key(session, "checkpointer"):
-                    candidate.reason = "no checkpoint: the task config has no checkpointer"
+                    candidate.reason = "no checkpoint: the experiment's config has no checkpointer"
                 elif _has_key(session, "checkpoints_dir"):
-                    candidate.reason = ("no checkpoint under the task's sessions directory (an "
+                    candidate.reason = ("no checkpoint under the experiment's sessions directory (an "
                                         "explicit checkpoints_dir is not searched; pass "
                                         "--checkpoint NAME=PATH)")
                 else:
@@ -202,7 +202,7 @@ def explicit_checkpoints(filesystem, batch_dir: str, given: list[str]) -> dict[s
         path = path if posixpath.isabs(path) else f"{batch_dir}/{path}"
         path = posixpath.normpath(path)
         if not path.startswith(batch_dir.rstrip("/") + "/"):
-            raise ResumeError(f"--checkpoint {item!r}: {path} is outside the batch directory")
+            raise ResumeError(f"--checkpoint {item!r}: {path} is outside the mission directory")
         if path.endswith(".tmp"):
             raise ResumeError(f"--checkpoint {item!r}: {path} is an incomplete checkpoint")
         manifest = filesystem.read(f"{path}/manifest.json")
@@ -248,8 +248,8 @@ def plan_dialect(plan: dict):
 
     raw = plan.get("scheduler_settings")
     if not raw:
-        raise ResumeError(f"{plan['batch_id']} was submitted before batches recorded what resume "
-                          "needs (its scheduler settings in plan.json); submit a new batch")
+        raise ResumeError(f"{plan['batch_id']} was launched before missions recorded what resume "
+                          "needs (its scheduler settings in plan.json); launch a new mission")
     bundle = get_scheduler(plan["scheduler"])
     problems = Problems()
     settings = bundle.parse_settings(raw, "plan.json scheduler_settings", problems, _Reader,
@@ -272,7 +272,7 @@ def check_cluster(plan: dict, filesystem, executor, *, restart: bool = False) ->
     """The source, the environment, and a remote side that can resume."""
     batch_dir = plan["batch_dir"]
     if not filesystem.exists(f"{batch_dir}/source"):
-        raise ResumeError(f"the batch's source checkout {batch_dir}/source is gone; submit a new batch")
+        raise ResumeError(f"the mission's source checkout {batch_dir}/source is gone; launch a new mission")
     environment = plan["environment"]
     if environment.get("managed"):
         try:
@@ -280,8 +280,8 @@ def check_cluster(plan: dict, filesystem, executor, *, restart: bool = False) ->
         except KeyMismatch as error:
             raise ResumeError(str(error)) from None
         if not ready:
-            raise ResumeError(f"the batch's environment {environment['location']} is no longer "
-                              "ready (deleted or purged); submit a new batch")
+            raise ResumeError(f"the mission's environment {environment['location']} is no longer "
+                              "ready (deleted or purged); launch a new mission")
     group = next(node for node in plan["nodes"] if node["kind"] == "task_set")
     context = context_from_json(group["context"])
     result = executor.run([context.interpreter, "-m", "training_framework.hpc.task",
@@ -294,14 +294,14 @@ def check_cluster(plan: dict, filesystem, executor, *, restart: bool = False) ->
     problems = preflight.compare(facts, plan["preflight"], f"{batch_dir}/source")
     capabilities = facts.get("capabilities") or []
     if "resume" not in capabilities:
-        problems.append("the batch's training_framework.hpc predates resume (its task entry "
-                        "point has no --resume); submit a new batch with a newer framework")
+        problems.append("the mission's training_framework.hpc predates resume (its task entry "
+                        "point has no --resume); launch a new mission with a newer framework")
     elif restart and "restart" not in capabilities:
-        problems.append("the batch's framework predates restarting a task without a "
-                        "checkpoint (--restart); resume only tasks with checkpoints, or submit "
-                        "a new batch with a newer framework")
+        problems.append("the mission's framework predates restarting an experiment without a "
+                        "checkpoint (--restart); resume only experiments with checkpoints, or "
+                        "launch a new mission with a newer framework")
     if problems:
-        raise ResumeError("the cluster cannot resume this batch:\n"
+        raise ResumeError("the host cannot resume this mission:\n"
                           + "\n".join(f"- {problem}" for problem in problems))
 
 
@@ -340,8 +340,8 @@ def build_attempt(plan: dict, receipt: dict, chosen: list[Candidate], dialect,
     for group, tasks in sorted(by_group.items()):
         node_json = next((n for n in plan["nodes"] if n["id"] == f"group-{group}"), None)
         if node_json is None or not node_json.get("resources"):
-            raise ResumeError(f"{batch_id} was submitted before batches recorded what resume "
-                              "needs (group resources in plan.json); submit a new batch")
+            raise ResumeError(f"{batch_id} was launched before missions recorded what resume "
+                              "needs (job resources in plan.json); launch a new mission")
         raw = node_json["resources"]
         walltime = changes.walltime or raw["walltime"]
         resources = Resources(
@@ -451,7 +451,7 @@ def submit_attempt(receipt, plan: ResumePlan, filesystem, submitter, *,
             job_ref = submitter.submit(g.node, g.script_path, [])
             receipt.node_submitted(current, job_ref)
             submitted.append((current, job_ref))
-            progress(f"submitted {current} as job {job_ref} ({len(g.tasks)} task(s))")
+            progress(f"submitted {current} as job {job_ref} ({len(g.tasks)} experiment(s))")
             current = None
     except SubmissionUncertain as error:
         receipt.node_unknown(current)

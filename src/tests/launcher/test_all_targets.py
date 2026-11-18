@@ -54,7 +54,7 @@ def targets(tmp_path, monkeypatch):
 
 @pytest.mark.skipif(shutil.which("ssh") is None, reason="needs ssh")
 def test_every_target_is_listed_and_the_unreachable_is_one_row(targets, capsys):
-    assert naavik(["batches", "--all-targets", "--targets", str(targets)]) == 1
+    assert naavik(["batches", "--all-hosts", "--targets", str(targets)]) == 1
     captured = capsys.readouterr()
     lines = captured.out.splitlines()
     batches = [line.split()[0] for line in lines[1:] if not line.startswith("?")]
@@ -72,30 +72,30 @@ def test_every_target_is_listed_and_the_unreachable_is_one_row(targets, capsys):
 
 @pytest.mark.skipif(shutil.which("ssh") is None, reason="needs ssh")
 def test_json_names_the_unreachable_targets(targets, capsys):
-    naavik(["batches", "--all-targets", "--targets", str(targets), "--json"])
+    naavik(["batches", "--all-hosts", "--targets", str(targets), "--json"])
     entries = json.loads(capsys.readouterr().out)
     assert sorted(entry["target"] for entry in entries if "unreachable" in entry) == ["broken", "far"]
     assert len([entry for entry in entries if "batch_id" in entry]) == 4
 
 
 def test_all_targets_and_one_target_conflict(targets, capsys):
-    assert naavik(["batches", "--all-targets", "--target", "workstation",
+    assert naavik(["batches", "--all-hosts", "--target", "workstation",
                    "--targets", str(targets)]) == 2
-    assert "--all-targets lists every target" in capsys.readouterr().err
+    assert "--all-hosts lists every host" in capsys.readouterr().err
 
 
 def test_reachable_targets_alone_exit_zero(tmp_path, targets, capsys):
     data = yaml.safe_load(targets.read_text())
     del data["targets"]["far"], data["targets"]["broken"]
     targets.write_text(yaml.safe_dump(data))
-    assert naavik(["batches", "--all-targets", "--targets", str(targets)]) == 0
+    assert naavik(["batches", "--all-hosts", "--targets", str(targets)]) == 0
     assert "?" not in capsys.readouterr().out
 
 
 
 @pytest.mark.skipif(shutil.which("ssh") is None, reason="needs ssh")
 def test_a_live_listing_puts_the_reason_where_the_state_goes(targets, capsys):
-    naavik(["batches", "--all-targets", "--live", "--targets", str(targets)])
+    naavik(["batches", "--all-hosts", "--live", "--targets", str(targets)])
     lines = capsys.readouterr().out.splitlines()
     assert lines[0].split()[-1] == "now"
     far = next(line for line in lines if line.startswith("?") and " far " in line)

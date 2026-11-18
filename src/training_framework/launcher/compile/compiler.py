@@ -107,46 +107,46 @@ class CodeFacts:
 class Selection:
     """Part of a mission file: whole jobs, and `JOB/RECIPE`s."""
 
-    groups: tuple[str, ...] = ()
-    experiments: tuple[str, ...] = ()
+    jobs: tuple[str, ...] = ()
+    recipes: tuple[str, ...] = ()
 
     def __bool__(self) -> bool:
-        return bool(self.groups or self.experiments)
+        return bool(self.jobs or self.recipes)
 
     def as_json(self) -> dict:
         return {key: list(value) for key, value in
-                (("groups", self.groups), ("experiments", self.experiments)) if value}
+                (("jobs", self.jobs), ("recipes", self.recipes)) if value}
 
 
 def _select(manifest: MissionFile, selection: Selection | None, problems: Problems) -> MissionFile:
-    """The manifest with only the chosen groups and experiments (task names
-    and numbers stay as the whole manifest makes them)."""
+    """The mission file with only the chosen jobs and recipes (experiment
+    names and numbers stay as the whole mission file makes them)."""
     import dataclasses as _dataclasses
 
     if not selection:
         return manifest
     groups = {group.name: group for group in manifest.groups}
-    for name in selection.groups:
+    for name in selection.jobs:
         if name not in groups:
-            problems.add(f"--group {name}: the mission file has no such job "
+            problems.add(f"--job {name}: the mission file has no such job "
                          f"(it has: {', '.join(groups)})")
-    chosen: dict[str, set[str] | None] = {name: None for name in selection.groups if name in groups}
-    for item in selection.experiments:
-        group, slash, experiment = item.partition("/")
-        if not slash or not experiment:
-            problems.add(f"--experiment {item}: name it GROUP/EXPERIMENT")
+    chosen: dict[str, set[str] | None] = {name: None for name in selection.jobs if name in groups}
+    for item in selection.recipes:
+        group, slash, recipe = item.partition("/")
+        if not slash or not recipe:
+            problems.add(f"--recipe {item}: name it JOB/RECIPE")
             continue
         if group not in groups:
-            problems.add(f"--experiment {item}: the mission file has no job '{group}' "
+            problems.add(f"--recipe {item}: the mission file has no job '{group}' "
                          f"(it has: {', '.join(groups)})")
             continue
         names = [e.name for e in groups[group].experiments]
-        if experiment not in names:
-            problems.add(f"--experiment {item}: group '{group}' has no experiment "
-                         f"'{experiment}' (it has: {', '.join(names)})")
+        if recipe not in names:
+            problems.add(f"--recipe {item}: job '{group}' has no recipe "
+                         f"'{recipe}' (it has: {', '.join(names)})")
             continue
-        if chosen.get(group, set()) is not None:            # not already the whole group
-            chosen.setdefault(group, set()).add(experiment)
+        if chosen.get(group, set()) is not None:            # not already the whole job
+            chosen.setdefault(group, set()).add(recipe)
     kept = []
     for group in manifest.groups:
         if group.name not in chosen:
@@ -368,7 +368,7 @@ def compile_plan(
     suggestions = data_module.suggest_sources(sessions, sources, facts)
     if suggestions:
         notes.append(
-            f"{len(suggestions)} absolute local path(s) in the task configs are "
+            f"{len(suggestions)} absolute local path(s) in the experiment configs are "
             "not data sources; `validate --suggest-data` prints entries for them"
         )
     problems.raise_if_any()
@@ -382,7 +382,7 @@ def compile_plan(
         identity_hash = hash_value(session)
         if identity_hash in seen_hashes:
             problems.add(
-                f"tasks {seen_hashes[identity_hash]} and {name} resolve to the same config"
+                f"experiments {seen_hashes[identity_hash]} and {name} resolve to the same config"
             )
         seen_hashes[identity_hash] = name
         session = _with_sessions_dir(session, f"{batch_dir}/tasks/{name}/sessions")
@@ -777,8 +777,8 @@ def _expand(manifest, session_of, dialect, problems):
                 array_index += 1
         if array_index > dialect.max_task_set_size:
             problems.add(
-                f"group '{group.name}' has {array_index} tasks, more than the "
-                f"maximum task-set size {dialect.max_task_set_size}; split it"
+                f"job '{group.name}' has {array_index} experiments, more than the "
+                f"most one job may hold ({dialect.max_task_set_size}); split it"
             )
     return tasks
 

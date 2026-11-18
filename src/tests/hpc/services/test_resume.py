@@ -85,7 +85,7 @@ def test_finished_and_unknown_tasks_cannot_be_named(tmp_path):
     with pytest.raises(HpcError) as error:
         resuming.select_tasks(batch, rows, resuming.task_index(files.tables), ["g/e/000", "nope"])
     assert "'g/e/000' finished (done)" in str(error.value)
-    assert "'nope' is not a task of this batch" in str(error.value)
+    assert "'nope' is not an experiment of this mission" in str(error.value)
 
 
 def test_jobs_still_queued_are_found_across_attempts():
@@ -172,7 +172,7 @@ def test_explicit_checkpoints_are_checked(tmp_path):
     chosen = resuming.explicit_checkpoints(FS, root, ["g/e/002=tasks/g/e/002/sessions/session_1/checkpoints/a"])
     assert chosen["g/e/002"] == resuming.FoundCheckpoint(
         f"{root}/tasks/g/e/002/sessions/session_1/checkpoints/a", 100, None)
-    for bad, message in (("x=/etc", "outside the batch directory"),
+    for bad, message in (("x=/etc", "outside the mission directory"),
                          ("x=tasks/g/e/002/sessions/session_1/checkpoints/c.tmp", "incomplete"),
                          ("x=tasks/g/e/002/sessions/session_1/checkpoints/d", "no manifest.json"),
                          ("no-equals", "must be NAME=PATH")):
@@ -220,7 +220,7 @@ def test_an_attempt_renders_only_its_tasks_with_the_new_resources():
 
 
 def test_rendering_refuses_old_plans_and_a_walltime_shorter_than_the_signal_lead():
-    with pytest.raises(HpcError, match="submitted before batches recorded what resume needs"):
+    with pytest.raises(HpcError, match="launched before missions recorded what resume needs"):
         resuming.build_attempt(plan_json("/b", with_resources=False), {}, chosen_tasks(), DIALECT,
                                resuming.ResourceChanges())
     with pytest.raises(HpcError, match="not shorter than the walltime"):
@@ -454,7 +454,7 @@ def test_resume_submits_an_attempt_and_status_follows_it(fake_cluster, tmp_path,
     assert main(["resume", batch_dir.name, "--profiles", str(profiles), "--walltime", "02:00:00",
                  "--dry-run"]) == 0
     dry = capsys.readouterr().out
-    assert "as attempt 2: 2 task(s)" in dry and "#SBATCH --array=0,1" in dry
+    assert "as attempt 2: 2 experiment(s)" in dry and "#SBATCH --array=0,1" in dry
     assert len(submitted_jobs(fake_cluster)) == before        # a dry run submits nothing
 
     assert main(["resume", batch_dir.name, "--profiles", str(profiles), "--walltime", "02:00:00",

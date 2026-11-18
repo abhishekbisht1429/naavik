@@ -93,7 +93,7 @@ def detail(run: Run, runs: list[Run], root: Path) -> str:
     parent = parent_of(run, runs)
     lines.append(f"launch   {launch.get('operation')}: {' '.join(launch.get('command') or [])}")
     if launch.get("batch_id"):
-        lines.append(f"batch    {launch['batch_id']} | task {launch.get('task')} | attempt "
+        lines.append(f"mission  {launch['batch_id']} | experiment {launch.get('task')} | attempt "
                      f"{launch.get('attempt')} | {launch.get('scheduler')}"
                      + (" | restarted" if launch.get("restarted") else ""))
     if launch.get("note"):

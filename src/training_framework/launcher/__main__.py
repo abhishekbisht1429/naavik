@@ -129,35 +129,44 @@ class WorkstationFacts:
 
 
 #: Command names kept as aliases, and the command they run.
-COMMAND_ALIASES = {"submit": "launch"}
+#: Earlier command names -> current ones (both work).
+COMMAND_ALIASES = {"submit": "launch", "batches": "missions",
+                   "probe-python": "show-site-interpreter"}
 
 
 def _parser(prog: str = "python -m training_framework.hpc") -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog=prog)
+    parser = argparse.ArgumentParser(prog=prog, allow_abbrev=False)
     commands = parser.add_subparsers(dest="command", required=True)
 
-    def profile_options(command):
-        command.add_argument("--target", "--profile", dest="profile",
-                             help="target name (default: the target file's 'default'); "
-                                  "--profile is its earlier name")
-        command.add_argument("--targets", "--profiles", dest="profiles", type=Path,
-                             help="target file (default: $XDG_CONFIG_HOME/training-framework/"
-                                  "targets.yaml); --profiles is its earlier name")
+    def add(name, **options):
+        # Flags are spelled out: an abbreviation (`--target` for `--targets`)
+        # could silently mean another flag.
+        aliases = [old for old, new in COMMAND_ALIASES.items() if new == name]
+        return commands.add_parser(name, aliases=aliases, allow_abbrev=False, **options)
+
+    def host_options(command):
+        command.add_argument("--host", "--target", "--profile", dest="profile",
+                             help="the host (default: the hosts file's default_host); "
+                                  "--target and --profile are earlier names")
+        command.add_argument("--hosts-file", "--targets", "--profiles", dest="profiles", type=Path,
+                             help="the hosts file (default: $XDG_CONFIG_HOME/training-framework/"
+                                  "hosts.yaml); --targets and --profiles are earlier names")
+
+    def receipts(command):
+        command.add_argument("--receipts", type=Path, help="receipt directory (default: $XDG_STATE_HOME/training-framework/submissions)")
 
     for name, help_text in (
-            ("validate", "compile the batch and report every offline problem"),
-            ("render", "write a preview of the batch directory"),
-            ("launch", "stage the batch on its target and start its jobs"),
+            ("validate", "compile the mission file and report every offline problem"),
+            ("render", "write a preview of the mission directory"),
+            ("launch", "start a mission: stage it on its host and start its jobs"),
     ):
-        aliases = [old for old, new in COMMAND_ALIASES.items() if new == name]
-        command = commands.add_parser(name, help=help_text, aliases=aliases)
-        command.add_argument("batch", help="path to the committed mission file")
-        profile_options(command)
-        command.add_argument("--group", action="append", default=[], metavar="GROUP",
-                             help="only this group's experiments (repeatable)")
-        command.add_argument("--experiment", action="append", default=[],
-                             metavar="GROUP/EXPERIMENT",
-                             help="only this experiment (repeatable)")
+        command = add(name, help=help_text)
+        command.add_argument("batch", metavar="MISSION_FILE", help="path to the committed mission file")
+        host_options(command)
+        command.add_argument("--job", action="append", default=[], metavar="JOB",
+                             help="only this job's experiments (repeatable)")
+        command.add_argument("--recipe", action="append", default=[], metavar="JOB/RECIPE",
+                             help="only this recipe's experiments (repeatable)")
         if name == "validate":
             command.add_argument("--suggest-data", action="store_true",
                                  help="print data_sources entries for uncovered local paths")
@@ -165,15 +174,15 @@ def _parser(prog: str = "python -m training_framework.hpc") -> argparse.Argument
             command.add_argument("--output", type=Path, required=True)
         else:
             command.add_argument("--fresh-env", action="store_true",
-                                 help="build a managed environment for this batch only")
+                                 help="build a managed environment for this mission only")
             command.add_argument("--yes", action="store_true",
-                                 help="do not ask (also accepts uploads above upload_limit)")
-    run = commands.add_parser(
-        "run", help="run one config as a one-task batch, and follow it",
-        description="Run CONFIG as a one-task batch built from the project file "
+                                 help="do not ask (also accepts uploads above confirm_uploads_over)")
+    run = add(
+        "run", help="run one config as a mission of one experiment, and follow it",
+        description="Run CONFIG as a mission of one experiment, built from the project file "
                     "(naavik-project.yaml at the repository root): checked, staged, and "
-                    "recorded like any batch. Follows the task's log until it ends and exits "
-                    "with its status. Ctrl-C cancels the task; a second Ctrl-C stops following.")
+                    "recorded like any mission. Follows the experiment's log until it ends and "
+                    "exits with its status. Ctrl-C cancels it; a second Ctrl-C stops following.")
     run.add_argument("config", help="the training config (a file in the repository)")
     run.add_argument("--override", action="append", default=[], metavar="PATH=VALUE",
                      help="set PATH (in the session) or component:PATH (inside that "
@@ -184,113 +193,114 @@ def _parser(prog: str = "python -m training_framework.hpc") -> argparse.Argument
     run.add_argument("--detach", action="store_true", help="return once launched; do not follow")
     run.add_argument("--fresh-env", action="store_true",
                      help="build a managed environment for this run only")
-    run.add_argument("--yes", action="store_true", help="do not ask, even above upload_limit")
-    profile_options(run)
-    status = commands.add_parser("status", help="show the state of every task of a submitted batch")
-    status.add_argument("batch_id", help="a batch id, or the path to its receipt")
-    status.add_argument("--receipts", type=Path, help="receipt directory "
-                        "(default: $XDG_STATE_HOME/training-framework/submissions)")
-    profile_options(status)
-    listing = commands.add_parser(
-        "batches", help="list every batch you submitted, past and present",
-        description="List every batch submitted from this machine (from its receipts). "
-                    "--live adds what each batch is doing now; --tasks shows every task.")
+    run.add_argument("--yes", action="store_true", help="do not ask, even above confirm_uploads_over")
+    host_options(run)
+    status = add("status", help="show the state of every experiment of a mission")
+    status.add_argument("batch_id", metavar="MISSION", help="a mission id, or the path to its receipt")
+    receipts(status)
+    host_options(status)
+    listing = add(
+        "missions", help="list every mission you launched, past and present",
+        description="List every mission launched from this machine (from its receipts). "
+                    "--live adds what each mission is doing now; --experiments shows every "
+                    "experiment.")
     listing.add_argument("--live", action="store_true",
-                         help="connect to the cluster(s) and show what each batch is doing now")
-    listing.add_argument("--tasks", action="store_true",
-                         help="show every task of each batch (implies --live)")
+                         help="connect to the host(s) and show what each mission is doing now")
+    listing.add_argument("--experiments", "--tasks", dest="tasks", action="store_true",
+                         help="show every experiment of each mission (implies --live); "
+                              "--tasks is its earlier name")
     listing.add_argument("--remote", action="store_true",
-                         help="also list batches submitted from other machines (needs a profile)")
-    listing.add_argument("--all-targets", action="store_true",
-                         help="list the batches on every target of the target file (one "
-                              "connection each; a target that cannot be reached is one ? row)")
+                         help="also list missions launched from other machines (needs a host)")
+    listing.add_argument("--all-hosts", action="store_true",
+                         help="list the missions on every host of the hosts file (one "
+                              "connection each; a host that cannot be reached is one ? row)")
     listing.add_argument("--active", action="store_true",
-                         help="only batches with queued or running tasks (implies --live)")
-    listing.add_argument("--since", metavar="AGE", help="only batches submitted within AGE: 30m, 12h, 7d, 2w")
-    listing.add_argument("--name", help="only batches whose id contains NAME")
-    listing.add_argument("--limit", type=int, help="only the newest LIMIT batches")
+                         help="only missions with queued or running experiments (implies --live)")
+    listing.add_argument("--since", metavar="AGE", help="only missions launched within AGE: 30m, 12h, 7d, 2w")
+    listing.add_argument("--name", help="only missions whose id contains NAME")
+    listing.add_argument("--limit", type=int, help="only the newest LIMIT missions")
     listing.add_argument("--json", action="store_true", help="print JSON instead of a table")
-    listing.add_argument("--receipts", type=Path, help="receipt directory "
-                         "(default: $XDG_STATE_HOME/training-framework/submissions)")
-    profile_options(listing)
-    resume = commands.add_parser(
-        "resume", help="continue a batch's unfinished tasks from their checkpoints",
-        description="Resubmit a batch's interrupted tasks (and those that ended without a "
-                    "record) from their latest checkpoints, as a new attempt in the same batch "
-                    "directory, with the same environment and task wrapper.")
-    resume.add_argument("batch_id", help="a batch id, or the path to its receipt")
-    resume.add_argument("--task", action="append", metavar="NAME",
-                        help="resume this task (repeatable); default: every interrupted task "
-                             "and every task that ended without a record")
+    receipts(listing)
+    host_options(listing)
+    resume = add(
+        "resume", help="continue a mission's unfinished experiments from their checkpoints",
+        description="Resubmit a mission's interrupted experiments (and those that ended "
+                    "without a record) from their latest checkpoints, as a new attempt in the "
+                    "same mission directory, with the same environment.")
+    resume.add_argument("batch_id", metavar="MISSION", help="a mission id, or the path to its receipt")
+    resume.add_argument("--experiment", "--task", dest="task", action="append", metavar="NAME",
+                        help="resume this experiment (repeatable; --task is its earlier name); "
+                             "default: every interrupted experiment and every one that ended "
+                             "without a record")
     resume.add_argument("--include-failed", action="store_true",
-                        help="also resume failed tasks (fix the cause first)")
+                        help="also resume failed experiments (fix the cause first)")
     resume.add_argument("--restart", action="store_true",
-                        help="run tasks that have no checkpoint again from their config "
+                        help="run experiments that have no checkpoint again from their config "
                              "(default: skip them)")
     resume.add_argument("--checkpoint", action="append", default=[], metavar="NAME=PATH",
-                        help="resume task NAME from this checkpoint instead of its latest")
-    resume.add_argument("--walltime", help="walltime of the resumed tasks ([D-]HH:MM:SS)")
-    resume.add_argument("--cpus", type=int, help="CPUs per resumed task")
-    resume.add_argument("--memory", help="memory per resumed task (e.g. 64G)")
-    resume.add_argument("--max-parallel", type=int, help="most resumed tasks running at once")
+                        help="resume experiment NAME from this checkpoint instead of its latest")
+    resume.add_argument("--walltime", help="walltime of the resumed experiments ([D-]HH:MM:SS)")
+    resume.add_argument("--cpus", type=int, help="CPUs per resumed experiment")
+    resume.add_argument("--memory", help="memory per resumed experiment (e.g. 64G)")
+    resume.add_argument("--max-parallel", type=int, help="most resumed experiments running at once")
     resume.add_argument("--yes", action="store_true", help="do not ask")
     resume.add_argument("--dry-run", action="store_true",
                         help="show what would be resumed and the job scripts; submit nothing")
-    resume.add_argument("--receipts", type=Path, help="receipt directory "
-                        "(default: $XDG_STATE_HOME/training-framework/submissions)")
-    profile_options(resume)
-    fetch = commands.add_parser(
-        "fetch", help="download a batch's results (records, logs, run files, checkpoints)",
-        description="Download the results of a batch's tasks to this machine: records, "
-                    "configs, run directories (TensorBoard events, outputs), job logs, and "
-                    "the latest complete checkpoint of each task. Running it again copies "
-                    "only what is new.")
-    fetch.add_argument("batch_id", help="a batch id, or the path to its receipt")
+    receipts(resume)
+    host_options(resume)
+    fetch = add(
+        "fetch", help="download a mission's results (records, logs, run files, checkpoints)",
+        description="Download the results of a mission's experiments to this machine: "
+                    "records, configs, run directories (TensorBoard events, outputs), job "
+                    "logs, and the latest complete checkpoint of each experiment. Running it "
+                    "again copies only what is new.")
+    fetch.add_argument("batch_id", metavar="MISSION", help="a mission id, or the path to its receipt")
     fetch.add_argument("--dest", type=Path, default=None,
-                       help="where to put it: <dest>/<batch-id>/ (default: ./hpc-results; "
-                            "a batch that ran on this machine is copied only with --dest)")
-    fetch.add_argument("--task", action="append", metavar="NAME", help="fetch this task (repeatable)")
+                       help="where to put it: <dest>/<mission-id>/ (default: ./hpc-results; "
+                            "a mission that ran on this machine is copied only with --dest)")
+    fetch.add_argument("--experiment", "--task", dest="task", action="append", metavar="NAME",
+                       help="fetch this experiment (repeatable; --task is its earlier name)")
     fetch.add_argument("--state", choices=("done", "finished", "all"), default="done",
                        help="done: finished successfully (default); finished: any final state; "
-                            "all: also tasks still queued or running")
+                            "all: also experiments still queued or running")
     fetch.add_argument("--checkpoints", choices=("latest", "all", "none"), default="latest",
-                       help="which checkpoints of each task (default: latest complete one)")
+                       help="which checkpoints of each experiment (default: latest complete one)")
     fetch.add_argument("--no-logs", action="store_true", help="skip the job logs")
     fetch.add_argument("--include", action="append", default=[], metavar="GLOB",
-                       help="also fetch files matching GLOB, relative to the batch directory")
+                       help="also fetch files matching GLOB, relative to the mission directory")
     fetch.add_argument("--yes", action="store_true", help="do not ask, even for large downloads")
     fetch.add_argument("--dry-run", action="store_true", help="show what would be fetched")
-    fetch.add_argument("--receipts", type=Path, help="receipt directory "
-                       "(default: $XDG_STATE_HOME/training-framework/submissions)")
-    profile_options(fetch)
-    cancel = commands.add_parser(
-        "cancel", help="stop a batch's queued and running jobs, or some of its tasks",
-        description="Cancel every job of a batch that is still queued or running, or (with "
-                    "--task) only those tasks' jobs. Running tasks get the scheduler's stop "
-                    "signal first; the receipt records what was cancelled.")
-    cancel.add_argument("batch_id", help="a batch id, or the path to its receipt")
-    cancel.add_argument("--task", action="append", default=[], metavar="NAME",
-                        help="cancel only this task (repeatable)")
+    receipts(fetch)
+    host_options(fetch)
+    cancel = add(
+        "cancel", help="stop a mission's queued and running jobs, or some of its experiments",
+        description="Cancel every job of a mission that is still queued or running, or (with "
+                    "--experiment) only those experiments. Running experiments get the "
+                    "scheduler's stop signal first; the receipt records what was cancelled.")
+    cancel.add_argument("batch_id", metavar="MISSION", help="a mission id, or the path to its receipt")
+    cancel.add_argument("--experiment", "--task", dest="task", action="append", default=[],
+                        metavar="NAME", help="cancel only this experiment (repeatable)")
     cancel.add_argument("--yes", action="store_true", help="do not ask")
-    cancel.add_argument("--receipts", type=Path, help="receipt directory "
-                        "(default: $XDG_STATE_HOME/training-framework/submissions)")
-    profile_options(cancel)
-    logs = commands.add_parser(
-        "logs", help="show (or follow) the log of a task or step of a batch",
-        description="Print the job log of a task (<group>/<experiment>/<NNN>) or step (setup, "
-                    "prepare-...) of a batch, from its target; its latest attempt unless "
-                    "--attempt is given.")
-    logs.add_argument("batch_id", help="a batch id, or the path to its receipt")
-    logs.add_argument("task", help="a task name, or a step (setup, prepare-...)")
+    receipts(cancel)
+    host_options(cancel)
+    logs = add(
+        "logs", help="show (or follow) the log of an experiment or step of a mission",
+        description="Print the job log of an experiment (<job>/<recipe>/<NNN>) or step "
+                    "(setup, prepare-...) of a mission, from its host; its latest attempt "
+                    "unless --attempt is given.")
+    logs.add_argument("batch_id", metavar="MISSION", help="a mission id, or the path to its receipt")
+    logs.add_argument("task", metavar="EXPERIMENT",
+                      help="an experiment name, or a step (setup, prepare-...)")
     logs.add_argument("--attempt", type=int, help="this attempt's log (default: the latest)")
     logs.add_argument("--follow", "-f", action="store_true",
-                      help="keep printing what is appended (Ctrl-C stops following, not the task)")
-    logs.add_argument("--receipts", type=Path, help="receipt directory "
-                      "(default: $XDG_STATE_HOME/training-framework/submissions)")
-    profile_options(logs)
-    probe = commands.add_parser("probe-python",
-                                help="print the site interpreter's identity for the profile")
-    profile_options(probe)
+                      help="keep printing what is appended (Ctrl-C stops following, not the "
+                           "experiment)")
+    receipts(logs)
+    host_options(logs)
+    probe = add("show-site-interpreter",
+                help="print the site interpreter's identity on the host, for "
+                     "python_environment.site_interpreter")
+    host_options(probe)
     return parser
 
 
@@ -323,7 +333,7 @@ def _compile(args, profile, fresh_env=False, fetch_here=False):
         clock=datetime.now(timezone.utc),
         fresh_env=fresh_env,
         code_facts=_code_facts(repository, profile, fetch_here=fetch_here),
-        selection=Selection(tuple(args.group), tuple(args.experiment)),
+        selection=Selection(tuple(args.job), tuple(args.recipe)),
     )
     _warn_earlier_names(compiled, repository)
     _print_code_notes(compiled)
@@ -338,11 +348,11 @@ def _code_facts(repository, profile, fetch_here=False):
     from training_framework.launcher.services.evaluation import ENV_SWITCH, enabled, evaluate_batch
 
     if not enabled():
-        print(f"warning: the task configs were not checked ({ENV_SWITCH}=0)", file=sys.stderr)
+        print(f"warning: the experiment configs were not checked ({ENV_SWITCH}=0)", file=sys.stderr)
         return None
 
     def port(sha, manifest, managed, tasks):
-        _progress(f"checking {len(tasks)} task config(s) with the code of {sha[:12]}")
+        _progress(f"checking {len(tasks)} experiment config(s) with the code of {sha[:12]}")
         facts = evaluate_batch(sha, manifest, managed, tasks, repository, profile)
         if fetch_here and not facts.problems and profile.data is not None:
             _fetch_uploads_here(sha, manifest, tasks, facts, repository, profile)
@@ -441,7 +451,7 @@ def _review(assume_yes: bool, only_over_limit: bool = False):
     """Print the batch's summary; ask before submitting (`only_over_limit`:
     only when the uploads exceed the profile's upload_limit)."""
     def review(plan, summary) -> bool:
-        print(f"batch {plan.batch_id}: {summary.tasks} task(s) in {summary.groups} group(s)")
+        print(f"mission {plan.batch_id}: {summary.tasks} experiment(s) in {summary.groups} job(s)")
         print(f"environment: {'ready' if summary.environment_ready else 'will be built'}")
         for source, local, size in summary.uploads:
             print(f"upload {source}: {local} ({_size(size)})")
@@ -589,8 +599,8 @@ def _receipt_target(args, receipt: dict):
             target, scheduler = named, profile.scheduler
         elif (named, profile.scheduler) != (target, scheduler):
             raise HpcError(
-                f"{receipt['batch_id']} was submitted to {target} ({scheduler}), but profile "
-                f"'{profile.name}' is {named} ({profile.scheduler}); drop --profile "
+                f"{receipt['batch_id']} was launched on {target} ({scheduler}), but host "
+                f"'{profile.name}' is {named} ({profile.scheduler}); drop --host "
                 "to use the receipt's cluster")
     return target, scheduler, profile
 
@@ -614,7 +624,7 @@ def _status(args) -> int:
     refs = [node["job_ref"] for node in receipt["nodes"].values() if node.get("job_ref")]
     live = bundle.job_states(executor)(refs) if bundle.job_states and refs else {}
     files = fetch_batches(executor, [receipt["batch_dir"]]).get(receipt["batch_dir"])
-    print(f"batch {receipt['batch_id']}: {receipt['status']} | {host}:{receipt['batch_dir']}")
+    print(f"mission {receipt['batch_id']}: {receipt['status']} | {host}:{receipt['batch_dir']}")
     if receipt.get("description"):
         print(f"note: {receipt['description']}")
     if problem := missing_files(receipt, files):
@@ -640,14 +650,14 @@ def _batches(args) -> int:
     # needed: for --remote, when one is named explicitly, or (lazily) for a
     # live lookup of a receipt written before receipts recorded the cluster.
     # A plain listing never reads it.
-    if args.all_targets and (args.profile or args.remote):
-        raise HpcError("--all-targets lists every target; drop --target and --remote")
+    if args.all_hosts and (args.profile or args.remote):
+        raise HpcError("--all-hosts lists every host; drop --host and --remote")
     explicit = bool(args.profile or args.profiles)
-    profile = _profile(args) if args.remote or (explicit and not args.all_targets) else None
+    profile = _profile(args) if args.remote or (explicit and not args.all_hosts) else None
     receipts_dir = str(args.receipts or default_receipts_dir())
     views = listing.load_receipts(receipts_dir)
     unreachable_targets = []
-    if args.all_targets:
+    if args.all_hosts:
         unreachable_targets = _list_every_target(args, views)
         views = listing.sort_views(views)
 
@@ -659,7 +669,7 @@ def _batches(args) -> int:
 
     if args.remote:
         if profile is None:
-            raise HpcError("--remote needs a profile (it lists the profile's roots.batches)")
+            raise HpcError("--remote needs a host (it lists the host's directories.missions)")
         known = {view.batch_id for view in views}
         _require_tools(*target_of_profile(profile).tools(transfer=False))
         executor = ports_for(target_of_profile(profile)).executor
@@ -694,11 +704,11 @@ def _batches(args) -> int:
                             for target in unreachable_targets], indent=2))
     else:
         print(listing.format_views(views, live=live, tasks=args.tasks,
-                                   origins=args.remote or args.all_targets,
+                                   origins=args.remote or args.all_hosts,
                                    unreachable=unreachable_targets))
-        if not views and not args.all_targets:
-            print(f"note: no batches were submitted from this machine (receipts in "
-                  f"{receipts_dir}){'' if args.remote else '; `batches --remote` also lists the batches on the cluster'}",
+        if not views and not args.all_hosts:
+            print(f"note: no missions were launched from this machine (receipts in "
+                  f"{receipts_dir}){'' if args.remote else '; `missions --remote` also lists the missions on the host'}",
                   file=sys.stderr)
     unreachable = sorted({view.unreachable for view in views if view.unreachable})
     for host in unreachable:
@@ -720,11 +730,11 @@ def _list_every_target(args, views) -> list:
 
     path = args.profiles or default_profiles_path()
     if not path.exists():
-        raise HpcError(f"no target file: {path} does not exist")
+        raise HpcError(f"no hosts file: {path} does not exist")
     raw = yaml.safe_load(path.read_text())
     names = target_names(raw)
     if not names:
-        raise HpcError(f"{path} lists no targets")
+        raise HpcError(f"{path} lists no hosts")
     known = {view.batch_id for view in views}
     missing = []
     for name in names:
@@ -757,7 +767,7 @@ def _resume(args) -> int:
     path, data = _load_receipt(args)
     if not data.get("staged") or data.get("status") != "submitted":
         raise HpcError(f"{data['batch_id']} was not submitted ({data.get('status')}); "
-                       "only a submitted batch can be resumed")
+                       "only a launched mission can be resumed")
     for attempt in data.get("attempts", []):
         if attempt.get("status") == "needs reconciliation":
             raise HpcError(f"attempt {attempt['attempt']} needs reconciliation: "
@@ -784,12 +794,12 @@ def _resume(args) -> int:
     candidates = resuming.select_tasks(data, rows, resuming.task_index(files.tables),
                                        args.task, args.include_failed)
     if not candidates:
-        raise HpcError(f"{data['batch_id']} has no interrupted tasks and none that ended without "
-                       "a record; name tasks with --task (or --include-failed)")
+        raise HpcError(f"{data['batch_id']} has no interrupted experiments and none that ended "
+                       "without a record; name them with --experiment (or --include-failed)")
     explicit = resuming.explicit_checkpoints(filesystem, batch_dir, args.checkpoint)
     if unknown := sorted(set(explicit) - {c.task for c in candidates}):
         raise HpcError(f"--checkpoint names {', '.join(unknown)}, which this command does not "
-                       "resume; name it with --task too, or fix the task name")
+                       "resume; name it with --experiment too, or fix the experiment name")
     checkpoints, configs = resuming.find_checkpoints(executor, batch_dir,
                                                      [c.task for c in candidates])
     resuming.choose_checkpoints(candidates, checkpoints, configs, explicit)
@@ -800,16 +810,16 @@ def _resume(args) -> int:
         print(f"skip {candidate.task} ({candidate.state}): {candidate.reason}")
     if not chosen:
         hint = ("" if args.restart or not any(c.no_checkpoint for c in skipped) else
-                "; --restart runs tasks without a checkpoint again from their config")
+                "; --restart runs experiments without a checkpoint again from their config")
         raise HpcError(f"nothing can be resumed (see above){hint}")
     plan = resuming.read_plan(filesystem, batch_dir)
     dialect = resuming.plan_dialect(plan)
     attempt = resuming.build_attempt(plan, data, chosen, dialect, changes)
     attempt.skipped = skipped
-    _progress("checking the batch's source, environment, and task entry point on the cluster")
+    _progress("checking the mission's source, environment, and task entry point on the host")
     resuming.check_cluster(plan, filesystem, executor, restart=bool(restarted))
 
-    print(f"resume {data['batch_id']} as attempt {attempt.attempt}: {len(chosen)} task(s)")
+    print(f"resume {data['batch_id']} as attempt {attempt.attempt}: {len(chosen)} experiment(s)")
     for candidate in chosen:
         if candidate.restarts:
             print(f"  {candidate.task:<30} {candidate.state:<24} restart from its config "
@@ -892,7 +902,7 @@ def _run(args) -> int:
                               review=_review(args.yes, only_over_limit=True))
     if status != 0 or receipt is None or args.detach:
         if status == 0 and receipt is not None:
-            print(f"follow: naavik logs {receipt.data['batch_id']} --task "
+            print(f"follow: naavik logs {receipt.data['batch_id']} "
                   f"{compiled.plan.tasks[0].name} --follow")
         return status
     return _follow(receipt.path, receipt.data, compiled.plan.tasks[0].name)
@@ -945,7 +955,7 @@ def _follow(receipt_path, receipt: dict, task: str) -> int:
     outcome = Follower(task=task, rows=rows, log=log, read=read, cancel=cancel, write=write,
                        say=lambda message: print(message, file=sys.stderr, flush=True)).run()
     if outcome.state is None:
-        print(f"follow again: naavik logs {receipt['batch_id']} --task {task} --follow")
+        print(f"follow again: naavik logs {receipt['batch_id']} {task} --follow")
     else:
         print(f"{task}: {outcome.state}")
     return outcome.status
@@ -959,7 +969,7 @@ def _batch_files(args, receipt):
     from training_framework.launcher.services.status import fetch_batches, missing_files
 
     if not receipt.get("staged"):
-        raise HpcError(f"{receipt['batch_id']} never reached its target ({receipt.get('status')})")
+        raise HpcError(f"{receipt['batch_id']} never reached its host ({receipt.get('status')})")
     host, scheduler, _ = _receipt_target(args, receipt)
     _require_tools(*host.tools(transfer=False))
     ports = ports_for(host)
@@ -1055,14 +1065,14 @@ def _fetch(args) -> int:
     for name, reason in skipped:
         print(f"skip {name}: {reason}")
     if not tasks:
-        raise HpcError("no task to fetch (see above)")
+        raise HpcError("no experiment to fetch (see above)")
     listing = fetching.plan_files(executor, batch_dir, tasks, args.checkpoints, args.include)
     if not args.no_logs:
         fetching.add_logs(executor, batch_dir, receipt, tasks, listing)
     local_root = (args.dest or Path("hpc-results")) / receipt["batch_id"]
     present, present_bytes = fetching.already_here(listing, str(local_root))
     total = sum(listing.values())
-    print(f"fetch {receipt['batch_id']}: {len(tasks)} task(s) from {host} into {local_root}")
+    print(f"fetch {receipt['batch_id']}: {len(tasks)} experiment(s) from {host} into {local_root}")
     for task in tasks:
         checkpoint = (", ".join(f"iteration {it}" for _, it in task.checkpoints)
                       if task.checkpoints else "no checkpoint")
@@ -1127,7 +1137,7 @@ def main(argv: list[str] | None = None, prog: str | None = None) -> int:
     # Dispatch on one name whichever was typed (`submit` is `launch`).
     args.command = COMMAND_ALIASES.get(args.command, args.command)
     try:
-        if args.command == "batches":
+        if args.command == "missions":
             return _batches(args)
         if args.command == "status":
             return _status(args)
@@ -1142,11 +1152,11 @@ def main(argv: list[str] | None = None, prog: str | None = None) -> int:
         if args.command == "run":
             return _run(args)
         profile = _profile(args)
-        if args.command == "probe-python":
+        if args.command == "show-site-interpreter":
             from training_framework.launcher.ports.targets import target_of_profile
 
             _require_tools(*target_of_profile(profile).tools(transfer=False))
-        if args.command == "probe-python":
+        if args.command == "show-site-interpreter":
             return _probe_python(profile)
         if args.command == "launch":
             return _submit(args, profile)
@@ -1160,8 +1170,8 @@ def main(argv: list[str] | None = None, prog: str | None = None) -> int:
     for note in plan.notes:
         print(f"note: {note}")
     if args.command == "validate":
-        print(f"ok: {len(plan.tasks)} task(s) in {sum(n.kind == 'task_set' for n in plan.nodes)} "
-              f"group(s); commit {plan.sha[:12]}; environment "
+        print(f"ok: {len(plan.tasks)} experiment(s) in {sum(n.kind == 'task_set' for n in plan.nodes)} "
+              f"job(s); commit {plan.sha[:12]}; environment "
               f"{plan.environment['key'] or plan.environment['location']}")
         if args.suggest_data and compiled.suggestions:
             print(yaml.safe_dump({"data_sources": compiled.suggestions}, sort_keys=False))

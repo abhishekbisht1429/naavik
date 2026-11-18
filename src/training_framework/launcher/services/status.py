@@ -207,7 +207,7 @@ def task_rows(receipt: dict, files: BatchFiles | None, live: dict) -> list[Row]:
         group = node_id[len("group-"):]
         table = files.tables.get(group)
         if table is None:
-            rows.append(Row(node_id, "", node["status"], "no task table"))
+            rows.append(Row(node_id, "", node["status"], "no experiment table"))
             continue
         for line in table.splitlines()[1:]:
             index, task, variant, config, _hash = line.split("\t")
@@ -276,12 +276,12 @@ def missing_files(receipt: dict, files: BatchFiles | None) -> str | None:
     if not receipt.get("staged"):
         return None
     if files is None:
-        return f"batch directory {receipt['batch_dir']} not found (deleted, purged, or another cluster)"
+        return f"mission directory {receipt['batch_dir']} not found (deleted, purged, or another host)"
     groups = [node_id[len("group-"):] for node_id, node in receipt["nodes"].items()
               if _is_group(node_id, node)]
     absent = [group for group in groups if group not in files.tables]
     if absent:
-        return f"task table missing for group(s) {', '.join(absent)} in {receipt['batch_dir']}"
+        return f"experiment table missing for job(s) {', '.join(absent)} in {receipt['batch_dir']}"
     return None
 
 
@@ -338,7 +338,7 @@ def summarize(receipt: dict, rows: list[Row]) -> str:
 
 
 def format_rows(rows: list[Row], indent: str = "") -> str:
-    headers = ("task", "values", "state", "detail")
+    headers = ("experiment", "values", "state", "detail")
     table = [headers] + [(r.name, r.values, r.state, r.detail) for r in rows]
     widths = [max(len(row[i]) for row in table) for i in range(3)]
     lines = []

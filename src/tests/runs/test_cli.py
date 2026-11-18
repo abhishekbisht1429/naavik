@@ -235,7 +235,7 @@ def test_sync_never_deletes_and_skips_this_machine(two_machines, capsys):
     _remote_run(remote, finished=True)
     mine = RunWriter.create(local, {"run_id": new_run_id(), "host": socket.gethostname(),
                                     "launch": {"operation": "config"}})
-    assert naavik(["runs", "sync", "--all-targets", "--targets", str(targets),
+    assert naavik(["runs", "sync", "--all-hosts", "--targets", str(targets),
                    "--registry", str(local)]) == 0
     output = capsys.readouterr().out
     assert "here: this machine" in output and "gpubox: " in output
@@ -282,7 +282,7 @@ def test_list_selects_a_batchs_tasks_and_names_them(recorded, capsys):
                    "task": "g/e/002", "attempt": 2}})
     task.event("finished", status="ok")
     capsys.readouterr()
-    assert naavik(["runs", "list", "--batch", "sweep-2026"]) == 0
+    assert naavik(["runs", "list", "--mission", "sweep-2026"]) == 0
     (row,) = rows(capsys.readouterr().out)
     assert row[0] == task.run_id and row[-4:] == ["sweep-20261116T000000Z-abc", "g/e/002",
                                                   "(attempt", "2)"]

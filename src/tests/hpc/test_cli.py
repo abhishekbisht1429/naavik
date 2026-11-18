@@ -18,7 +18,7 @@ def setup(tmp_path, monkeypatch):
 def test_validate_reports_the_plan(setup, capsys):
     root, profiles = setup
     assert main(["validate", str(root / "batch.yaml"), "--profiles", str(profiles)]) == 0
-    assert "ok: 4 task(s) in 1 group(s)" in capsys.readouterr().out
+    assert "ok: 4 experiment(s) in 1 job(s)" in capsys.readouterr().out
 
 
 def test_validate_reports_every_problem_and_fails(tmp_path, monkeypatch, capsys):

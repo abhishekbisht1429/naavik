@@ -63,8 +63,8 @@ def test_the_selection_is_in_the_plan_and_the_whole_manifest_is_staged(tmp_path)
     compiled = compile_selected(two_groups(tmp_path), groups=["long"],
                                 experiments=["probes/frozen"])
     files = plan_files(compiled.plan, compiled.manifest.raw)
-    assert json.loads(files["plan.json"])["selection"] == {"groups": ["long"],
-                                                           "experiments": ["probes/frozen"]}
+    assert json.loads(files["plan.json"])["selection"] == {"jobs": ["long"],
+                                                           "recipes": ["probes/frozen"]}
     assert set(yaml.safe_load(files["mission.yaml"])["jobs"]) == {"probes", "long"}
 
 
@@ -82,10 +82,10 @@ def test_config_files_are_recorded_as_for_the_whole_manifest(tmp_path):
 
 
 @pytest.mark.parametrize("groups, experiments, message", [
-    (["nope"], [], r"--group nope: the mission file has no such job \(it has: long, probes\)"),
-    ([], ["probes"], "--experiment probes: name it GROUP/EXPERIMENT"),
-    ([], ["nope/full"], "--experiment nope/full: the mission file has no job 'nope'"),
-    ([], ["probes/nope"], r"group 'probes' has no experiment 'nope' \(it has: frozen, unfrozen\)"),
+    (["nope"], [], r"--job nope: the mission file has no such job \(it has: long, probes\)"),
+    ([], ["probes"], "--recipe probes: name it JOB/RECIPE"),
+    ([], ["nope/full"], "--recipe nope/full: the mission file has no job 'nope'"),
+    ([], ["probes/nope"], r"job 'probes' has no recipe 'nope' \(it has: frozen, unfrozen\)"),
 ])
 def test_an_unknown_name_is_refused(tmp_path, groups, experiments, message):
     with pytest.raises(PlanError, match=message):
@@ -115,11 +115,11 @@ def test_a_launched_part_is_followed_like_any_batch(tmp_path, here, capsys):
     subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "two"],
                    cwd=root, check=True)
     assert naavik(["launch", str(root / "batch.yaml"), "--targets", str(here), "--yes",
-                   "--experiment", "cpu/other"]) == 0
+                   "--recipe", "cpu/other"]) == 0
     output = capsys.readouterr().out
     batch_dir = Path(output.split("submitted: ")[1].splitlines()[0])
     receipt = json.loads((batch_dir / "receipt.json").read_text())
-    assert receipt["selection"] == {"experiments": ["cpu/other"]}
+    assert receipt["selection"] == {"recipes": ["cpu/other"]}
     wait_for(lambda: record(batch_dir, "cpu/other/000"), "the task's record")
     assert not (batch_dir / "tasks" / "cpu" / "c0").exists()
     assert naavik(["status", receipt["batch_id"]]) == 0

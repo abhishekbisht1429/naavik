@@ -247,7 +247,7 @@ def _run_ids(
             if len(siblings) > 1:
                 run_id = f"{task}/{os.path.basename(session_dir)}"
                 notes.append((
-                    f"task {task} has {len(siblings)} session directories; "
+                    f"experiment {task} has {len(siblings)} session directories; "
                     "each is reported as its own run",
                     session_dir,
                 ))

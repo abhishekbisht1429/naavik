@@ -33,7 +33,7 @@ def _target_names(args) -> tuple[Path, list[str]]:
 
     path = args.profiles or default_profiles_path()
     if not path.exists():
-        raise _error(f"target file {path} does not exist")
+        raise _error(f"hosts file {path} does not exist")
     raw = yaml.safe_load(path.read_text()) or {}
     entries = raw.get("targets") or raw.get("profiles") or {}
     if args.all_targets:
@@ -42,7 +42,7 @@ def _target_names(args) -> tuple[Path, list[str]]:
         return path, list(args.profile)
     if raw.get("default"):
         return path, [raw["default"]]
-    raise _error(f"{path} has no default target; pass --target or --all-targets")
+    raise _error(f"{path} has no default_host; pass --host or --all-hosts")
 
 
 def _error(message: str):

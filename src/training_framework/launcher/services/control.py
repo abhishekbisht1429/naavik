@@ -73,7 +73,7 @@ def log_path(receipt: dict, tables: dict[str, str], name: str, attempt: int | No
     jobs = task_jobs(receipt, tables)
     if name not in jobs:
         known = sorted(jobs) + sorted(steps)
-        raise HpcError(f"'{name}' is not a task or step of this batch (have: {', '.join(known)})")
+        raise HpcError(f"'{name}' is not an experiment or step of this mission (have: {', '.join(known)})")
     if not jobs[name]:
         raise HpcError(f"{name} never reached the scheduler; it has no log")
     if attempt is None:
@@ -120,7 +120,7 @@ def to_cancel(receipt: dict, tables: dict[str, str], names: list[str],
     jobs = task_jobs(receipt, tables)
     unknown = [name for name in names if name not in jobs]
     if unknown:
-        raise HpcError(f"not tasks of this batch: {', '.join(unknown)}")
+        raise HpcError(f"not experiments of this mission: {', '.join(unknown)}")
     chosen = []
     for name in dict.fromkeys(names):
         if not jobs[name]:

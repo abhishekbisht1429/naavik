@@ -140,7 +140,7 @@ def add_live_state(views: list[BatchView], connect, fallback=None) -> None:
         if "value" not in resolved:
             try:
                 resolved["value"] = fallback() if fallback else None
-                resolved["error"] = None if resolved["value"] else "no profile was given"
+                resolved["error"] = None if resolved["value"] else "no host was given"
             except Exception as error:   # reported on the receipts that needed it
                 resolved["value"], resolved["error"] = None, str(error)
         return resolved["value"], resolved["error"]
@@ -161,7 +161,7 @@ def add_live_state(views: list[BatchView], connect, fallback=None) -> None:
             cluster, error = fallback_cluster()
             if cluster is None:
                 view.problem = ("this receipt predates receipts recording their cluster, so the "
-                                f"profile is needed ({error}); pass --profile")
+                                f"host is needed ({error}); pass --host")
                 continue
         by_cluster.setdefault(cluster, []).append(view)
     for (host, scheduler), members in by_cluster.items():
@@ -231,8 +231,8 @@ class UnreachableTarget:
 def format_views(views: list[BatchView], *, live: bool, tasks: bool, origins: bool,
                  unreachable: list[UnreachableTarget] = ()) -> str:
     if not views and not unreachable:
-        return "no batches"
-    headers = ["batch", "submitted", "profile", "tasks", "submit"]
+        return "no missions"
+    headers = ["mission", "launched", "host", "experiments", "submit"]
     if origins:
         headers.insert(3, "from")
     # Why each batch ran, only when some batch says.

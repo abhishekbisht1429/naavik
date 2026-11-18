@@ -50,8 +50,8 @@ def test_an_empty_live_listing_still_checks_the_cluster(fake_cluster, tmp_path, 
         item.unlink()                          # e.g. every submit failed before its receipt
     assert main(["batches", "--profiles", str(profiles)]) == 0
     captured = capsys.readouterr()
-    assert captured.out.strip() == "no batches"
-    assert "no batches were submitted from this machine" in captured.err and "--remote" in captured.err
+    assert captured.out.strip() == "no missions"
+    assert "no missions were launched from this machine" in captured.err and "--remote" in captured.err
     assert main(["batches", "--live", "--profiles", str(profiles)]) == 0      # reachable: just empty
     monkeypatch.setenv("FAKE_SSH_DOWN", "1")
     assert main(["batches", "--live", "--profiles", str(profiles)]) == 2

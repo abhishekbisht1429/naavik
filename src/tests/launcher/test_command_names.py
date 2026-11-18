@@ -107,7 +107,7 @@ def test_target_and_profile_select_the_same_entry(tmp_path, capsys):
         assert _validate(root, *options) == 0
         outputs.append(capsys.readouterr().out)
     assert outputs[0] == outputs[1]
-    assert "ok: 4 task(s)" in outputs[0]
+    assert "ok: 4 experiment(s)" in outputs[0]
 
 
 def test_the_target_file_is_read_from_targets_yaml(tmp_path, config_home, capsys):

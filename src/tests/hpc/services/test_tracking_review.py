@@ -35,7 +35,7 @@ def test_a_missing_batch_directory_is_a_problem_not_finished(tmp_path):
     view = live_view(tmp_path, staged=True, batch_dir=str(tmp_path / "purged"))
     listing.add_live_state([view], local({"9_3": "running"}), None)
     assert view.now is None and view.rows is None
-    assert "not found (deleted, purged, or another cluster) on cluster" in view.problem
+    assert "not found (deleted, purged, or another host) on cluster" in view.problem
     assert "its jobs are still in the queue" in view.problem
     assert listing.select([view], active=True) == []        # no summary, so not claimed active
 
@@ -44,7 +44,7 @@ def test_a_missing_task_table_is_a_problem(tmp_path):
     view = live_view(tmp_path, staged=True)
     os.remove(Path(view.receipt["batch_dir"]) / "groups" / "g" / "tasks.tsv")
     listing.add_live_state([view], local(), None)
-    assert view.now is None and "task table missing for group(s) g" in view.problem
+    assert view.now is None and "experiment table missing for job(s) g" in view.problem
 
 
 def test_a_batch_that_never_reached_the_cluster_still_summarizes(tmp_path):
@@ -77,7 +77,7 @@ def test_status_uses_the_receipts_cluster_and_refuses_a_conflicting_profile(
     assert "other-cluster:" in capsys.readouterr().out
     assert main(["status", batch_dir.name, "--profiles", str(profiles)]) == 2
     error = capsys.readouterr().err
-    assert "was submitted to other-cluster" in error and "drop --profile" in error
+    assert "was launched on other-cluster" in error and "drop --host" in error
 
 
 def test_status_of_a_purged_batch_is_an_error(fake_cluster, tmp_path, monkeypatch, capsys):
@@ -85,7 +85,7 @@ def test_status_of_a_purged_batch_is_an_error(fake_cluster, tmp_path, monkeypatc
     import shutil
     shutil.rmtree(batch_dir)
     assert main(["status", batch_dir.name]) == 2
-    assert "not found (deleted, purged, or another cluster)" in capsys.readouterr().err
+    assert "not found (deleted, purged, or another host)" in capsys.readouterr().err
 
 
 # 3. The offline listing never reads the profile file ------------------------------------
@@ -102,7 +102,7 @@ def test_offline_batches_works_with_a_broken_profile_file(tmp_path, monkeypatch,
     # A live lookup needs the profile only for this older receipt, and says why.
     assert main(["batches", "--live", "--receipts", str(tmp_path / "receipts")]) == 0
     out = capsys.readouterr().out
-    assert "predates receipts recording their cluster" in out and "pass --profile" in out
+    assert "predates receipts recording their cluster" in out and "pass --host" in out
 
 
 # 4. Malformed receipts are isolated -----------------------------------------------------

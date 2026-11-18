@@ -288,8 +288,8 @@ def test_status_of_a_cancelled_group_says_so(tmp_path):
     rows = batch_status(receipt, LocalFilesystem(), LocalExecutor(), lambda refs: {})
     assert {row.name: row.state for row in rows}["g/e/003"] == "cancelled"
     text = format_rows(rows)
-    assert text.splitlines()[0].split() == ["task", "values", "state", "detail"]
-    assert "g/e/001  optimizer.lr=0.1  failed (exit 1)  ValueError: bad lr" in text
+    assert text.splitlines()[0].split() == ["experiment", "values", "state", "detail"]
+    assert "g/e/001     optimizer.lr=0.1  failed (exit 1)  ValueError: bad lr" in text
 
 
 SQUEUE = r'''
@@ -316,7 +316,7 @@ def test_the_status_command_after_a_submit(fake_cluster, tmp_path, monkeypatch, 
     monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
     assert main(["status", batch_id, "--profiles", str(path)]) == 0
     lines = capsys.readouterr().out.splitlines()
-    assert lines[0].startswith(f"batch {batch_id}: submitted | ")
+    assert lines[0].startswith(f"mission {batch_id}: submitted | ")
     states = {line.split()[0]: line for line in lines[2:]}
     assert "built" in states["setup"]
     tasks = [line for name, line in states.items() if name.startswith("probes/")]

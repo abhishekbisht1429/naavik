@@ -70,7 +70,7 @@ def framework_mismatch(manifest, sha, managed, repository, framework: dict, tree
     if manifest.code_framework == "checkout":
         location = Path(framework.get("location") or "/")
         return None if location.is_relative_to(tree.resolve()) else (
-            f"the check used the framework at {location}, not the batch's own checkout "
+            f"the check used the framework at {location}, not the mission's own checkout "
             f"({tree}); is it in code.python_paths?")
     if not managed:
         return None                        # an existing environment is the target's own

@@ -55,7 +55,7 @@ class Follower:
         for row in self.rows():
             if row.name == self.task:
                 return row
-        raise HpcError(f"'{self.task}' is not a task of this batch")
+        raise HpcError(f"'{self.task}' is not an experiment of this mission")
 
     def _drain(self) -> None:
         path = self.log()
@@ -83,10 +83,10 @@ class Follower:
                 self.sleep(self.interval)
             except KeyboardInterrupt:
                 if self.cancelled:
-                    self.say("detached; the task was asked to stop")
+                    self.say("detached; the experiment was asked to stop")
                     return Outcome(DETACHED, None, True)
                 self.cancelled = True
-                self.say("cancelling the task (Ctrl-C again to stop following)")
+                self.say("cancelling the experiment (Ctrl-C again to stop following)")
                 try:
                     self.cancel()
                 except KeyboardInterrupt:

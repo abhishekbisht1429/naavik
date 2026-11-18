@@ -169,7 +169,7 @@ def _submit(plan, manifest_raw, receipt, environment, preparer, uploader, stager
     skipped: set[str] = set()       # nodes whose work is already done
     try:
         if environment.managed and plan.preflight["interpreter"].get("identity"):
-            progress("checking the cluster's site interpreter against the profile")
+            progress("checking the host's site interpreter against python_environment.site_interpreter")
         environment.check_identity()
         env_ready = environment.ready()
         if environment.managed:
@@ -195,7 +195,7 @@ def _submit(plan, manifest_raw, receipt, environment, preparer, uploader, stager
         parent = plan.batch_dir.rsplit("/", 1)[0]
         filesystem.makedirs(parent)
         if not filesystem.mkdir_atomic(plan.batch_dir):
-            raise HpcError(f"{plan.batch_dir} already exists; batch directories are never reused")
+            raise HpcError(f"{plan.batch_dir} already exists; mission directories are never reused")
         receipt.mirror_to(filesystem, f"{plan.batch_dir}/receipt.json")
         # Schedulers need not create their log directories (some Slurm versions do not).
         for node in plan.nodes:

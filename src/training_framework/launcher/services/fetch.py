@@ -60,7 +60,7 @@ def select(receipt: dict, rows: list[Row], index: dict[str, tuple[str, int]],
     if names:
         unknown = [name for name in names if name not in task_rows]
         if unknown:
-            raise HpcError(f"not tasks of this batch: {', '.join(unknown)}")
+            raise HpcError(f"not experiments of this mission: {', '.join(unknown)}")
         considered = list(dict.fromkeys(names))
     else:
         considered = list(task_rows)

@@ -174,7 +174,7 @@ def test_targets_are_checked_against_the_session(tmp_path):
 def test_a_group_larger_than_the_task_set_size_is_refused(tmp_path):
     data = profile()
     data["profiles"]["cluster"]["slurm"]["max_array_size"] = 3
-    assert "more than the maximum task-set size 3" in problems_of(
+    assert "more than the most one job may hold (3)" in problems_of(
         make_repo(tmp_path), profile_data=data)
 
 

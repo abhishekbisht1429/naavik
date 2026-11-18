@@ -68,7 +68,7 @@ def validate(root, targets):
 def test_a_sound_batch_passes_the_check(tmp_path, here, capsys):
     assert validate(project(tmp_path, session()), here) == 0
     output = capsys.readouterr().out
-    assert "checking 1 task config(s) with the code of" in output and "ok: 1 task(s)" in output
+    assert "checking 1 experiment config(s) with the code of" in output and "ok: 1 experiment(s)" in output
 
 
 def test_a_misspelt_component_is_refused_naming_the_task(tmp_path, here, capsys):
@@ -183,7 +183,7 @@ def test_checkout_mode_without_the_framework_in_its_paths_is_refused(tmp_path, h
     assert validate(root, here) == 2
     err = capsys.readouterr().err
     # Whatever framework the interpreter finds, it is not the batch's own.
-    assert "not the batch's own checkout" in err and "is it in code.python_paths?" in err
+    assert "not the mission's own checkout" in err and "is it in code.python_paths?" in err
 
 
 # Skipping, never silently --------------------------------------------------------------------------
@@ -197,7 +197,7 @@ def test_a_skipped_check_is_warned_about_and_recorded(tmp_path, here, monkeypatc
     assert receipt["code_check"] == "skipped"
     assert naavik(["validate", str(project(tmp_path / "x", config) / "batch.yaml"),
                    "--targets", str(here)]) == 0
-    assert "warning: the task configs were not checked (TRAINING_FRAMEWORK_CODE_CHECK=0)" in \
+    assert "warning: the experiment configs were not checked (TRAINING_FRAMEWORK_CODE_CHECK=0)" in \
         capsys.readouterr().err
 
 

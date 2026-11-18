@@ -22,7 +22,7 @@ class RunsError(Exception):
 
 
 def _parser(prog: str) -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog=prog)
+    parser = argparse.ArgumentParser(prog=prog, allow_abbrev=False)
     commands = parser.add_subparsers(dest="command", required=True)
 
     def registry_option(command):
@@ -30,13 +30,14 @@ def _parser(prog: str) -> argparse.ArgumentParser:
                              help="the registry to read (default: $TRAINING_FRAMEWORK_RUNS, "
                                   "else $XDG_DATA_HOME/training-framework/runs)")
 
-    listing = commands.add_parser("list", help="the recorded runs, newest first")
+    listing = commands.add_parser("list", allow_abbrev=False, help="the recorded runs, newest first")
     listing.add_argument("--since", metavar="AGE", help="only runs started within AGE: 30m, 12h, 7d, 2w")
     listing.add_argument("--state", action="append", default=[],
                          help="only runs in this state (repeatable): done, failed, interrupted, "
                               "running, 'ended without a record', unknown")
     listing.add_argument("--host", action="append", default=[], help="only runs on this host (repeatable)")
-    listing.add_argument("--batch", help="only tasks of batches whose id contains BATCH")
+    listing.add_argument("--mission", dest="batch",
+                         help="only experiments of missions whose id contains MISSION")
     listing.add_argument("--where", action="append", default=[], metavar="KEY=VALUE",
                          help="only runs whose (first session's) config has KEY equal to VALUE "
                               "(dotted path; VALUE read as YAML; repeatable)")
@@ -44,12 +45,12 @@ def _parser(prog: str) -> argparse.ArgumentParser:
     listing.add_argument("--json", action="store_true", help="print JSON instead of a table")
     registry_option(listing)
 
-    show = commands.add_parser("show", help="one run in detail")
+    show = commands.add_parser("show", allow_abbrev=False, help="one run in detail")
     show.add_argument("run", help="a run id, or a unique beginning of one")
     show.add_argument("--json", action="store_true", help="print the record as JSON")
     registry_option(show)
 
-    diff = commands.add_parser("diff", help="what differs between two runs")
+    diff = commands.add_parser("diff", allow_abbrev=False, help="what differs between two runs")
     diff.add_argument("a", help="a run id (or a unique beginning)")
     diff.add_argument("b", help="another run id (or a unique beginning)")
     diff.add_argument("--all-keys", action="store_true",
@@ -57,13 +58,14 @@ def _parser(prog: str) -> argparse.ArgumentParser:
                            "(sessions_dir, the rendezvous address and port)")
     registry_option(diff)
 
-    sync = commands.add_parser("sync", help="copy the runs recorded on targets into this registry")
+    sync = commands.add_parser("sync", allow_abbrev=False, help="copy the runs recorded on hosts into this registry")
     which = sync.add_mutually_exclusive_group()
-    which.add_argument("--target", "--profile", dest="profile", action="append", default=[],
-                       help="this target (repeatable; default: the target file's default)")
-    which.add_argument("--all-targets", action="store_true", help="every target of the target file")
-    sync.add_argument("--targets", "--profiles", dest="profiles", type=Path,
-                      help="target file (default: $XDG_CONFIG_HOME/training-framework/targets.yaml)")
+    which.add_argument("--host", "--target", "--profile", dest="profile", action="append", default=[],
+                       help="this host (repeatable; default: the hosts file's default_host)")
+    which.add_argument("--all-hosts", dest="all_targets", action="store_true",
+                       help="every host of the hosts file")
+    sync.add_argument("--hosts-file", "--targets", "--profiles", dest="profiles", type=Path,
+                      help="the hosts file (default: $XDG_CONFIG_HOME/training-framework/hosts.yaml)")
     registry_option(sync)
     return parser
 

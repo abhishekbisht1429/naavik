@@ -75,7 +75,7 @@ def test_by_default_only_successful_tasks_are_fetched(tmp_path):
     assert [t.task for t in chosen] == ["g/e/000", "g/e/001", "g/e/002", "g/e/003"]
     chosen, _ = selection(batch, names=["g/e/001"])                    # named: fetched whatever its state
     assert [t.task for t in chosen] == ["g/e/001"]
-    with pytest.raises(HpcError, match="not tasks of this batch: nope"):
+    with pytest.raises(HpcError, match="not experiments of this mission: nope"):
         selection(batch, names=["nope"])
 
 
@@ -282,7 +282,7 @@ def test_fetch_through_the_cli_and_again(fake_cluster, tmp_path, monkeypatch, ca
     dest = tmp_path / "results"
     assert main(["fetch", batch_dir.name, "--dest", str(dest), "--dry-run"]) == 0
     out = capsys.readouterr().out
-    assert "2 task(s)" in out and out.count("iteration 10") == 2 and out.count("skip ") == 2
+    assert "2 experiment(s)" in out and out.count("iteration 10") == 2 and out.count("skip ") == 2
     assert not dest.exists()
 
     assert main(["fetch", batch_dir.name, "--dest", str(dest)]) == 0

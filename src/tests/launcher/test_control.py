@@ -63,7 +63,7 @@ def test_logs_prints_a_tasks_log_and_names_what_exists(tmp_path, here, capsys):
     assert naavik(["logs", batch_dir.name, "cpu/seeds/000", "--attempt", "2"]) == 2
     assert "has no attempt 2 (attempts: 1)" in capsys.readouterr().err
     assert naavik(["logs", batch_dir.name, "cpu/seeds/999"]) == 2
-    assert "not a task or step of this batch (have: cpu/seeds/000)" in capsys.readouterr().err
+    assert "not an experiment or step of this mission (have: cpu/seeds/000)" in capsys.readouterr().err
 
 
 def test_logs_follow_streams_until_interrupted(tmp_path, here, capsys):
@@ -146,7 +146,7 @@ def test_a_task_that_never_ran_restarts_from_its_config(tmp_path, here, capsys):
 
     assert naavik(["resume", batch_dir.name, "--task", "cpu/seeds/001", "--yes"]) == 2
     captured = capsys.readouterr()
-    assert "skip cpu/seeds/001" in captured.out and "--restart runs tasks" in captured.err
+    assert "skip cpu/seeds/001" in captured.out and "--restart runs experiments" in captured.err
 
     assert naavik(["resume", batch_dir.name, "--task", "cpu/seeds/001", "--restart", "--yes"]) == 0
     assert "restart from its config (no checkpoint)" in capsys.readouterr().out
