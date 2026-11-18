@@ -182,7 +182,8 @@ def test_earlier_names_are_read_with_one_warning_naming_the_fix(tmp_path, config
     warnings = [line for line in err.splitlines() if line.startswith("warning:")
                 and "earlier names" in line and "targets.yaml uses" in line]
     assert len(warnings) == 1
-    assert "roots -> directories" in warnings[0] and f"naavik migrate {config_home / 'targets.yaml'}" in warnings[0]
+    assert "roots -> directories" in warnings[0]
+    assert warnings[0].endswith("rename them by hand (old -> new)")
 
 
 def test_the_warning_names_each_renamed_setting():

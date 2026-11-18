@@ -4,8 +4,8 @@ The hosts file (`hosts.yaml`) was the target file and, before that, the
 profile file (`hpc.yaml`); its keys were renamed so each says what it holds
 (`.context/plan-naming.md`). A file written with the earlier names is still
 read: `host_entry_from_earlier` turns one entry into the current names and
-says what it renamed, so the caller can warn once. The same table drives
-`naavik migrate`, which rewrites a file for good.
+says what it renamed, so the caller can warn once, listing each
+`old -> new` for the user to rename by hand.
 
 Both a name and its earlier name in one place is an error: one setting has
 one key.

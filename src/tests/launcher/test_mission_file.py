@@ -136,8 +136,9 @@ def test_earlier_names_are_warned_about_once_with_the_fix(tmp_path, capsys, monk
     warnings = [line for line in capsys.readouterr().err.splitlines()
                 if line.startswith("warning:") and "earlier names" in line]
     assert len(warnings) == 1 and "groups -> jobs" in warnings[0]
-    # The command works from where it is run.
-    assert "`naavik migrate repo/batch.yaml`" in warnings[0]
+    # The file is named as it is from where naavik runs, to open and edit.
+    assert warnings[0].startswith("warning: repo/batch.yaml uses earlier names")
+    assert warnings[0].endswith("rename them by hand (old -> new)")
 
 
 def test_a_project_file_in_earlier_names_is_part_of_the_warning(tmp_path):

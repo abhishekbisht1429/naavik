@@ -350,13 +350,13 @@ def build_attempt(plan: dict, receipt: dict, chosen: list[Candidate], dialect,
             memory=changes.memory or raw["memory"],
             scheduler_options=raw.get("scheduler_options") or {},
         )
-        problems = dialect.check_resources(resources, f"group '{group}'")
+        problems = dialect.check_resources(resources, f"job '{group}'")
         if problems:
             raise ResumeError("; ".join(problems))
         stop_grace = node_json.get("stop_grace_seconds", 0)
         lead = dialect.signal_lead(timeout, stop_grace)
         if lead >= resources.walltime_seconds:
-            raise ResumeError(f"group '{group}': the shutdown signal lead ({lead}s) is not "
+            raise ResumeError(f"job '{group}': the shutdown signal lead ({lead}s) is not "
                               f"shorter than the walltime ({walltime})")
         node = JobNode(
             id=f"group-{group}.resume-{attempt}", kind="task_set", location="job",

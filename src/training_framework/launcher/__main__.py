@@ -314,7 +314,7 @@ def _profile(args):
     profile = parse_profiles(yaml.safe_load(path.read_text()), args.profile, str(path))
     if profile.renamed:
         print(f"warning: {path} uses earlier names ({'; '.join(profile.renamed)}); "
-              f"`naavik migrate {path}` rewrites them", file=sys.stderr)
+              "rename them by hand (old -> new)", file=sys.stderr)
     return profile
 
 
@@ -398,7 +398,7 @@ def _ready_here(requirement) -> bool:
 
 def _warn_earlier_names(compiled, repository) -> None:
     """One warning for mission and project files written with earlier names
-    (their paths as they are from here, for the command it suggests)."""
+    (their paths as they are from here, to open and edit)."""
     if not compiled.renamed:
         return
     files = sorted({item.split(": ", 1)[0] for item in compiled.renamed})
@@ -408,8 +408,9 @@ def _warn_earlier_names(compiled, repository) -> None:
         # Relative when it is under the current directory, else absolute.
         here.append(str(path.relative_to(Path.cwd().resolve()))
                     if path.is_relative_to(Path.cwd().resolve()) else str(path))
-    print(f"warning: {', '.join(files)} use earlier names ({'; '.join(compiled.renamed)}); "
-          f"`naavik migrate {' '.join(here)}` rewrites them", file=sys.stderr)
+    verb = "uses" if len(here) == 1 else "use"
+    print(f"warning: {', '.join(here)} {verb} earlier names ({'; '.join(compiled.renamed)}); "
+          "rename them by hand (old -> new)", file=sys.stderr)
 
 
 def _print_code_notes(compiled) -> None:
@@ -831,7 +832,7 @@ def _resume(args) -> int:
               f"{candidate.iteration}/{total}  {relative}")
     for group in attempt.groups:
         r = group.node.resources
-        print(f"  group {group.group}: walltime {r.walltime}, {r.gpus} GPU(s), {r.cpus} CPU(s), "
+        print(f"  job {group.group}: walltime {r.walltime}, {r.gpus} GPU(s), {r.cpus} CPU(s), "
               f"{r.memory}" + (f", at most {group.node.max_parallel} at once"
                                if group.node.max_parallel else ""))
     if args.dry_run:
