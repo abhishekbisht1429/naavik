@@ -186,9 +186,9 @@ list of view batches and normalizes each.
 
 ## Its data, fetched once
 
-Each built-in dataset declares the data it needs, so a batch target can
-fetch, upload, or check it (the profile's
-[`data_modes`](../guide/08-hpc-batches.md#declared-data-data_modes-in-the-profile)),
+Each built-in dataset declares the data it needs, so a host can download,
+copy, or check it (the host's
+[`dataset_delivery`](../guide/08-hpc-batches.md#declared-data-dataset_delivery-on-the-host)),
 and so a download never happens twice:
 
 | Dataset | Requirement | Fetched | Kept at |

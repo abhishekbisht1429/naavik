@@ -3,7 +3,7 @@
 [← Docs](../README.md) · [Project README](../../README.md)
 
 Every launch of the engine leaves a record: a direct run from your entry
-point or your IDE, a batch task on any target, a resume, an extension, and a
+point or your IDE, a mission's experiment on any host, a resume, an extension, and a
 launch that fails while its config is being built. The record says what ran
 (the config, the code, the environment), where (the host, every rank's
 device), and how it ended. `naavik runs` lists, shows, and compares them.
@@ -29,9 +29,9 @@ run                         started           host    state  code               
 ```
 
 Newest first, at most 50 (`--limit N`, `0` for all). `what` is the config
-file, the checkpoint a resume or extension started from, or a batch task
-(`<batch-id> <task>`). A `note` column (before `what`) shows a batch
-task's note when some run has one. `code` is the commit; `(snapshot)` when the working
+file, the checkpoint a resume or extension started from, or a mission's
+experiment (`<mission-id> <experiment>`). A `note` column (before `what`)
+shows a mission's note when some run has one. `code` is the commit; `(snapshot)` when the working
 tree was taken as a snapshot commit, `(dirty)` when it had changes and no
 snapshot was kept (see [The code](#the-code)).
 
@@ -40,7 +40,7 @@ snapshot was kept (see [The code](#the-code)).
 | `--since 30m` / `12h` / `7d` / `2w` | runs started within that time |
 | `--state S` | runs in this state (repeatable) |
 | `--host H` | runs on this host (repeatable) |
-| `--batch TEXT` | tasks of batches whose id contains `TEXT` |
+| `--mission TEXT` | experiments of missions whose id contains `TEXT` |
 | `--where KEY=VALUE` | runs whose config has `KEY` (a dotted path, e.g. `optimizer.optimizer.kwargs.lr`) equal to `VALUE` (read as YAML, so `0.2` is a number); repeatable, all must hold |
 | `--json` | the records as JSON |
 | `--registry PATH` | another registry than this machine's |
@@ -74,7 +74,7 @@ finished 2026-11-17T02:19:13.025363+00:00 | ok | last iteration [4]
 ```
 
 - `launch`: how it was started (`config`, `resume`, or `extend`) and the
-  command. A batch task adds its batch, task, attempt, and scheduler.
+  command. A mission's experiment adds its mission, experiment, attempt, and scheduler.
 - `continues <run>`: for a resume or an extension, the earlier run of the
   same session (the latest one whose session directory it restored).
 - `env`: Python, torch, CUDA, and a hash of the installed packages (equal
@@ -122,23 +122,23 @@ A direct run records the Git repository holding its components package
   temporary index (your index, branch, and files are untouched) and kept as
   `refs/naavik/runs/<run-id>`, so `git diff <HEAD> refs/naavik/runs/<run-id>`
   shows exactly what ran. The same tree on the same HEAD is the same commit.
-  This is the [snapshot](08-hpc-batches.md#uncommitted-work-worktree-snapshot)
-  batches use, with the same limit on untracked files (50 MB);
+  This is the [working tree snapshot](08-hpc-batches.md#uncommitted-work-run_code_from-working_tree)
+  missions use, with the same limit on untracked files (50 MB);
 - outside a Git repository: nothing.
 
 With `TRAINING_FRAMEWORK_RUNS_SNAPSHOT=0`, or when untracked files exceed
 the limit, no snapshot is kept: the record says the tree was dirty and why.
-A batch task records its batch's commit (and snapshot base) instead.
+A mission's experiment records its mission's commit (and snapshot base) instead.
 
 `naavik summarize` uses these records to tell runs on different code apart
 (see [Comparing runs](12-comparing-runs.md#which-settings-are-compared)).
-A batch launched with a description (`naavik run --note TEXT`, or the
-experiment file's `description`) keeps it in each task's record; `naavik runs
+A mission launched with a note (`naavik run --note TEXT`, or the mission
+file's `note`) keeps it in each experiment's record; `naavik runs
 show` prints it as `note`.
 
 ## Across machines
 
-Each machine has its own registry. A batch task records on the machine it
+Each machine has its own registry. A mission's experiment records on the machine it
 runs on; copy those runs here with:
 
 ```bash
@@ -174,5 +174,5 @@ directory; stored configs shared with other runs stay.
 
 ---
 
-**See also:** [Running batches](08-hpc-batches.md) for batch tasks and
+**See also:** [Running missions](08-hpc-batches.md) for missions and
 targets; [Comparing runs](12-comparing-runs.md) for metrics.

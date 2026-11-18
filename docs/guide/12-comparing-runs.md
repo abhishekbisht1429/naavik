@@ -6,8 +6,8 @@ After a sweep you have many run directories, each with its TensorBoard
 events and the config it ran with. `summarize` reads them all and writes one
 report: the hyperparameters that differ between the runs, each metric you
 ask for, and the runs that differ only in their seed grouped into
-mean ± std. It works the same on local runs, on an HPC batch directory, and
-on results brought back with [`hpc fetch`](08-hpc-batches.md#11-getting-results-back).
+mean ± std. It works the same on local runs, on a mission directory, and
+on results brought back with [`naavik fetch`](08-hpc-batches.md#11-getting-results-back).
 
 It assumes the runs use the [`tensorboard`](../reference/builtin-components.md#tensorboard)
 resource, usually with
@@ -76,14 +76,14 @@ directory per instance, `Tensorboard_tensorboard_<suffix>/`, whose tags are
 then prefixed with the directory name).
 
 A root can be a `sessions_dir`, any directory above several of them, a single
-session directory, an HPC batch directory, or `hpc-results/<batch-id>/`.
+session directory, a mission directory, or `hpc-results/<mission-id>/`.
 `--runs RUN` (repeatable) adds the session directories of a
 [recorded run](13-run-registry.md) by its id, so no root is needed:
 `naavik summarize --runs 01M7KMT17KHK --runs 01M7KMT4A2T9`.
-`--batch BATCH` (a batch id or its receipt; repeatable) adds a batch: its
-batch directory when it ran on this machine, else its copy fetched by
-`naavik fetch` (in `hpc-results/<batch-id>`; `--fetched DIR` for another
-place). It never downloads: a batch not fetched yet is an error saying so.
+`--mission MISSION` (a mission id or its receipt; repeatable) adds a mission:
+its mission directory when it ran on this machine, else its copy fetched by
+`naavik fetch` (in `hpc-results/<mission-id>`; `--fetched DIR` for another
+place). It never downloads: a mission not fetched yet is an error saying so.
 Several roots go in one report; each run's id then starts with its root's
 name:
 
@@ -91,9 +91,9 @@ name:
 python -m training_framework.reporting summarize runs/baseline runs/sweep-2 --metric loss:min
 ```
 
-A run's id is its path below the root. An HPC task is called by its task
-name, `<group>/<experiment>/<NNN>`, and its matrix values from `variant.json`
-are columns too, labelled like the experiment file (`optimizer:optimizer.kwargs.lr`).
+A run's id is its path below the root. A mission's experiment is called by
+its name, `<job>/<recipe>/<NNN>`, and its varied values from `variant.json`
+are columns too, labelled like the mission file (`optimizer:optimizer.kwargs.lr`).
 `--include GLOB` and `--exclude GLOB` choose runs by id.
 
 ## The values
@@ -135,7 +135,7 @@ python -m training_framework.reporting summarize runs/ --metric loss:min \
 ```
 
 A seed key is a config path (`resources.data_manager.seed`) or, like a
-matrix address in an experiment file, `component:path`: the path inside that
+`vary` address in a mission file, `component:path`: the path inside that
 component's entry, wherever the entry is listed in each run's config (the
 top level or a `resources`/`hooks`/`steps` group). Matrix values match
 either form.
@@ -164,7 +164,7 @@ does not is a column, `absent` where it is missing. Values of different
 types are different (`1`, `1.0`, and `true` are three values).
 
 Some settings differ between runs by construction and are not compared:
-`session_config.sessions_dir` (every HPC task has its own) and the rendezvous
+`session_config.sessions_dir` (every experiment of a mission has its own) and the rendezvous
 `ddp.master_addr` / `ddp.master_port` (the engine picks a free port at
 every launch), at the top level or in a `resources` group. `ddp.world_size`
 is compared: it changes the global batch size. `--ignore-key PATH` adds a
@@ -174,7 +174,7 @@ the defaults too.
 **The code is compared too.** When some run's code is known, each run gets
 a setting `code`: the commit it ran (12 characters), marked `(snapshot)`
 for a working tree run as a snapshot, or `(dirty)` for a direct run whose
-uncommitted changes were not kept. A batch task's comes from its
+uncommitted changes were not kept. A mission experiment's comes from its
 `record.json` (next to `variant.json`), a direct run's from the [run
 registry](13-run-registry.md), matched by its session directory. Runs on
 different code are never one seed group: a group's spread is then seed
@@ -184,13 +184,13 @@ report is as it was. `--ignore-key code` leaves the code out. A config that
 has a `code` setting of its own is reported as a problem and the code is
 not compared.
 
-**So is the config file**, for batches whose experiments use more than one
-training config (an experiment's `config:`): a setting `config`, the file
-each task was made from, under the same rules (`unknown` when not
+**So is the config file**, for missions whose recipes use more than one
+session config (a recipe's `config_file:`): a setting `config`, the file
+each experiment was made from, under the same rules (`unknown` when not
 recorded, `--ignore-key config` to leave it out).
 
-**Notes are shown, not compared.** A run whose batch has a note (`naavik
-run --note`, an experiment file's `description`), or whose run record has one, gets
+**Notes are shown, not compared.** A run whose mission has a note (`naavik
+run --note`, a mission file's `note`), or whose run record has one, gets
 it in a `note` column of the runs table (and `note` in JSON), only when
 some run has one. Runs with different notes still share a seed group.
 
@@ -233,5 +233,5 @@ Every option of the command line is described in the
 
 ---
 
-**See also:** [Running batches](08-hpc-batches.md) for
+**See also:** [Running missions](08-hpc-batches.md) for
 producing and fetching sweeps.

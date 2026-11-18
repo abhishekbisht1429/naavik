@@ -29,14 +29,14 @@ A task-ordered path. It picks up where the
    how a launch decides its topology, and coordinated stopping.
 7. [Analysis sessions](guide/07-analysis-sessions.md) — driving a trained
    checkpoint through an analysis workflow.
-8. [Running batches: here, over SSH, or on a cluster](guide/08-hpc-batches.md) — sweeps of
-   experiments from one experiment file on this machine, a machine over SSH, or a
+8. [Running missions: here, over SSH, or on a cluster](guide/08-hpc-batches.md) — sweeps of
+   experiments from one mission file on this machine, a machine over SSH, or a
    Slurm cluster (committed or as a snapshot of your working tree), and
-   keeping track of every batch you launched.
-9. [First runs on Big Red 200](guide/09-hpc-big-red-200.md) — SSH, profile,
-   and a staged checklist for bringing the HPC layer up on IU's cluster.
-10. [Setting up a project for HPC batches](guide/10-hpc-projects.md) — code
-    modes, generating the pinned requirements, and projects that depend on
+   keeping track of every mission you launched.
+9. [First runs on Big Red 200](guide/09-hpc-big-red-200.md) — SSH, host settings,
+   and a staged checklist for bringing missions up on IU's cluster.
+10. [Setting up a project for missions](guide/10-hpc-projects.md) — where
+    the framework comes from, generating the pinned requirements, and projects that depend on
     training-framework.
 11. [Self-supervised training with DINO](guide/11-self-supervised-dino.md) —
     a ViT-S/16 DINO run built part by part, checked on a small scale,
@@ -50,8 +50,9 @@ A task-ordered path. It picks up where the
 
 ## Look it up
 
-- [HPC configuration](reference/hpc-configuration.md) — every key of the HPC
-  profile and experiment file, with defaults and rules.
+- [Configuration: hosts, missions, projects](reference/hpc-configuration.md) — every key
+  of the hosts file, mission files, and the project file, with defaults, rules,
+  and the earlier names.
 - [Built-in components](reference/builtin-components.md) — every component the
   framework ships with, and its configuration keys.
 - [Generic steps](reference/generic-steps.md) — `load_batch`, `forward` and

@@ -59,31 +59,34 @@ settings and are not written into session configuration or checkpoints.
 
 ## The `naavik` command
 
-Everything above is your own training entry point. Launching batches and
+Everything above is your own training entry point. Launching missions and
 reading results is one separate command, installed with the package as
 `naavik` (also `navik`; or `python -m training_framework.cli`):
 
 | Command | Does | Guide |
 |---|---|---|
-| `naavik validate / render / launch EXPERIMENT_FILE` | check, preview, or launch a batch | [Running batches](../guide/08-hpc-batches.md) |
-| `naavik run CONFIG [--override PATH=VALUE] [--note TEXT] [--gpus N] [--walltime T] [--detach]` | one config as a one-task batch, followed to its end | [`naavik run`](../guide/08-hpc-batches.md#one-config-followed-naavik-run) |
-| `naavik validate / render / launch EXPERIMENT_FILE --group G --experiment G/E` | only part of an experiment file | [Running batches](../guide/08-hpc-batches.md#5-checking-a-batch-validate-and-render) |
-| `naavik batches / status / logs / cancel / resume / fetch` | follow, stop, continue, and collect batches | [Running batches](../guide/08-hpc-batches.md#7-keeping-track-of-your-batches) |
-| `naavik batches --all-targets` | the batches on every target | [Every target at once](../guide/08-hpc-batches.md#every-target-at-once---all-targets) |
-| `naavik probe-python` | print a site interpreter's identity | [Running batches](../guide/08-hpc-batches.md#1-the-profile-site-settings-on-your-machine) |
-| `naavik summarize ROOT... [--runs RUN] [--batch BATCH]` | compare runs | [Comparing runs](../guide/12-comparing-runs.md) |
+| `naavik validate / render / launch MISSION_FILE` | check, preview, or launch a mission | [Running missions](../guide/08-hpc-batches.md) |
+| `naavik run CONFIG [--override PATH=VALUE] [--note TEXT] [--gpus N] [--walltime T] [--detach]` | one config as a mission of one experiment, followed to its end | [`naavik run`](../guide/08-hpc-batches.md#one-config-followed-naavik-run) |
+| `naavik validate / render / launch MISSION_FILE --job J --recipe J/R` | only part of a mission file | [Running missions](../guide/08-hpc-batches.md#5-checking-a-mission-validate-and-render) |
+| `naavik missions / status / logs / cancel / resume / fetch` | follow, stop, continue, and collect missions | [Running missions](../guide/08-hpc-batches.md#7-keeping-track-of-your-missions) |
+| `naavik missions --all-hosts` | the missions on every host | [Every host at once](../guide/08-hpc-batches.md#every-host-at-once---all-hosts) |
+| `naavik show-site-interpreter` | print a site interpreter's identity | [Running missions](../guide/08-hpc-batches.md#1-the-hosts-file-your-machines-on-your-machine) |
+| `naavik summarize ROOT... [--runs RUN] [--mission MISSION]` | compare runs | [Comparing runs](../guide/12-comparing-runs.md) |
 | `naavik runs list / show / diff / sync` | every recorded run | [Every run is recorded](../guide/13-run-registry.md) |
 
 `naavik <command> --help` lists every option. The earlier entry points run
 the same code: `python -m training_framework.hpc <command>` and
-`python -m training_framework.reporting summarize`. `launch` was called
-`submit`, and `--target`/`--targets` were `--profile`/`--profiles`; the old
-names are kept as aliases.
+`python -m training_framework.reporting summarize`. Earlier names are kept
+as aliases: `submit` (`launch`), `batches` (`missions`), `probe-python`
+(`show-site-interpreter`), `--target` / `--profile` (`--host`), `--targets` /
+`--profiles` (`--hosts-file`), `--task` (`--experiment`), `--tasks`
+(`--experiments`). Flags are spelled out in full: an abbreviation is
+refused.
 
-`validate`, `render`, `launch`, and `run` check every task config with the
-batch's own code ([step 9](../guide/08-hpc-batches.md#5-checking-a-batch-validate-and-render));
+`validate`, `render`, `launch`, and `run` check every experiment's config with the
+mission's own code ([step 9](../guide/08-hpc-batches.md#5-checking-a-mission-validate-and-render));
 `TRAINING_FRAMEWORK_CODE_CHECK=0` skips it, with a warning, recorded in the
-receipt. `naavik run` exits with the task's exit status (`130` when Ctrl-C
+receipt. `naavik run` exits with the experiment's exit status (`130` when Ctrl-C
 stopped following).
 
 ## `naavik runs`
@@ -93,7 +96,7 @@ record. Also `python -m training_framework.runs`.
 
 | Command | Does |
 |---|---|
-| `naavik runs list [--since AGE] [--state S] [--host H] [--batch TEXT] [--where KEY=VALUE] [--limit N] [--json]` | recorded runs, newest first (at most 50 by default; `--limit 0`: all) |
+| `naavik runs list [--since AGE] [--state S] [--host H] [--mission TEXT] [--where KEY=VALUE] [--limit N] [--json]` | recorded runs, newest first (at most 50 by default; `--limit 0`: all) |
 | `naavik runs show RUN [--json]` | one run in detail: launch, code, environment, devices, sessions, checkpoints, outcome |
 | `naavik runs diff A B [--all-keys]` | what differs in code, config, environment, and devices (`--all-keys`: also `sessions_dir` and the rendezvous address and port) |
 | `naavik runs sync [--target T ... \| --all-targets] [--targets FILE]` | copy the runs recorded on SSH targets into this registry |
@@ -118,7 +121,7 @@ naavik summarize ROOT [ROOT ...] [options]
 
 | Argument | Default | Meaning |
 |---|---|---|
-| `ROOT` | | A directory to look for runs (`session_*` directories) in: a `sessions_dir`, a directory above several, one session directory, an HPC batch, or `hpc-results/<batch-id>`. A ROOT or `--runs` is needed |
+| `ROOT` | | A directory to look for runs (`session_*` directories) in: a `sessions_dir`, a directory above several, one session directory, a mission directory, or `hpc-results/<batch-id>`. A ROOT or `--runs` is needed |
 | `--runs RUN` | | The session directories of a [recorded run](../guide/13-run-registry.md) (an id or a unique beginning; repeatable) |
 | `--metric TAG[:min\|:max]` | every tag, last only | A scalar tag to report; with a direction its best value too (repeatable) |
 | `--tags GLOB` | | Also report every tag matching `GLOB`, last value only (repeatable) |

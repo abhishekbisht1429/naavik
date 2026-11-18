@@ -1,19 +1,19 @@
-# Setting up a project for HPC batches
+# Setting up a project for missions
 
-How to prepare a repository for the [HPC batch layer](08-hpc-batches.md):
-which code mode to use, and how to produce the pinned requirements file a
+How to prepare a repository for [missions](08-hpc-batches.md): where the
+framework comes from, and how to produce the pinned requirements file a
 managed environment is built from. Every key used here is described in the
-[HPC configuration reference](../reference/hpc-configuration.md).
+[configuration reference](../reference/hpc-configuration.md).
 
-## Two code modes
+## Where the framework comes from
 
-| `code.framework` | When | The framework comes from | The requirements file |
+| `code.framework_from` | When | The framework comes from | The requirements file |
 |---|---|---|---|
-| `checkout` | the repository *is* training-framework | the staged commit (`code.paths: ["src"]`) | must **not** contain `training-framework` |
-| `dependency` | your project uses training-framework as a dependency | the cluster environment | must pin `training-framework` exactly once |
+| `this_repository` | the repository *is* training-framework | the staged commit (`code.python_paths: ["src"]`) | must **not** contain `training-framework` |
+| `installed` | your project uses training-framework as a dependency | the environment on the host | must pin `training-framework` exactly once |
 
-In both modes your own code is never pip-installed: `code.paths` puts it on
-`PYTHONPATH` from the staged commit, so code changes do not rebuild the
+Either way your own code is never pip-installed: `code.python_paths` puts it
+on `PYTHONPATH` from the staged commit, so code changes do not rebuild the
 environment. Only dependency changes do.
 
 ## Why a pinned requirements file
@@ -24,21 +24,22 @@ The requirements file is that resolution, done once on your machine and
 committed:
 
 - The environment's key hashes it, so the same file always means the same
-  packages, and batches with the same file share one environment.
+  packages, and missions with the same file share one environment.
 - It is installed with `pip install --no-deps`: pip resolves nothing on the
-  cluster, so the file must list every package, indirect dependencies
+  host, so the file must list every package, indirect dependencies
   included.
-- `validate` checks it before anything reaches the cluster: every line is
+- `validate` checks it before anything reaches the host: every line is
   `name==X.Y.Z` or a direct reference with a full 40-character commit SHA or
   an archive hash, and the only options are `--index-url`,
   `--extra-index-url`, `--find-links`, and `--hash=`.
 
-You do not need it with `env.existing` (an environment you manage yourself).
+You do not need it with `python_environment.use_existing` (an environment
+you manage yourself).
 
 ## Install uv
 
 [uv](https://docs.astral.sh/uv/) resolves `pyproject.toml` for another
-platform and Python version, which is what the cluster needs. Any one of:
+platform and Python version, which is what the host needs. Any one of:
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh     # standalone, into ~/.local/bin
@@ -50,20 +51,20 @@ conda install -c conda-forge uv
 uv --version
 ```
 
-## The cluster's Python version
+## The host's Python version
 
-Resolve for the Python that runs on the cluster:
+Resolve for the Python that runs on the host:
 
 ```bash
 ssh <cluster> 'module load python/<version> && python3 --version'
-# or, with a profile: naavik probe-python
+# or, with the host in hosts.yaml: naavik show-site-interpreter
 ```
 
-The examples below use 3.12; use what the cluster reports. With
-`python_source: site` it must match the profile's `site_python_identity`;
-with `uv` or `conda` it is `environment.python`.
+The examples below use 3.12; use what the host reports. With
+`interpreter_from: site` it must match the host's `site_interpreter`; with
+`uv` or `conda` it is `python_packages.python_version`.
 
-## `checkout` mode: this repository
+## `this_repository`: training-framework itself
 
 ```bash
 cd training-framework
@@ -76,20 +77,20 @@ grep -i '^training-framework' requirements/hpc.txt    # must print nothing
 ```
 
 `uv pip compile pyproject.toml` writes the dependencies only, not the
-project itself. Leave out `--extra vision` if no batch uses the image
+project itself. Leave out `--extra vision` if no mission uses the image
 datasets. `--python-platform linux` resolves for Linux x86_64 even on a Mac.
 
 ```yaml
-code: {framework: checkout, paths: ["src"]}
-environment:
-  requirements: requirements/hpc.txt
+code: {framework_from: this_repository, python_paths: ["src"]}
+python_packages:
+  requirements_file: requirements/hpc.txt
 ```
 
-## `dependency` mode: a project that uses training-framework
+## `installed`: a project that uses training-framework
 
 ### 1. Make the framework commit fetchable
 
-The cluster installs the framework from Git, so the commit must be pushed:
+The host installs the framework from Git, so the commit must be pushed:
 
 ```bash
 cd training-framework
@@ -105,11 +106,12 @@ can point at different code later.
 ```
 my-project/
   pyproject.toml
+  naavik-project.yaml      # what the mission files share (step 6)
   my_project/
     __init__.py
     components.py          # session_config.components_package
   configs/train.yaml
-  batch.yaml
+  missions/sweep.yaml
   requirements/hpc.txt     # generated in step 4
 ```
 
@@ -151,86 +153,91 @@ The CLI runs locally, from the same commit, with the `hpc` extra:
 pip install "training-framework[hpc] @ git+https://github.com/abhishekbisht1429/training-framework.git@<the same sha>"
 ```
 
-### 6. The experiment file
+### 6. The project file and a mission file
 
 ```yaml
-version: 1
-name: my-sweep
+# naavik-project.yaml
 code:
-  framework: dependency          # the framework comes from the environment
-  paths: ["."]                   # puts my_project/ on PYTHONPATH (["src"] for a src layout)
-environment:
-  requirements: requirements/hpc.txt
-  python: "3.12"                 # optional with python_source: site
-training:
-  config: configs/train.yaml
-groups:
+  framework_from: installed      # the framework comes from the environment
+  python_paths: ["."]            # puts my_project/ on PYTHONPATH (["src"] for a src layout)
+python_packages:
+  requirements_file: requirements/hpc.txt
+  python_version: "3.12"         # optional with interpreter_from: site
+```
+
+```yaml
+# missions/sweep.yaml
+format_version: 1
+name: my-sweep
+project_file: naavik-project.yaml
+base:
+  config_file: configs/train.yaml
+jobs:
   cpu:
-    resources: {walltime: "00:15:00", cpus: 2, memory: 8G}
-    experiments:
+    per_experiment: {walltime: "00:15:00", cpus: 2, memory: 8G}
+    recipes:
       - name: seeds
-        matrix: [{path: session_config.rng_seed, values: [1, 2]}]
+        vary: [{path: session_config.rng_seed, values: [1, 2]}]
 ```
 
 In `configs/train.yaml`, set `session_config.components_package:
 my_project.components`.
 
-### 7. The profile
+### 7. The host
 
-Let the HPC layer build the environment:
+Let naavik build the environment:
 
 ```yaml
-env:
-  python_source: site
-  site_python_identity: {...}     # from probe-python
-setup_location: login             # pip fetches from GitHub and PyPI on the login node
+python_environment:
+  interpreter_from: site
+  site_interpreter: {...}         # from show-site-interpreter
+environment_build: {on: login_node}   # pip fetches from GitHub and PyPI on the login node
 ```
 
-Or use `env.existing: /path/to/env`, an environment that already has this
-framework commit and its dependencies (install them there with the same
-`pip install ... @<sha>`).
+Or use `python_environment.use_existing: /path/to/env`, an environment that
+already has this framework commit and its dependencies (install them there
+with the same `pip install ... @<sha>`).
 
-### A profile for this machine
+### A host for this machine
 
-To run the same experiment file on your workstation, without committing each
+To run the same mission file on your workstation, without committing each
 change and in the environment your IDE already uses:
 
 ```yaml
-targets:
+hosts:
   here:
-    local: true
-    scheduler: host
-    host: {gpus: [4, 5]}        # the GPUs batches may use here
-    worktree: snapshot          # run the working tree as it is
-    env: {existing: current}    # the interpreter running naavik
-    roots: {batches: /data/me/naavik/batches, envs: /data/me/naavik/envs, data: /data/me/naavik/data}
+    connection: local
+    scheduler: {kind: builtin, gpus: [4, 5]}   # the GPUs missions may use here
+    run_code_from: working_tree                # run the working tree as it is
+    python_environment: {use_existing: current}   # the interpreter running naavik
+    directories: {missions: /data/me/naavik/missions, python_environments: /data/me/naavik/envs, datasets: /data/me/naavik/datasets}
 ```
 
-`naavik launch batch.yaml --target here` then needs no requirements file
-(the environment exists) and no commit; see
-[Targets](08-hpc-batches.md#targets-this-machine-an-ssh-host-or-a-cluster).
+`naavik launch missions/sweep.yaml --host here` then needs no requirements
+file (the environment exists) and no commit; see
+[Hosts](08-hpc-batches.md#hosts-this-machine-an-ssh-machine-or-a-cluster).
 
-### 8. Commit, validate, submit
+### 8. Commit, validate, launch
 
 ```bash
-git add -A && git commit -m "HPC batch setup"
-naavik validate batch.yaml
-naavik launch batch.yaml
-naavik status <batch-id>
+git add -A && git commit -m "Set up missions"
+naavik validate missions/sweep.yaml
+naavik launch missions/sweep.yaml
+naavik status <mission-id>
 ```
 
 `validate` checks that the framework is pinned exactly once and everything
-else is pinned; the setup's preflight checks that `training_framework`
-imports from the environment.
+else is pinned; the environment build's preflight checks that
+`training_framework` imports from the environment.
 
 ### A private framework repository
 
-`pip install` on the cluster must then authenticate to GitHub. Either:
+`pip install` on the host must then authenticate to GitHub. Either:
 
 - an SSH URL, `git+ssh://git@github.com/...@<sha>`, with a deploy key on the
-  cluster; or
+  host; or
 - a wheel: build it (`python -m build` in the framework repository), copy it
-  where the cluster can read it, and pin it with its archive hash:
+  where the host can read it, and pin it with its archive hash:
   `training-framework @ file:///N/.../training_framework-0.5.0-py3-none-any.whl#sha256=<hash>`
   (`sha256sum` prints the hash).
 
@@ -251,7 +258,7 @@ uv pip compile ... \
 
 ## Without uv: freezing a tested environment
 
-If you have a working environment on Linux x86_64 with the cluster's Python
+If you have a working environment on Linux x86_64 with the host's Python
 version (for example a conda environment on a training machine):
 
 ```bash
@@ -260,26 +267,28 @@ python -m pip list --format=freeze --exclude-editable > requirements/hpc.txt
 
 Use `pip list --format=freeze`, not `pip freeze`: for packages installed by
 conda, `pip freeze` writes `name @ file:///...` paths that do not exist on
-the cluster (and `validate` refuses). Then edit the file:
+the host (and `validate` refuses). Then edit the file:
 
 - remove conda tooling (`conda`, `conda-package-handling`, `mkl-service`,
   ...), whose versions may not exist on PyPI;
-- `checkout` mode: remove `training-framework`; `dependency` mode: replace
-  it with the `git+...@<sha>` line;
+- `framework_from: this_repository`: remove `training-framework`;
+  `installed`: replace it with the `git+...@<sha>` line;
 - a `torch==X.Y.Z+cuXXX` line needs `--extra-index-url
   https://download.pytorch.org/whl/cuXXX` at the top.
 
 This is less reliable than `uv pip compile`: conda builds can differ from
 the PyPI ones `pip install --no-deps` will fetch.
 
-A conda environment *on the cluster* is a separate choice: `env.backend:
-conda` creates it with Python and `env.conda_packages`, then installs this
-file into it with pip, so the file holds pip packages only.
+A conda environment *on the host* is a separate choice:
+`python_environment.kind: conda` creates it with Python and
+`python_environment.conda_packages`, then installs this file into it with
+pip, so the file holds pip packages only.
 
 ## Updating
 
-When `pyproject.toml` changes (or, in `dependency` mode, to move to a new
-framework commit: push it, put its SHA in `pyproject.toml`, and reinstall
-the CLI at that SHA), run the same `uv pip compile` command again (add
-`--upgrade` to take newer versions within your ranges) and commit the file.
-The next batch builds a new environment once; earlier batches keep theirs.
+When `pyproject.toml` changes (or, with `framework_from: installed`, to move
+to a new framework commit: push it, put its SHA in `pyproject.toml`, and
+reinstall the CLI at that SHA), run the same `uv pip compile` command again
+(add `--upgrade` to take newer versions within your ranges) and commit the
+file. The next mission builds a new environment once; earlier missions keep
+theirs.
