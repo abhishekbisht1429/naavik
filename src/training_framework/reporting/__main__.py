@@ -40,6 +40,13 @@ def _parser(prog: str = "python -m training_framework.reporting") -> argparse.Ar
     summarize.add_argument("--runs", action="append", default=[], metavar="RUN",
                            help="also the session directories of this recorded run (a run id "
                                 "or a unique beginning of one, see `naavik runs`; repeatable)")
+    summarize.add_argument("--batch", action="append", default=[], metavar="BATCH",
+                           help="also this batch (an id or its receipt): read on this machine "
+                                "when it ran here, else from its fetched copy; never "
+                                "downloaded (repeatable)")
+    summarize.add_argument("--fetched", metavar="DIR", default="hpc-results",
+                           help="where `naavik fetch` put batches from other targets "
+                                "(default: ./hpc-results)")
     summarize.add_argument("--metric", action="append", default=[], metavar="TAG[:min|:max]",
                            help="a scalar tag to report; with :min or :max its best value too "
                                 "(repeatable; default: every tag, last value only)")
@@ -96,6 +103,51 @@ def _recorded_session_dirs(prefixes: list[str]) -> list[str]:
     return directories
 
 
+def _batch_roots(batches: list[str], fetched: str) -> list[str]:
+    """The directory to read each batch from: its batch directory when it ran
+    on this machine, else its fetched copy (`naavik fetch` puts it in
+    `<fetched>/<batch-id>`); never downloaded."""
+    if not batches:
+        return []
+    import json
+
+    from training_framework.launcher.errors import HpcError
+    from training_framework.launcher.ports.targets import target_of_receipt
+    from training_framework.launcher.services.receipt import default_receipts_dir
+    from training_framework.launcher.services.status import receipt_problem
+
+    roots = []
+    for batch in batches:
+        path = batch if os.path.isfile(batch) else os.path.join(default_receipts_dir(), f"{batch}.json")
+        if not os.path.isfile(path):
+            raise ReportError(f"--batch {batch}: no receipt for it on this machine "
+                              f"(looked at {path})")
+        try:
+            receipt = json.loads(open(path, encoding="utf-8").read())
+        except (OSError, ValueError) as error:
+            raise ReportError(f"--batch {batch}: its receipt {path} cannot be read ({error})") from None
+        if problem := receipt_problem(receipt):
+            raise ReportError(f"--batch {batch}: its receipt {path} is {problem}")
+        batch_id = receipt["batch_id"]
+        try:
+            target = target_of_receipt(receipt)
+        except HpcError as error:
+            raise ReportError(f"--batch {batch}: {error}") from None
+        if target is not None and target.is_local:
+            if not os.path.isdir(receipt["batch_dir"]):
+                raise ReportError(f"--batch {batch_id} ran on this machine, but its batch "
+                                  f"directory {receipt['batch_dir']} is gone")
+            roots.append(receipt["batch_dir"])
+            continue
+        copy = os.path.join(fetched, batch_id)
+        if not os.path.isdir(copy):
+            raise ReportError(f"--batch {batch_id} ran on {target or 'another target'}; fetch "
+                              f"it first (`naavik fetch {batch_id}`), or give --fetched DIR "
+                              f"(looked at {copy})")
+        roots.append(copy)
+    return roots
+
+
 def _summarize(args) -> int:
     if args.table is not None and args.format != "csv":
         raise ReportError("--table only applies with --format csv")
@@ -103,9 +155,10 @@ def _summarize(args) -> int:
         raise ReportError("--seed-key has no effect with --no-seed-groups")
     if args.table == "groups" and args.no_seed_groups:
         raise ReportError("there is no groups table with --no-seed-groups")
-    roots = list(args.roots) + _recorded_session_dirs(args.runs)
+    roots = (list(args.roots) + _recorded_session_dirs(args.runs)
+             + _batch_roots(args.batch, args.fetched))
     if not roots:
-        raise ReportError("give a ROOT directory or --runs RUN")
+        raise ReportError("give a ROOT directory or --runs RUN (or --batch BATCH)")
     discovery = discover_runs(*roots, include=args.include, exclude=args.exclude)
     if args.output is not None:
         output = os.path.abspath(args.output)
