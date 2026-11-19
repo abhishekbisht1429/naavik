@@ -94,4 +94,31 @@ def check_session_config(config: Mapping, session_type: str | None = None) -> Co
             parse_component_config(planned.component_class, planned.config)
         except (TypeError, ValueError) as error:
             result.problems.append(f"{planned.name}: {_message(error)}")
+    result.problems += _batch_split_problems(plan.components)
     return result
+
+
+def _batch_split_problems(components) -> list[str]:
+    """The training data manager's global `batch_size` split over the DDP
+    `world_size` (the rule its setup applies), when both are numbers in
+    the config: a rule across two components, so no schema sees it."""
+    from training_framework.components.builtin.data import DataManager, world_size_problem
+    from training_framework.components.builtin.distributed import DDPResource
+
+    sizes = [planned.config.get("world_size") for planned in components
+             if issubclass(planned.component_class, DDPResource)
+             and isinstance(planned.config, Mapping)]
+    world_size = sizes[0] if len(sizes) == 1 else None
+    if isinstance(world_size, bool) or not isinstance(world_size, int) or world_size <= 0:
+        return []
+    problems = []
+    for planned in components:
+        if not issubclass(planned.component_class, DataManager) or not isinstance(planned.config, Mapping):
+            continue
+        batch_size = planned.config.get("batch_size")
+        if isinstance(batch_size, bool) or not isinstance(batch_size, int) or batch_size <= 0:
+            continue                    # the schema says what is wrong with it
+        if (problem := world_size_problem(batch_size, world_size)) is not None:
+            result = f"{planned.name}: {problem} (batch_size {batch_size}, ddp.world_size {world_size})"
+            problems.append(result)
+    return problems

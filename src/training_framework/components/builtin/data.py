@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import TYPE_CHECKING, Any, override
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, ClassVar, override
 
 import torch
 from torch.utils.data import DataLoader, default_collate
@@ -60,28 +61,81 @@ class _ManagedDataIterator:
         self._iterator = None
 
 
+def _check_loader_settings(config) -> None:
+    """The settings both data managers share."""
+    batch_size = config.batch_size
+    if isinstance(batch_size, bool) or not isinstance(batch_size, int) or batch_size <= 0:
+        raise ValueError("DataManager batch_size must be a positive integer")
+    num_workers = config.num_workers
+    if isinstance(num_workers, bool) or not isinstance(num_workers, int) or num_workers < 0:
+        raise ValueError("DataManager num_workers must be a non-negative integer")
+    if not isinstance(config.pin_memory, bool):
+        raise TypeError("DataManager pin_memory must be a boolean")
+
+
+def world_size_problem(batch_size: int, world_size: int) -> str | None:
+    """Why `batch_size` (global) cannot be split over `world_size` ranks."""
+    if batch_size < world_size:
+        return ("DataManager batch_size must be at least the DDP world_size "
+                "so every rank receives a sample")
+    if batch_size % world_size != 0:
+        return "DataManager batch_size must be divisible by the DDP world_size"
+    return None
+
+
+@dataclass(frozen=True)
+class DataManagerConfig:
+    """The training `data_manager` config: `batch_size` is the global batch."""
+
+    batch_size: Any
+    num_workers: Any = 0
+    pin_memory: Any = False
+    #: Restoring a checkpoint from before this schema: keys the data manager
+    #: never read are dropped with a warning, so the checkpoint still resumes.
+    unknown_keys_dropped_on_restore: ClassVar[bool] = True
+
+    def __post_init__(self) -> None:
+        _check_loader_settings(self)
+
+
+@dataclass(frozen=True)
+class AnalysisDataManagerConfig:
+    """The analysis `data_manager` config."""
+
+    batch_size: Any
+    num_workers: Any = 0
+    pin_memory: Any = False
+    drop_last: Any = False
+    unknown_keys_dropped_on_restore: ClassVar[bool] = True
+
+    def __post_init__(self) -> None:
+        _check_loader_settings(self)
+        if not isinstance(self.drop_last, bool):
+            raise TypeError("DataManager drop_last must be a boolean")
+
+
+def _parsed(component_class, config):
+    from training_framework.components.config_schema import parse_component_config
+
+    return parse_component_config(component_class, config)
+
+
 @requires_resource("ddp")
 @requires_resource("dataset")
 @resource("data_manager", session_type="training")
 class DataManager(StatefulResource, EpochSource):
 
+    config_schema = DataManagerConfig
+
     def __init__(self, config):
-        self._batch_size = config["batch_size"]
-        self._num_workers = config["num_workers"]
-        self._pin_memory = config["pin_memory"]
+        settings = _parsed(type(self), config)
+        self._batch_size = settings.batch_size
+        self._num_workers = settings.num_workers
+        self._pin_memory = settings.pin_memory
         self._data_iter: _ManagedDataIterator | None = None
         self._sampler_state: dict[str, Any] | None = None
         self._local_batch_size: int | None = None
         self._epoch_size: int | None = None
-
-        if (
-                isinstance(self._batch_size, bool)
-                or not isinstance(self._batch_size, int)
-                or self._batch_size <= 0
-        ):
-            raise ValueError(
-                "DataManager batch_size must be a positive integer"
-            )
 
     @property
     def batch_size(self):
@@ -102,16 +156,8 @@ class DataManager(StatefulResource, EpochSource):
             raise ValueError(
                 "DataManager requires a positive integer world_size"
             )
-        if self.batch_size < world_size:
-            raise ValueError(
-                "DataManager batch_size must be at least the DDP world_size "
-                "so every rank receives a sample"
-            )
-        if self.batch_size % world_size != 0:
-            raise ValueError(
-                "DataManager batch_size must be divisible by the DDP "
-                "world_size"
-            )
+        if (problem := world_size_problem(self.batch_size, world_size)) is not None:
+            raise ValueError(problem)
 
     @override
     def iterations_for_epochs(self, epochs: int) -> int:
@@ -254,33 +300,16 @@ class AnalysisDataManager(Resource, EpochSource):
     analysis session.
     """
 
+    config_schema = AnalysisDataManagerConfig
+
     def __init__(self, config):
-        self._batch_size = config["batch_size"]
-        self._num_workers = config.get("num_workers", 0)
-        self._pin_memory = config.get("pin_memory", False)
-        self._drop_last = config.get("drop_last", False)
+        settings = _parsed(type(self), config)
+        self._batch_size = settings.batch_size
+        self._num_workers = settings.num_workers
+        self._pin_memory = settings.pin_memory
+        self._drop_last = settings.drop_last
         self._dataloader: DataLoader | None = None
         self._data_iter = None
-
-        if (
-                isinstance(self._batch_size, bool)
-                or not isinstance(self._batch_size, int)
-                or self._batch_size <= 0
-        ):
-            raise ValueError(
-                "DataManager batch_size must be a positive integer"
-            )
-        if (
-                isinstance(self._num_workers, bool)
-                or not isinstance(self._num_workers, int)
-                or self._num_workers < 0
-        ):
-            raise ValueError(
-                "DataManager num_workers must be a non-negative integer"
-            )
-        for key in ("pin_memory", "drop_last"):
-            if not isinstance(config.get(key, False), bool):
-                raise TypeError(f"DataManager {key} must be a boolean")
 
     @property
     def batch_size(self):
