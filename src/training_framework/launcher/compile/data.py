@@ -383,20 +383,26 @@ def suggest_sources(
         sessions: list[dict],
         sources: list[Source],
         facts: LocalFacts,
+        not_data: list | None = None,
 ) -> list[dict]:
-    """`upload: {}` entries for absolute local paths not yet covered."""
+    """`upload: {}` entries for absolute local paths not yet covered.
+    `not_data`: per session, an address whose value is not data (the
+    checkpoint `from_mission` writes), or None."""
     suggestions: dict[tuple, dict] = {}
     taken = {source.name for source in sources}
-    for session in sessions:
+    for index, session in enumerate(sessions):
         prefixes = _entry_paths(session)
         claimed = set()
-        for source in sources:
-            if source.address.component is None:
-                claimed.add(source.address.path)
+        addresses = [source.address for source in sources]
+        if not_data is not None and not_data[index] is not None:
+            addresses.append(not_data[index])
+        for address in addresses:
+            if address.component is None:
+                claimed.add(address.path)
             else:
                 for prefix, name in prefixes.items():
-                    if name == source.address.component:
-                        claimed.add(prefix + source.address.path)
+                    if name == address.component:
+                        claimed.add(prefix + address.path)
         found: list[tuple[tuple, str]] = []
         _scan(session, (), found)
         for path, value in found:

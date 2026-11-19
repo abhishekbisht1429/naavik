@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import copy
 import json
+from pathlib import Path
 
 import pytest
 import yaml
@@ -227,3 +228,192 @@ def test_a_mission_without_from_mission_never_asks_and_names_no_source(tmp_path)
                  profile=parse_profiles(PROFILE, None, "profiles.yaml"), facts=FakeFacts(root),
                  clock=CLOCK, checkpoint_facts=port)
     assert port.calls == []
+
+
+# The real port: the source's receipt, its host, its checkpoints -------------------------------
+
+from tests.hpc.test_end_to_end import COMPONENTS, environment, session  # noqa: E402,F401 (fixture)
+from tests.launcher.test_host_end_to_end import here, launch, record, wait_for  # noqa: E402,F401
+
+
+def trained_and_analysis_repo(tmp_path):
+    """One repository: a training mission (two seeds, checkpoints at 2 and
+    4) and an analysis mission over its checkpoints."""
+    training = session(max_iterations=4)
+    training["checkpointer"] = {"checkpoint_every": 2}
+    analysis = {"session_type": "analysis",
+                "session_config": {"rng_seed": 0, "sessions_dir": "./runs", "max_iterations": 1,
+                                   "device": "cpu", "components_package": "my_project.components",
+                                   "show_execution_graph": False},
+                "trained_model": {"model_checkpoint_path": "unset"}}
+    train_mission = {
+        "format_version": 1, "name": "train",
+        "code": {"framework_from": "installed", "python_paths": ["."]},
+        "base": {"config_file": "configs/train.yaml",
+                 "engine_options": ["--process_timeout_on_join", "30"]},
+        "jobs": {"cpu": {"per_experiment": {"walltime": "00:30:00", "cpus": 2, "memory": "4G"},
+                         "max_parallel_experiments": 2,
+                         "recipes": [{"name": "seeds", "vary": [
+                             {"path": "session_config.rng_seed", "values": [1, 2]}]}]}},
+    }
+    return make_repo(tmp_path, manifest=train_mission, config={"sessions": [training]},
+                     requirements=None, extra_files={
+                         "my_project/components.py": COMPONENTS.read_text(),
+                         "configs/analysis.yaml": yaml.safe_dump({"sessions": [analysis]})})
+
+
+def analysis_mission(source_id, **origin):
+    return {
+        "format_version": 1, "name": "eval",
+        "code": {"framework_from": "installed", "python_paths": ["."]},
+        "base": {"config_file": "configs/analysis.yaml",
+                 "engine_options": ["--process_timeout_on_join", "30"]},
+        "jobs": {"eval": {"per_experiment": {"walltime": "00:30:00", "cpus": 2, "memory": "4G"},
+                          "recipes": [{"name": "test", "from_mission": {"id": source_id, **origin}}]}},
+    }
+
+
+def commit(root, relative, data):
+    import subprocess
+
+    (root / relative).parent.mkdir(parents=True, exist_ok=True)
+    (root / relative).write_text(yaml.safe_dump(data))
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+    subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", relative],
+                   cwd=root, check=True)
+
+
+def test_an_analysis_mission_runs_over_a_trained_missions_checkpoints(tmp_path, here, capsys):
+    from training_framework.cli import main as naavik
+
+    root = trained_and_analysis_repo(tmp_path)
+    train_dir, train_receipt = launch(root, here, capsys)
+    names = ["cpu/seeds/000", "cpu/seeds/001"]
+    wait_for(lambda: all(record(train_dir, name) for name in names), "the training records")
+    assert all(record(train_dir, name)["exit_status"] == 0 for name in names)
+
+    commit(root, "missions/eval.yaml", analysis_mission(train_receipt["batch_id"]))
+    # validate lists the checkpoints, and says it did.
+    assert naavik(["validate", str(root / "missions/eval.yaml"), "--targets", str(here)]) == 0
+    out = capsys.readouterr().out
+    assert f"note: listed the checkpoints of {train_receipt['batch_id']} on host 'cluster' (read-only)" in out
+    assert "ok: 2 experiment(s) in 1 job(s)" in out
+    assert "not data sources" not in out              # a checkpoint path is not data to copy
+
+    assert naavik(["launch", str(root / "missions/eval.yaml"), "--targets", str(here), "--yes"]) == 0
+    eval_dir = Path(capsys.readouterr().out.split("submitted: ")[1].splitlines()[0])
+    plan = json.loads((eval_dir / "plan.json").read_text())
+    sources = [task["source"] for task in plan["tasks"]]
+    assert [(s["experiment"], s["iteration"]) for s in sources] == [("cpu/seeds/000", 4), ("cpu/seeds/001", 4)]
+    for task, source in zip(plan["tasks"], sources):
+        wait_for(lambda: record(eval_dir, task["name"]), f"{task['name']}'s record")
+        done = record(eval_dir, task["name"])
+        assert done["exit_status"] == 0, done.get("error")
+        assert done["source"] == source           # the record names what it analysed
+        config = yaml.safe_load((eval_dir / "tasks" / task["name"] / "config.yaml").read_text())
+        assert config["sessions"][0]["trained_model"]["model_checkpoint_path"] == source["checkpoint"]
+        assert source["checkpoint"].startswith(str(train_dir))
+
+
+def test_all_checkpoints_and_an_unmatched_glob(tmp_path, here, capsys):
+    from training_framework.cli import main as naavik
+
+    root = trained_and_analysis_repo(tmp_path)
+    train_dir, train_receipt = launch(root, here, capsys)
+    wait_for(lambda: all(record(train_dir, f"cpu/seeds/00{i}") for i in (0, 1)), "the training records")
+    commit(root, "missions/eval.yaml",
+           analysis_mission(train_receipt["batch_id"], checkpoint="all", experiments=["cpu/seeds/000"]))
+    assert naavik(["validate", str(root / "missions/eval.yaml"), "--targets", str(here)]) == 0
+    assert "ok: 2 experiment(s)" in capsys.readouterr().out          # iterations 2 and 4
+    commit(root, "missions/eval.yaml", analysis_mission(train_receipt["batch_id"], experiments=["gpu/*"]))
+    assert naavik(["validate", str(root / "missions/eval.yaml"), "--targets", str(here)]) == 2
+    assert "'gpu/*' matches no experiment" in capsys.readouterr().err
+
+
+def test_a_source_without_a_receipt_here_is_named(tmp_path, here, capsys):
+    from training_framework.cli import main as naavik
+
+    root = trained_and_analysis_repo(tmp_path)
+    commit(root, "missions/eval.yaml", analysis_mission(SOURCE))
+    assert naavik(["validate", str(root / "missions/eval.yaml"), "--targets", str(here)]) == 2
+    err = capsys.readouterr().err
+    assert f"recipes[test].from_mission: no receipt for {SOURCE} on this machine" in err
+
+
+# Where the source is read from -----------------------------------------------------------------
+
+
+def hosts_profile(name):
+    from tests.launcher.test_hosts_file import CURRENT as HOSTS
+
+    data = copy.deepcopy(HOSTS)
+    data["hosts"]["gpubox"] = dict(copy.deepcopy(HOSTS["hosts"]["cluster"]), connection={"ssh": "gpubox"})
+    data["hosts"]["here"] = {
+        "connection": "local", "scheduler": {"kind": "builtin"},
+        "directories": {"missions": "/m", "python_environments": "/e", "datasets": "/d"},
+        "python_environment": {"use_existing": "/opt/env"}}
+    return parse_profiles(data, name, "hosts.yaml")
+
+
+def write_receipt(directory, **changes):
+    receipt = {"batch_id": SOURCE, "batch_dir": f"/scratch/me/batches/{SOURCE}", "status": "submitted",
+               "staged": True, "nodes": {}, "profile": "cluster", "created": "2026-11-18T09:00:00+00:00",
+               "task_count": 1, "ssh_host": "cluster", **changes}
+    receipt = {key: value for key, value in receipt.items() if value is not None}
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / f"{SOURCE}.json").write_text(json.dumps(receipt))
+    return directory
+
+
+def read(tmp_path, host, **kwargs):
+    from training_framework.launcher.services.source_mission import read_source_mission
+
+    return read_source_mission(SOURCE, hosts_profile(host), **kwargs)
+
+
+def test_a_fetched_copy_is_read_for_a_mission_on_this_machine(tmp_path):
+    copy_dir = tmp_path / "hpc-results" / SOURCE
+    (copy_dir / "groups" / "short").mkdir(parents=True)
+    (copy_dir / "groups" / "short" / "tasks.tsv").write_text(
+        "index\ttask\n0\tshort/base/000\n1\tshort/base/001\n")
+    checkpoint_dir = copy_dir / "tasks/short/base/000/sessions/session_1/checkpoints/iteration_7"
+    checkpoint_dir.mkdir(parents=True)
+    (checkpoint_dir / "manifest.json").write_text(json.dumps({"iteration": 7}))
+    found = read(tmp_path, "here", receipts_dir=write_receipt(tmp_path / "receipts"),
+                 fetched=str(tmp_path / "hpc-results"))
+    assert found.problems == []
+    assert found.experiments == {"short/base/000": (SourceCheckpoint(str(checkpoint_dir), 7),),
+                                 "short/base/001": ()}
+    assert found.where == f"from its fetched copy {copy_dir}"
+
+
+@pytest.mark.parametrize("host, changes, message", [
+    ("here", {}, rf"{SOURCE} ran on cluster, and this mission runs on this machine: fetch it here "
+                 rf"first \(`naavik fetch {SOURCE}`; add --checkpoints all"),
+    ("gpubox", {}, rf"{SOURCE} ran on cluster, but this mission runs on host 'gpubox' \(gpubox\): "
+                   "an analysis runs where its checkpoints are"),
+    ("cluster", {"staged": None, "status": "failed"}, rf"{SOURCE} never reached its host \(failed\)"),
+    ("cluster", {"ssh_host": None}, "does not record its host"),
+])
+def test_where_a_source_cannot_be_read_is_said(tmp_path, host, changes, message):
+    found = read(tmp_path, host, receipts_dir=write_receipt(tmp_path / "receipts", **changes),
+                 fetched=str(tmp_path / "hpc-results"))
+    assert found.experiments == {} and len(found.problems) == 1
+    assert __import__("re").search(message, found.problems[0]), found.problems[0]
+
+
+def test_a_damaged_receipt_is_a_problem_not_a_crash(tmp_path):
+    directory = tmp_path / "receipts"
+    directory.mkdir()
+    (directory / f"{SOURCE}.json").write_text("{not json")
+    found = read(tmp_path, "cluster", receipts_dir=directory)
+    assert "cannot be read" in found.problems[0]
+
+
+def test_a_source_whose_directory_is_gone_is_named(tmp_path):
+    import socket
+
+    receipts = write_receipt(tmp_path / "receipts", ssh_host=None, batch_dir=str(tmp_path / "gone"),
+                             target={"transport": "local", "host": socket.gethostname()})
+    found = read(tmp_path, "here", receipts_dir=receipts)
+    assert found.problems and "mission directory" in found.problems[0] and "not found" in found.problems[0]

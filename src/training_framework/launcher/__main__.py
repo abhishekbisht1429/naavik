@@ -334,6 +334,7 @@ def _compile(args, profile, fresh_env=False, fetch_here=False):
         fresh_env=fresh_env,
         code_facts=_code_facts(repository, profile, fetch_here=fetch_here),
         selection=Selection(tuple(args.job), tuple(args.recipe)),
+        checkpoint_facts=_checkpoint_facts(profile),
     )
     _warn_earlier_names(compiled, repository)
     _print_code_notes(compiled)
@@ -357,6 +358,19 @@ def _code_facts(repository, profile, fetch_here=False):
         if fetch_here and not facts.problems and profile.data is not None:
             _fetch_uploads_here(sha, manifest, tasks, facts, repository, profile)
         return facts
+
+    return port
+
+
+def _checkpoint_facts(profile):
+    """The compiler's `checkpoint_facts` port: another mission's complete
+    checkpoints, for a recipe's `from_mission` (asked only when one has it;
+    on the host it reads, never writes)."""
+    from training_framework.launcher.services.source_mission import read_source_mission
+
+    def port(mission_id):
+        _progress(f"listing the checkpoints of {mission_id}")
+        return read_source_mission(mission_id, profile, require_tools=_require_tools)
 
     return port
 

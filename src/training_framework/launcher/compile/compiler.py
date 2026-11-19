@@ -397,7 +397,10 @@ def compile_plan(
         sources, sessions, profile, facts, environment.get("key"), code_identity, problems,
     )
     _data_requirements(tasks_raw, sessions, sources, profile, facts, facts_found, problems, data)
-    suggestions = data_module.suggest_sources(sessions, sources, facts)
+    suggestions = data_module.suggest_sources(sessions, sources, facts, [
+        addresses.parse_address(experiment.from_mission.into, "")[0]
+        if experiment.from_mission is not None else None
+        for _, experiment, *_ in tasks_raw])
     if suggestions:
         notes.append(
             f"{len(suggestions)} absolute local path(s) in the experiment configs are "
@@ -476,8 +479,8 @@ def compile_plan(
             lead = dialect.signal_lead(timeout, node.stop_grace_seconds)
             if lead >= node.resources.walltime_seconds:
                 problems.add(
-                    f"group '{node.group}': the shutdown signal lead ({lead}s "
-                    "= process_timeout_on_join + stop_grace) is not shorter "
+                    f"job '{node.group}': the shutdown signal lead ({lead}s "
+                    "= process_timeout_on_join + stop_grace_period) is not shorter "
                     f"than the walltime ({node.resources.walltime})"
                 )
         elif node.kind == "prepare":
