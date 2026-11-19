@@ -64,6 +64,16 @@ An explicit component mapping replaces its default mapping, so retain required
 fields such as `log_every` and `checkpoint_every` when overriding defaults.
 The analysis logger likewise defaults to `log_every: 10`.
 
+**Every built-in checks its config.** Each one has a `config_schema`, so a
+session check (`naavik validate`) finds a mistake without building
+anything, with the message building would give: an unknown key is refused
+(it is never silently ignored), a required one named when missing, and
+intervals (`log_every`, `checkpoint_every`, `call_every`) must be positive
+integers. What depends on the machine that runs (a checkpoint file existing,
+a free port, a usable GPU) is checked when the session is built. A
+checkpoint written while a component still ignored a key restores: the key
+is dropped, with a warning naming it.
+
 The optional training built-ins use these configurations (`optimizer` and its
 chain are in [Optimization](optimization.md); the generic steps in
 [Generic steps](generic-steps.md)):
@@ -92,6 +102,15 @@ tensorboard:
 ```
 
 ### `ddp`
+
+| Key | Default | Meaning |
+|---|---|---|
+| `world_size` | required | Processes in the process group, a positive integer |
+| `backend` | `gloo` | `gloo`, `nccl`, `mpi`, or `ucc` |
+| `master_addr` | `127.0.0.1` | Where the ranks meet |
+| `master_port` | chosen by the launch | A port number (1-65535); left out, the engine (or naavik) binds a free one |
+| `rank_zero_components` | none | Components kept on rank 0 only (below) |
+| `parallel_components` | none | Deprecated (below) |
 
 The DDP resource is a [singleton](../guide/02-wiring-components.md#components-that-must-stay-unique):
 it owns the process group, and the engine, worker and session each expect
@@ -233,7 +252,8 @@ tensorboard.summary_writer.add_scalar(
 )
 ```
 
-`serve` (default `true`) controls the server. With `serve: false` the
+`serve` (default `true`) controls the server, which then needs `host` and
+`port` (a port number); `logdir` is optional. With `serve: false` the
 resource starts no `tensorboard` process and only creates the writer, in the
 same directory; `host`, `port`, and `logdir` configure the server alone, so
 giving any of them with `serve: false` is an error. Use it where a server
@@ -432,7 +452,7 @@ layer_inspector:
     - "encoder\\.layer\\.\\d+\\.attention$"    # the name from model.named_modules()
   module_types:              # optional list[str], dotted paths resolved to classes
     - torch.nn.MultiheadAttention
-  always_call: false          # optional, default false; forwarded to register_forward_hook
+  always_call: false          # optional, default false (a boolean); forwarded to register_forward_hook
 ```
 
 At least one of `name_patterns` or `module_types` is required. Layers are
