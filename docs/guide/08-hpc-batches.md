@@ -206,6 +206,13 @@ jobs:
   `base.session_index`). When any recipe sets `config_file:`, every
   experiment records the file it was made from, and `summarize` compares it
   as `config`, so two structures are never one seed group.
+- To compare several structures on the same sweep, one recipe can list them:
+  `config_files: [configs/model/vit-base.yaml, configs/model/vit-attnpool.yaml]`.
+  Each file gets every combination of the recipe's `vary` values (the file
+  is the slower axis), and its `overrides` and `vary` are checked against
+  every file; an error ends with `(in <file>)`. With three files and the
+  four combinations above, the recipe is twelve experiments. `status`
+  shows each experiment's file.
 - `per_experiment` resources are portable; partitions, QoS, and account come
   from the host. Scheduler-specific options go under `scheduler_options:
   {slurm: {...}}`.
@@ -779,8 +786,11 @@ whatever your default host is; the hosts file is read only for receipts
 written before receipts recorded their host, and a `--host` that points at a
 different one is refused rather than queried. A mission whose directory is
 gone is an error, not a list of experiments without records. (Values are
-shortened above; both print full addresses such as
-`optimizer.optimizer.kwargs.lr`.)
+shortened above; both print each varied value's path, such as
+`optimizer.kwargs.lr=0.001`.) In a mission that uses more than one session
+config file, the values start with the experiment's file,
+`config=configs/model/vit-attnpool.yaml ...`, and `--json` gives it as
+`config_file`.
 
 ### Logs
 

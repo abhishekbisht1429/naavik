@@ -185,7 +185,7 @@ has a `code` setting of its own is reported as a problem and the code is
 not compared.
 
 **So is the config file**, for missions whose recipes use more than one
-session config (a recipe's `config_file:`): a setting `config`, the file
+session config (a recipe's `config_file:`, or its `config_files:` list): a setting `config`, the file
 each experiment was made from, under the same rules (`unknown` when not
 recorded, `--ignore-key config` to leave it out).
 

@@ -287,14 +287,17 @@ Used by jobs, `prepare_on_host` sources (`allocation`), and the host's
 | Key | Required | Meaning |
 |---|---|---|
 | `name` | yes | Unique within the job; experiments are `<job>/<name>/000`, `001`, ... |
-| `config_file` | no | Its own session config (a repository path; default `base.config_file`), for a change of structure. Its session is `base.session_index`, and its overrides and `vary` are checked against it. When any recipe sets it, every experiment records its file (`config_file`), compared as `config` by `summarize`. |
+| `config_file` | no | Its own session config (a repository path; default `base.config_file`), for a change of structure. Its session is `base.session_index`, and its overrides and `vary` are checked against it. When any recipe sets it, every experiment records its file (`config_file`), compared as `config` by `summarize`. Not with `config_files`. |
+| `config_files` | no | Two or more session configs, distinct: one more axis, each file with every `vary` combination. Every override and `vary` address is checked against each file (a problem ends with `(in <file>)`). Each experiment records its own file, and `status` shows it (`config=<file>`). Not with `config_file`. |
 | `overrides` | no | List of `{component?, path, value}`: values set for every experiment of the recipe. |
 | `vary` | no | List of `{component?, path, values}`: one experiment per combination of the values; the last entry varies fastest. Without it the recipe is one experiment. |
 | `from_mission` | no | Take the recipe's experiments from another mission's checkpoints: one experiment per chosen checkpoint (below). Its session must be an analysis session. |
 
-Each experiment's config is: its session config (with its includes merged),
-then the recipe's `overrides`, then its checkpoint (with `from_mission`),
-then its combination of `vary` values. A `${...}` interpolation brought in
+Each experiment's config is: its session config (with its includes merged;
+with `config_files`, one of them), then the recipe's `overrides`, then its
+checkpoint (with `from_mission`), then its combination of `vary` values.
+The axes, slowest first: the checkpoint, the config file, then `vary` (its
+last entry fastest). A `${...}` interpolation brought in
 by an override or a varied value is refused, as in the session config
 itself.
 
