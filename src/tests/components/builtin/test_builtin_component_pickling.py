@@ -5,7 +5,6 @@ from types import SimpleNamespace
 
 import pytest
 import torch
-import yaml
 from torch import nn
 
 from training_framework.components import StatefulResource, resource
@@ -19,7 +18,6 @@ from training_framework.components.builtin import (
 )
 from training_framework.components.builtin import observability
 from training_framework.session import TrainingSession
-from training_framework.session.io import ConfigDumper
 from tests.test_utils import inject_dependencies
 
 
@@ -314,23 +312,6 @@ def test_trained_model_validates_its_checkpoint_config(tmp_path):
         TrainedModel({
             "model_checkpoint_path": tmp_path / "missing.pt",
         })
-
-
-def test_pickled_config_dumper_writes_the_session_configuration(tmp_path):
-    restored = pickle.loads(pickle.dumps(ConfigDumper()))
-    session = SimpleNamespace(
-        session_config=SimpleNamespace(session_dir=str(tmp_path)),
-        full_config={"session_type": "training", "model": {"width": 8}},
-    )
-
-    restored.pre_session(session)
-    restored.post_session(session)
-
-    with open(tmp_path / "config.yaml") as config_file:
-        assert yaml.safe_load(config_file) == session.full_config
-
-
-# -- model_diagram -------------------------------------------------------------------
 
 
 def _model_diagram_hook(session):

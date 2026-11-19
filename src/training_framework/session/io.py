@@ -1,13 +1,7 @@
 import os
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import yaml
-
-from training_framework.components import SessionHook
-from training_framework.components import hook
-
-if TYPE_CHECKING:
-    from training_framework.session.base import Session
 
 
 def write_session_config(
@@ -19,15 +13,3 @@ def write_session_config(
     config_dump_path = os.path.join(session_dir, filename)
     with open(config_dump_path, "w") as config_file:
         yaml.safe_dump(config, config_file)
-
-
-@hook("config_dumper")
-class ConfigDumper(SessionHook):
-    def pre_session(self, session: "Session") -> None:
-        write_session_config(
-            session.session_config.session_dir,
-            session.full_config,
-        )
-
-    def post_session(self, session: "Session") -> None:
-        pass
