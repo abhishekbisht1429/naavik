@@ -56,13 +56,6 @@ _LEGACY_CONFIG_KEYS = frozenset({
     "weight_decay",
     "warmup_iters",
 })
-_CONFIG_KEYS = frozenset({
-    "optimizer",
-    "lr_scheduler",
-    "param_groups",
-    "precision",
-    "accumulate_steps",
-})
 _SPEC_KEYS = frozenset({"name", "kwargs"})
 _SCHEDULER_KEYS = frozenset({"stages", "milestones", "metric_key"})
 _PARAM_GROUP_KEYS = frozenset({"match", "kwargs"})
@@ -239,6 +232,101 @@ def _unwrapped(wrapped_model: nn.Module) -> nn.Module:
     return wrapped_model
 
 
+def _check_kwargs(target: type, kwargs: Mapping, path: str, supplied: str) -> None:
+    """Refuse a key `target.__init__` does not take (`supplied`: the one the
+    optimizer resource passes itself). A signature with `**kwargs` takes
+    any name, so it is not checked by name; values are left to torch."""
+    import inspect
+
+    try:
+        parameters = list(inspect.signature(target.__init__).parameters.values())[1:]
+    except (TypeError, ValueError):     # no introspectable signature
+        return
+    if any(parameter.kind is parameter.VAR_KEYWORD for parameter in parameters):
+        return
+    taken = [parameter.name for parameter in parameters
+             if parameter.kind in (parameter.POSITIONAL_OR_KEYWORD, parameter.KEYWORD_ONLY)
+             and parameter.name != supplied]
+    unknown = sorted(str(key) for key in kwargs if key not in taken)
+    if unknown:
+        raise ValueError(
+            f"{path}: {target.__name__} takes no {', '.join(repr(key) for key in unknown)} "
+            f"(it takes: {', '.join(taken)})"
+        )
+
+
+@dataclass(frozen=True)
+class OptimizerConfig:
+    """The `optimizer` config. The optimizer spec, the schedule's stages,
+    and the parameter groups are read by the resource's own normalizers
+    (nested specs stay hand-parsed); their kwargs are checked against the
+    torch class each one builds."""
+
+    optimizer: Any
+    lr_scheduler: Any = None
+    param_groups: Any = None
+    precision: Any = "fp32"
+    accumulate_steps: Any = 1
+
+    @staticmethod
+    def check_keys(values: Mapping) -> None:
+        legacy = sorted(_LEGACY_CONFIG_KEYS & set(values))
+        if legacy:
+            raise ValueError(
+                "Legacy optimizer fields are no longer supported: "
+                f"{', '.join(legacy)}. Use optimizer.optimizer.name and "
+                "optimizer.optimizer.kwargs; configure scheduling under "
+                "optimizer.lr_scheduler."
+            )
+
+    def __post_init__(self) -> None:
+        optimizer_spec = _normalize_spec(self.optimizer, "optimizer.optimizer")
+        optimizer_class = _resolve_class(
+            optim, optimizer_spec["name"], optim.Optimizer, "optimizer"
+        )
+        if "params" in optimizer_spec["kwargs"]:
+            raise ValueError(
+                "optimizer.optimizer.kwargs must not contain 'params'; model "
+                "parameters are supplied by the optimizer resource"
+            )
+        _check_kwargs(optimizer_class, optimizer_spec["kwargs"],
+                      "optimizer.optimizer.kwargs", "params")
+        if self.precision not in _PRECISIONS:
+            raise ValueError(
+                f"optimizer.precision must be one of {sorted(_PRECISIONS)}; "
+                f"got {self.precision!r}"
+            )
+        accumulate_steps = self.accumulate_steps
+        if (
+                isinstance(accumulate_steps, bool)
+                or not isinstance(accumulate_steps, int)
+                or accumulate_steps <= 0
+        ):
+            raise ValueError(
+                "optimizer.accumulate_steps must be a positive integer; got "
+                f"{accumulate_steps!r}"
+            )
+        param_groups = OptimizerResource._normalize_param_groups(self.param_groups)
+        for index, group in enumerate(param_groups):
+            # A group's kwargs are the optimizer's own options, per group.
+            _check_kwargs(optimizer_class, group["kwargs"],
+                          f"optimizer.param_groups[{index}].kwargs", "params")
+        scheduler = OptimizerResource._normalize_scheduler(self.lr_scheduler)
+        for index, stage in enumerate((scheduler or {}).get("stages", ())):
+            _check_kwargs(
+                _resolve_class(optim.lr_scheduler, stage["name"],
+                               optim.lr_scheduler.LRScheduler, "scheduler"),
+                stage["kwargs"], f"optimizer.lr_scheduler.stages[{index}].kwargs", "optimizer")
+        # Not a field: what the resource keeps (`OptimizerResource._settings`).
+        object.__setattr__(self, "settings", _OptimizerSettings(
+            optimizer_spec=optimizer_spec,
+            scheduler_config=scheduler,
+            param_groups=param_groups,
+            precision=self.precision,
+            accumulate_steps=accumulate_steps,
+        ))
+
+
 @dataclass(frozen=True)
 class _OptimizerSettings:
     optimizer_spec: dict[str, Any]
@@ -259,6 +347,8 @@ class OptimizerResource(StatefulResource, ExtendableComponent):
     The steps of the optimization chain drive it through the methods below;
     `forward_context` opens each iteration with `begin_iteration`.
     """
+
+    config_schema = OptimizerConfig
 
     def __init__(self, config):
         self._settings = self._normalize_config(config)
@@ -296,63 +386,11 @@ class OptimizerResource(StatefulResource, ExtendableComponent):
 
     @staticmethod
     def _normalize_config(config) -> _OptimizerSettings:
-        config = _require_mapping(config, "optimizer config")
-        legacy = sorted(_LEGACY_CONFIG_KEYS & set(config))
-        if legacy:
-            raise ValueError(
-                "Legacy optimizer fields are no longer supported: "
-                f"{', '.join(legacy)}. Use optimizer.optimizer.name and "
-                "optimizer.optimizer.kwargs; configure scheduling under "
-                "optimizer.lr_scheduler."
-            )
-        unknown = _unknown_keys(config, _CONFIG_KEYS)
-        if unknown:
-            raise ValueError(
-                "Unknown optimizer config fields: " + ", ".join(unknown)
-            )
-        if "optimizer" not in config:
-            raise ValueError("optimizer.optimizer is required")
+        """The settings of `config`, through the `config_schema` (so the
+        session check, construction, and extensions read it alike)."""
+        from training_framework.components.config_schema import parse_component_config
 
-        optimizer_spec = _normalize_spec(
-            config["optimizer"], "optimizer.optimizer"
-        )
-        _resolve_class(
-            optim, optimizer_spec["name"], optim.Optimizer, "optimizer"
-        )
-        if "params" in optimizer_spec["kwargs"]:
-            raise ValueError(
-                "optimizer.optimizer.kwargs must not contain 'params'; model "
-                "parameters are supplied by the optimizer resource"
-            )
-
-        precision = config.get("precision", "fp32")
-        if precision not in _PRECISIONS:
-            raise ValueError(
-                f"optimizer.precision must be one of {sorted(_PRECISIONS)}; "
-                f"got {precision!r}"
-            )
-        accumulate_steps = config.get("accumulate_steps", 1)
-        if (
-                isinstance(accumulate_steps, bool)
-                or not isinstance(accumulate_steps, int)
-                or accumulate_steps <= 0
-        ):
-            raise ValueError(
-                "optimizer.accumulate_steps must be a positive integer; got "
-                f"{accumulate_steps!r}"
-            )
-
-        return _OptimizerSettings(
-            optimizer_spec=optimizer_spec,
-            scheduler_config=OptimizerResource._normalize_scheduler(
-                config.get("lr_scheduler")
-            ),
-            param_groups=OptimizerResource._normalize_param_groups(
-                config.get("param_groups")
-            ),
-            precision=precision,
-            accumulate_steps=accumulate_steps,
-        )
+        return parse_component_config(OptimizerResource, config).settings
 
     @staticmethod
     def _normalize_param_groups(value) -> list[dict[str, Any]]:

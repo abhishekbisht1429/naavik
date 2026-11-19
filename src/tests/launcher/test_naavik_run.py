@@ -180,12 +180,20 @@ def test_the_note_reaches_the_runs_record(tmp_path, here, capsys):
 
 
 def test_a_failing_run_exits_with_its_status(tmp_path, here, capsys):
-    # The optimizer's config is read only when it is built: the check passes,
-    # the task fails.
+    # An optimizer argument's value is checked only by torch, when it builds
+    # the optimizer: the check passes, the task fails.
     root = project(tmp_path)
-    status = run(root, here, "--yes", "--override", "optimizer:optimizer.name=NoSuchOptimizer")
+    status = run(root, here, "--yes", "--override", "optimizer:optimizer.kwargs.lr=fast")
     out = capsys.readouterr().out
     assert status == 1 and "run/base/000: failed (exit 1)" in out
+
+
+def test_an_unknown_optimizer_is_refused_before_launch(tmp_path, here, capsys):
+    root = project(tmp_path)
+    status = run(root, here, "--yes", "--override", "optimizer:optimizer.name=NoSuchOptimizer")
+    captured = capsys.readouterr()
+    assert status == 2 and "Unknown optimizer class: NoSuchOptimizer" in captured.err
+    assert "submitted" not in captured.out
 
 
 def test_detach_returns_once_launched(tmp_path, here, capsys):

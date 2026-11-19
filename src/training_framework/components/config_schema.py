@@ -95,6 +95,15 @@ def parse_component_config(
     values = _plain(config)
     accepted = _accepted_keys(schema)
 
+    # A schema may refuse keys with its own message before the generic
+    # unknown-key one (for example, keys of a format it no longer reads).
+    check_keys = getattr(schema, "check_keys", None)
+    if check_keys is not None:
+        try:
+            check_keys(values)
+        except (TypeError, ValueError) as error:
+            raise type(error)(f"Invalid {_name(component_class)} config: {error}") from error
+
     unknown = sorted(set(values) - set(accepted), key=str)
     if unknown:
         raise ValueError(
