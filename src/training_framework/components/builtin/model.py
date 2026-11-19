@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, cast
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from training_framework.components import (
     ComponentDependencyError,
@@ -16,19 +17,45 @@ if TYPE_CHECKING:
     from training_framework.session import Session
 
 
+@dataclass(frozen=True)
+class TrainedModelConfig:
+    """The `trained_model` config. Whether the checkpoint exists is checked
+    when the component is built: it depends on the machine that runs."""
+
+    model_checkpoint_path: Any
+    unknown_keys_dropped_on_restore: ClassVar[bool] = True
+
+    @staticmethod
+    def check_keys(values: Mapping) -> None:
+        if values.get("model_checkpoint_path") is None:
+            raise ValueError("trained_model.model_checkpoint_path is required")
+
+    def __post_init__(self) -> None:
+        try:
+            path = os.fspath(cast(Any, self.model_checkpoint_path))
+        except TypeError as error:
+            raise TypeError(
+                "trained_model.model_checkpoint_path must be a string or "
+                "path-like object"
+            ) from error
+        if not isinstance(path, str):
+            raise TypeError(
+                "trained_model.model_checkpoint_path must resolve to a "
+                "string path"
+            )
+
+
 @resource("trained_model")
 class TrainedModel(Resource):
     """Expose the model resource restored from a training-session checkpoint."""
 
+    config_schema = TrainedModelConfig
+
     def __init__(self, config: Mapping):
-        super().__init__(config)
         if not isinstance(config, Mapping):
             raise TypeError("trained_model config must be a mapping")
-        checkpoint_path = config.get("model_checkpoint_path")
-        if checkpoint_path is None:
-            raise ValueError(
-                "trained_model.model_checkpoint_path is required"
-            )
+        super().__init__(config)
+        checkpoint_path = self._cfg.model_checkpoint_path
         try:
             normalized_path = os.fspath(cast(Any, checkpoint_path))
         except TypeError as error:

@@ -4,7 +4,7 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from torch import nn
 
@@ -52,26 +52,19 @@ def _resolve_module_type(dotted_path: str) -> type[nn.Module]:
     )
 
 
-@requires_resource("trained_model")
-@resource("layer_inspector", session_type=ANALYSIS_SESSION_TYPE)
-class LayerInspector(Resource):
-    """Automate discovery and forward-pass capture of selected model layers.
+@dataclass(frozen=True)
+class LayerInspectorConfig:
+    """The `layer_inspector` config: layers chosen by name (regular
+    expressions) and/or module type (dotted class paths, imported here)."""
 
-    Matches layers of `trained_model.model` by name pattern and/or module
-    type, registers a forward hook on each match, and exposes the current
-    iteration's captured input/output as `captures`. Interpreting those
-    captures (heatmaps, statistics, or anything else) is left entirely to
-    the user's own analysis `Step`.
-    """
+    name_patterns: Any = None
+    module_types: Any = None
+    always_call: Any = False
+    unknown_keys_dropped_on_restore: ClassVar[bool] = True
 
-
-    def __init__(self, config: Mapping) -> None:
-        super().__init__(config)
-        if not isinstance(config, Mapping):
-            raise TypeError("layer_inspector config must be a mapping")
-
-        name_patterns = config.get("name_patterns") or []
-        module_type_paths = config.get("module_types") or []
+    def __post_init__(self) -> None:
+        name_patterns = self.name_patterns or []
+        module_type_paths = self.module_types or []
         if not isinstance(name_patterns, list) or not all(
                 isinstance(pattern, str) for pattern in name_patterns
         ):
@@ -89,20 +82,45 @@ class LayerInspector(Resource):
                 "layer_inspector requires at least one of 'name_patterns' "
                 "or 'module_types' to select layers"
             )
-
         try:
-            self._name_patterns = [
-                re.compile(pattern) for pattern in name_patterns
-            ]
+            compiled = tuple(re.compile(pattern) for pattern in name_patterns)
         except re.error as error:
             raise ValueError(
                 "layer_inspector.name_patterns contains an invalid regex: "
                 f"{error}"
             ) from error
-        self._module_types = tuple(
-            _resolve_module_type(path) for path in module_type_paths
-        )
-        self._always_call = bool(config.get("always_call", False))
+        if not isinstance(self.always_call, bool):
+            raise TypeError(
+                f"layer_inspector.always_call must be a boolean; got {self.always_call!r}"
+            )
+        # Not fields: what the inspector keeps.
+        object.__setattr__(self, "compiled_patterns", compiled)
+        object.__setattr__(self, "resolved_types", tuple(
+            _resolve_module_type(path) for path in module_type_paths))
+
+
+@requires_resource("trained_model")
+@resource("layer_inspector", session_type=ANALYSIS_SESSION_TYPE)
+class LayerInspector(Resource):
+    """Automate discovery and forward-pass capture of selected model layers.
+
+    Matches layers of `trained_model.model` by name pattern and/or module
+    type, registers a forward hook on each match, and exposes the current
+    iteration's captured input/output as `captures`. Interpreting those
+    captures (heatmaps, statistics, or anything else) is left entirely to
+    the user's own analysis `Step`.
+    """
+
+
+    config_schema = LayerInspectorConfig
+
+    def __init__(self, config: Mapping) -> None:
+        if not isinstance(config, Mapping):
+            raise TypeError("layer_inspector config must be a mapping")
+        super().__init__(config)
+        self._name_patterns = list(self._cfg.compiled_patterns)
+        self._module_types = self._cfg.resolved_types
+        self._always_call = self._cfg.always_call
 
         self._matched_layer_names: tuple[str, ...] = ()
         self._layers: dict[str, nn.Module] = {}
