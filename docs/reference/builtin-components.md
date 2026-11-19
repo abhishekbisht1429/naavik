@@ -77,7 +77,7 @@ ddp:
   rank_zero_components: []   # optional; built on rank 0 only
 
 data_manager:
-  batch_size: 32       # global batch size; divisible by world_size
+  batch_size: 32       # required: the global batch size; divisible by world_size
   num_workers: 0
   pin_memory: false
 
@@ -126,6 +126,18 @@ opt-in behaviour and warns.
 iteration, see [Building an iteration](../guide/03-building-an-iteration.md).
 
 ### `data_manager`
+
+| Key | Default | Meaning |
+|---|---|---|
+| `batch_size` | required | The global batch size, a positive integer: each of the `ddp.world_size` ranks gets `batch_size / world_size`, so it must be at least the world size and divisible by it |
+| `num_workers` | `0` | `DataLoader` worker processes, a non-negative integer |
+| `pin_memory` | `false` | `DataLoader` pinned memory |
+
+Other keys are refused. A session check (`naavik validate`) finds all of
+this without building anything, and also checks `batch_size` against
+`ddp.world_size` when the config gives the world size as a number. A
+checkpoint written before unknown keys were refused still resumes: they are
+dropped, with a warning naming them.
 
 `data_manager.data_iter` is available only while the session is active. It
 divides the global batch size across ranks and checkpoints delivered-batch
@@ -378,6 +390,8 @@ data_manager:
   pin_memory: false    # optional
   drop_last: false     # optional; drop a final partial batch
 ```
+
+Other keys are refused, as for the training `data_manager`.
 
 While the session is active, `data_manager.data_iter` is an iterator over the
 `DataLoader` (also exposed as `data_manager.dataloader`), and the dataset's

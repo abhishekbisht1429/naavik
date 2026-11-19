@@ -475,9 +475,12 @@ installed version, or a framework checkout whose `pyproject.toml` says
 
 What it cannot check without building the session is printed once as a
 `note:`: `import_components` (it reads checkpoints), the dataflow and graph
-order (they need built components), and configs that only their constructor
-reads (the optimizer's, the data manager's). Those still fail when the
-experiment starts.
+order (they need built components), and configs that only their
+constructor reads (components without a `config_schema`, such as the
+built-in `ddp`, `checkpointer` and `logger`; the optimizer and data managers
+have one).
+Those still fail when the experiment starts. Values handed to torch (an
+optimizer's `lr`, a scheduler's `T_max`) are checked by torch, at startup.
 
 `TRAINING_FRAMEWORK_CODE_CHECK=0` skips this check. It is never silent:
 `validate`, `render`, and `launch` print a warning, and the receipt records

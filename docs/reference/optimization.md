@@ -100,6 +100,21 @@ The former `learning_rate`, `weight_decay` and `warmup_iters` fields are
 rejected: move optimizer arguments under `optimizer.kwargs` and describe the
 warmup/main schedule explicitly, as above.
 
+**Checked before building.** The whole config is the optimizer's
+`config_schema`, so a session check (`naavik validate`) refuses mistakes
+without building anything: unknown keys, an optimizer or scheduler class
+`torch.optim` does not have, and a kwarg the class does not take. The
+kwargs of `optimizer`, of each `param_groups` entry (the optimizer's own
+options, per group), and of each schedule stage are checked against the
+torch class's constructor, naming the arguments it takes:
+
+```text
+optimizer: Invalid optimizer config: optimizer.optimizer.kwargs: AdamW takes no 'lrr' (it takes: lr, betas, eps, weight_decay, amsgrad, maximize, foreach, capturable, differentiable, fused)
+```
+
+Values are left to torch, which checks them when it builds the optimizer
+(a class whose constructor takes `**kwargs` is not checked by name).
+
 **Patterns.** `match` patterns here and in `freeze_gradients` are `fnmatch`
 globs over the model's parameter names -- the names of the model DDP wraps,
 without a `module.` prefix. A pattern that matches no parameter is an error.
