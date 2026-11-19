@@ -490,6 +490,32 @@ class Resources:
     scheduler_options: dict
 
 
+#: `from_mission.checkpoint`: each source experiment's newest complete
+#: checkpoint, or every complete one.
+CHECKPOINT_CHOICES = ("latest", "all")
+#: `from_mission.into` when not given: where an analysis session loads a
+#: trained model from (`components/builtin/model.py`).
+DEFAULT_CHECKPOINT_INTO = {"component": "trained_model", "path": "model_checkpoint_path"}
+FROM_MISSION_KEYS = frozenset({"id", "experiments", "checkpoint", "into"})
+
+
+@dataclass(frozen=True)
+class FromMission:
+    """A recipe's `from_mission`: one experiment per chosen checkpoint of
+    another mission's experiments."""
+
+    id: str
+    #: Globs over the source's experiment names; () = all of them.
+    experiments: tuple[str, ...]
+    checkpoint: str               # latest | all
+    #: Raw address {component?, path} the checkpoint's path is written at.
+    into: dict
+
+    def as_json(self) -> dict:
+        return {"id": self.id, "experiments": list(self.experiments),
+                "checkpoint": self.checkpoint, "into": dict(self.into)}
+
+
 @dataclass(frozen=True)
 class Experiment:
     name: str
@@ -497,6 +523,8 @@ class Experiment:
     matrix: tuple[dict, ...]      # raw {component?, path, values}
     #: Its own training config (a repository path); None: `training.config`.
     config: str | None = None
+    #: `from_mission`; None: the recipe's experiments come from the file only.
+    from_mission: FromMission | None = None
 
 
 @dataclass(frozen=True)
@@ -794,9 +822,12 @@ def _parse_group(name, raw, where, problems) -> Group | None:
 
 def _parse_experiment(raw, where, problems) -> Experiment | None:
     """One recipe (inside: an experiment) of a job."""
-    reader = _Reader(raw, where, problems, {"name", "overrides", "vary", "config_file"})
+    reader = _Reader(raw, where, problems, {"name", "overrides", "vary", "config_file", "from_mission"})
     name = reader.get("name", required=True)
     config = reader.string("config_file")
+    from_mission = None
+    if reader.get("from_mission") is not None:
+        from_mission = _parse_from_mission(reader.get("from_mission"), f"{where}.from_mission", problems)
     if name is not None and (problem := check_name(name, f"{where}.name")):
         problems.add(problem)
         name = None
@@ -829,7 +860,40 @@ def _parse_experiment(raw, where, problems) -> Experiment | None:
                 )
     if name is None or not isinstance(overrides, list) or not isinstance(matrix, list):
         return None
-    return Experiment(name, tuple(overrides), tuple(matrix), config)
+    return Experiment(name, tuple(overrides), tuple(matrix), config, from_mission)
+
+
+def _parse_from_mission(raw, where, problems) -> FromMission | None:
+    """A recipe's `from_mission` (its checkpoints are listed when compiling)."""
+    from training_framework.launcher.names import check_mission_id
+
+    if raw is not None and not isinstance(raw, Mapping):
+        problems.add(f"{where} must be a mapping with id (and experiments, checkpoint, into)")
+        return None
+    reader = _Reader(raw, where, problems, FROM_MISSION_KEYS)
+    mission_id = reader.get("id", required=True)
+    if mission_id is not None and (problem := check_mission_id(mission_id, f"{where}.id")):
+        problems.add(problem)
+        mission_id = None
+    patterns = reader.get("experiments", [])
+    if not isinstance(patterns, list) or not all(isinstance(p, str) and p for p in patterns):
+        problems.add(f"{where}.experiments must be a list of experiment names or globs "
+                     "(such as short/*); leave it out for all of them")
+        patterns = None
+    elif len(set(patterns)) != len(patterns):
+        problems.add(f"{where}.experiments names an experiment or glob twice")
+    checkpoint = reader.choice("checkpoint", CHECKPOINT_CHOICES, "latest")
+    into = reader.get("into", DEFAULT_CHECKPOINT_INTO)
+    if not isinstance(into, Mapping):
+        problems.add(f"{where}.into must be an address {{component?, path}}")
+        into = None
+    elif set(into) - {"component", "path"}:
+        problems.add(f"{where}.into: unknown field(s) "
+                     f"{', '.join(sorted(set(into) - {'component', 'path'}))} (allowed: component, path)")
+        into = None
+    if mission_id is None or patterns is None or checkpoint is None or into is None:
+        return None
+    return FromMission(mission_id, tuple(patterns), checkpoint, dict(into))
 
 
 # The earlier names (the mission file was called the manifest, a word a

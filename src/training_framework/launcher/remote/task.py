@@ -211,10 +211,11 @@ def run_task(config_path: str, record_path: str, plan_path: str,
         "attempt": attempt,
         "run_id": engine.run_id if engine is not None else None,
     }
-    config_file = next((task.get("config_file") for task in plan.get("tasks", [])
-                        if task.get("name") == task_name), None)
-    if config_file:
-        record["config_file"] = config_file
+    entry = next((task for task in plan.get("tasks", []) if task.get("name") == task_name), {})
+    if entry.get("config_file"):
+        record["config_file"] = entry["config_file"]
+    if entry.get("source"):
+        record["source"] = entry["source"]
     if plan.get("description"):
         record["note"] = plan["description"]
     if resume:

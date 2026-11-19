@@ -21,6 +21,20 @@ def check_name(value: Any, what: str) -> str | None:
     return None
 
 
+#: A mission's id, as `compile_plan` makes it: `<name>-<UTC time>-<commit[:12]>`.
+_MISSION_ID = re.compile(r"\A[A-Za-z0-9_-]+-\d{8}T\d{6}Z-[0-9a-f]{12}\Z")
+
+
+def check_mission_id(value: Any, what: str) -> str | None:
+    """The problem with `value` as a mission id, or None."""
+    if not isinstance(value, str) or not _MISSION_ID.match(value):
+        return (
+            f"{what} must be a mission id (<name>-<YYYYMMDDTHHMMSSZ>-<12 hex digits>, as "
+            f"`naavik missions` lists it); got {value!r}"
+        )
+    return None
+
+
 def canonical_json(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"))
 

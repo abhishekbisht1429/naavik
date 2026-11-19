@@ -157,6 +157,33 @@ def _select(manifest: MissionFile, selection: Selection | None, problems: Proble
     return _dataclasses.replace(manifest, groups=tuple(kept))
 
 
+@dataclass(frozen=True)
+class SourceCheckpoint:
+    """One complete checkpoint of another mission's experiment."""
+
+    path: str
+    iteration: int
+
+
+@dataclass
+class SourceMission:
+    """The answer of the `checkpoint_facts` port of `compile_plan`: a
+    mission's experiments, each with its complete checkpoints."""
+
+    #: Experiment name -> its complete checkpoints (any order), in the
+    #: mission's own order of experiments.
+    experiments: dict[str, tuple[SourceCheckpoint, ...]] = field(default_factory=dict)
+    #: Problems reading it (no receipt, unreachable host...): they stop the compile.
+    problems: list[str] = field(default_factory=list)
+    #: Where it was read, for the note: "on workstation", "from a fetched copy".
+    where: str = ""
+
+
+#: `checkpoint_facts(mission_id)`: another mission's complete checkpoints,
+#: asked once per mission a recipe's `from_mission` names.
+CheckpointFactsPort = Callable[[str], SourceMission]
+
+
 #: `code_facts(sha, manifest, managed, tasks)`, tasks being (name, config) in
 #: order: the batch's own code asked about its expanded task configs (as the
 #: manifest makes them, before data paths are rewritten for the target).
@@ -182,13 +209,16 @@ def compile_plan(
         manifest_data: bytes | None = None,
         code_facts: CodeFactsPort | None = None,
         selection: Selection | None = None,
+        checkpoint_facts: CheckpointFactsPort | None = None,
 ) -> Compiled:
     """`manifest_data`: a manifest given as data rather than read from the
     repository (`naavik run` builds one); `manifest_path` then only names
     it in messages, and everything else is still read at the batch's
     commit. `code_facts`: asked once the tasks are expanded (problems it
     reports stop the compile there); None: not asked. `selection`: only
-    these groups and experiments become tasks (None: all)."""
+    these groups and experiments become tasks (None: all).
+    `checkpoint_facts`: lists the checkpoints of the missions recipes take
+    theirs from (`from_mission`); needed only when one does."""
     problems = Problems()
 
     # The batch runs one exact tree: HEAD (worktree: commit, which must then
@@ -330,8 +360,10 @@ def compile_plan(
         problems.add(problem)
 
     # Tasks ------------------------------------------------------------------
+    chosen = _choose_checkpoints(manifest, checkpoint_facts, problems, notes)
+    problems.raise_if_any()
     tasks_raw = _expand(manifest, lambda experiment: configs[config_of(experiment)][1],
-                        dialect, problems)
+                        dialect, problems, chosen)
     problems.raise_if_any()
 
     facts_found = None
@@ -341,12 +373,12 @@ def compile_plan(
                 _with_sessions_dir(session, f"{batch_dir}/tasks/{name}/sessions")]})
             for name, experiment, session in (
                 (f"{group.name}/{experiment.name}/{number:03d}", experiment, session)
-                for group, experiment, number, _, session, _ in tasks_raw)])
+                for group, experiment, number, _, session, _, _ in tasks_raw)])
         for problem in facts_found.problems:
             problems.add(problem)
         problems.raise_if_any()
 
-    sessions = [session for _, _, _, _, session, _ in tasks_raw]
+    sessions = [session for _, _, _, _, session, _, _ in tasks_raw]
     sources = data_module.parse_sources(manifest.data_sources, problems, profile)
     problems.raise_if_any()
 
@@ -375,7 +407,7 @@ def compile_plan(
 
     tasks: list[Task] = []
     seen_hashes: dict[str, str] = {}
-    for index, (group, experiment, number, array_index, session, variant) in enumerate(tasks_raw):
+    for index, (group, experiment, number, array_index, session, variant, source) in enumerate(tasks_raw):
         for target, path in data.rewrites.get(index, {}).items():
             session = addresses.write(session, target, path)
         name = f"{group.name}/{experiment.name}/{number:03d}"
@@ -391,6 +423,7 @@ def compile_plan(
             group.name, experiment.name, number, array_index, tuple(variant),
             config, hash_value(config),
             config_of(experiment) if several_configs else None,
+            source,
         ))
     problems.raise_if_any()
 
@@ -691,7 +724,7 @@ def _data_requirements(tasks_raw, sessions, sources, profile, facts, code_facts,
     """Declared data (step 4): managed when the target's profile has `data_modes`;
     said once (a note) when it does not."""
     names = [f"{group.name}/{experiment.name}/{number:03d}"
-             for group, experiment, number, _, _, _ in tasks_raw]
+             for group, experiment, number, _, _, _, _ in tasks_raw]
     if code_facts is None:
         if profile.data is not None:
             problems.add(f"host '{profile.name}' manages data (dataset_delivery), which "
@@ -736,9 +769,98 @@ def _parse_entries(entries, field, where, base, problems):
     return parsed
 
 
-def _expand(manifest, session_of, dialect, problems):
-    """(group, experiment, number, array index, session, variant) per task;
-    `session_of(experiment)`: the selected session of its training config."""
+def _choose_checkpoints(manifest, checkpoint_facts, problems, notes):
+    """(job, recipe) -> [(source experiment, SourceCheckpoint)] for every
+    recipe with `from_mission`, in the source's order of experiments, then
+    by iteration. Each mission is asked for once."""
+    import fnmatch
+
+    wanted = [(group, experiment) for group in manifest.groups
+              for experiment in group.experiments if experiment.from_mission is not None]
+    if not wanted:
+        return {}
+    if checkpoint_facts is None:
+        for group, experiment in wanted:
+            problems.add(f"jobs.{group.name}.recipes[{experiment.name}].from_mission: this "
+                         "command cannot list another mission's checkpoints")
+        return {}
+    missions: dict[str, SourceMission] = {}
+    chosen = {}
+    for group, experiment in wanted:
+        origin = experiment.from_mission
+        where = f"jobs.{group.name}.recipes[{experiment.name}].from_mission"
+        if origin.id not in missions:
+            missions[origin.id] = found = checkpoint_facts(origin.id)
+            for problem in found.problems:
+                problems.add(f"{where}: {problem}")
+            if not found.problems:
+                notes.append(f"listed the checkpoints of {origin.id}"
+                             + (f" {found.where}" if found.where else ""))
+        source = missions[origin.id]
+        if source.problems:
+            continue
+        names = list(source.experiments)
+        for pattern in origin.experiments:
+            if not fnmatch.filter(names, pattern):
+                problems.add(f"{where}.experiments: '{pattern}' matches no experiment of "
+                             f"{origin.id} (it has: {', '.join(names) or 'none'})")
+        selected = [name for name in names if not origin.experiments
+                    or any(fnmatch.fnmatchcase(name, p) for p in origin.experiments)]
+        picked, left_out = [], []
+        for name in selected:
+            checkpoints = sorted(source.experiments[name], key=lambda c: (c.iteration, c.path))
+            if not checkpoints:
+                left_out.append(name)
+                continue
+            for checkpoint in (checkpoints[-1:] if origin.checkpoint == "latest" else checkpoints):
+                picked.append((name, checkpoint))
+        if left_out:
+            notes.append(f"{group.name}/{experiment.name}: {', '.join(left_out)} of {origin.id} "
+                         "has no complete checkpoint; left out")
+        if selected and not picked:
+            problems.add(f"{where}: no experiment of {origin.id} it chooses has a complete "
+                         "checkpoint, so it makes no experiment")
+        chosen[(group.name, experiment.name)] = picked
+    return chosen
+
+
+def _check_into(experiment, origin, base_session, overrides, matrix, e_where, problems):
+    """The address `from_mission` writes each checkpoint's path at, or None."""
+    session_type = base_session.get("session_type", "training")
+    if not isinstance(session_type, str) or session_type.strip() != "analysis":
+        problems.add(f"{e_where}.from_mission: the recipe's session is a {session_type!r} "
+                     "session; from_mission needs an analysis session (session_type: "
+                     "analysis), which loads the checkpoints it is given")
+        return None
+    parsed = _parse_entries([{**origin.into, "value": None}], "value",
+                            f"{e_where}.from_mission.into", base_session, problems)
+    if not parsed:
+        return None
+    into = parsed[0][0]
+    for key, entries in (("overrides", overrides), ("vary", matrix)):
+        for target, _ in entries:
+            if _overlaps(target, into):
+                problems.add(f"{e_where}.{key}: {target.describe()} is where from_mission "
+                             f"writes each checkpoint ({into.describe()}); set one or the other")
+    return into
+
+
+def _overlaps(a, b) -> bool:
+    """Whether writing one address changes the other."""
+    if a.component != b.component:
+        return False
+    shorter = min(len(a.path), len(b.path))
+    return a.path[:shorter] == b.path[:shorter]
+
+
+def _expand(manifest, session_of, dialect, problems, chosen=None):
+    """(group, experiment, number, array index, session, variant, source)
+    per task; `session_of(experiment)`: the selected session of its
+    training config. `chosen`: the checkpoints of recipes with
+    `from_mission` (`_choose_checkpoints`): one more axis, the slowest; a
+    task's source is then {mission, experiment, checkpoint, iteration}
+    (None otherwise)."""
+    chosen = chosen or {}
     tasks = []
     for group in manifest.groups:
         where = f"jobs.{group.name}"
@@ -756,9 +878,25 @@ def _expand(manifest, session_of, dialect, problems):
                     session = addresses.write(session, target, value)
                 except ValueError as error:
                     problems.add(f"{e_where}: {error}")
-            combinations = itertools.product(*(values for _, values in matrix)) if matrix else [()]
-            for number, combination in enumerate(combinations):
+            origin = experiment.from_mission
+            sources: list = [None]
+            into = None
+            if origin is not None:
+                into = _check_into(experiment, origin, base_session, overrides, matrix,
+                                   e_where, problems)
+                sources = [{"mission": origin.id, "experiment": name, "checkpoint": checkpoint.path,
+                            "iteration": checkpoint.iteration}
+                           for name, checkpoint in chosen.get((group.name, experiment.name), [])]
+                if into is None:
+                    sources = []
+            combinations = list(itertools.product(*(values for _, values in matrix))) if matrix else [()]
+            for number, (source, combination) in enumerate(itertools.product(sources, combinations)):
                 task_session = session
+                if source is not None:
+                    try:
+                        task_session = addresses.write(task_session, into, source["checkpoint"])
+                    except ValueError as error:
+                        problems.add(f"{e_where}.from_mission.into: {error}")
                 variant = []
                 for (target, _), value in zip(matrix, combination):
                     try:
@@ -773,7 +911,7 @@ def _expand(manifest, session_of, dialect, problems):
                     problems.add(str(error))
                 for problem in check_topology(task_session, group.resources):
                     problems.add(f"{group.name}/{experiment.name}/{number:03d}: {problem}")
-                tasks.append((group, experiment, number, array_index, task_session, variant))
+                tasks.append((group, experiment, number, array_index, task_session, variant, source))
                 array_index += 1
         if array_index > dialect.max_task_set_size:
             problems.add(

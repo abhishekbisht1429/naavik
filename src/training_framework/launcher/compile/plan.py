@@ -57,6 +57,9 @@ class Task:
     #: The training config file it was made from, when the batch's
     #: experiments use more than one (None otherwise).
     config_file: str | None = None
+    #: For a recipe with `from_mission`: the checkpoint it analyses,
+    #: {mission, experiment, checkpoint, iteration}. None otherwise.
+    source: dict | None = None
 
     @property
     def name(self) -> str:
@@ -188,6 +191,7 @@ class ExecutionPlan:
                     "variant": list(task.variant),
                     "config_hash": task.config_hash,
                     **({"config_file": task.config_file} if task.config_file else {}),
+                    **({"source": task.source} if task.source else {}),
                 }
                 for task in self.tasks
             ],
