@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import re
 from collections import Counter
+import dataclasses
 from dataclasses import dataclass
 
 
@@ -22,6 +23,9 @@ class Row:
     detail: str
     #: The state is the scheduler's (the job is in its queue), not a record's.
     live: bool = False
+    #: The session config file an experiment was made from, when its
+    #: mission used more than one (the experiment table's 6th column).
+    config_file: str | None = None
 
 
 #: Slurm job states after which a job holds nothing and will not run again.
@@ -210,34 +214,48 @@ def task_rows(receipt: dict, files: BatchFiles | None, live: dict) -> list[Row]:
             rows.append(Row(node_id, "", node["status"], "no experiment table"))
             continue
         for line in table.splitlines()[1:]:
-            index, task, variant, config, _hash = line.split("\t")
-            values = _variant_text(json.loads(variant))
-            record = files.records.get(f"{config.rsplit('/', 1)[0]}/record.json")
-            if (group, int(index)) in attempts:
-                attempt, attempt_node = attempts[(group, int(index))]
-                rows.append(_attempt_row(task, values, group, index, attempt, attempt_node,
-                                         record, live, _cancelled(receipt, task, attempt)))
-                continue
-            element = f"{node.get('job_ref')}_{index}"
-            if record:
-                state, detail = _record_state(record)
-            elif element in live:
-                rows.append(Row(task, values, live[element], f"job {element}", True))
-                continue
-            elif _cancelled(receipt, task, 1):
-                # Its element left the queue; the job may run on for others.
-                state, detail = "cancelled", ""
-            elif node.get("job_ref") in live:
-                rows.append(Row(task, values, live[node["job_ref"]], f"job {node['job_ref']}", True))
-                continue
-            elif node["status"] in ("cancelled", "unknown", "refused", "cancel failed"):
-                state, detail = node["status"], ""
-            elif node["status"] == "submitted":
-                state, detail = "ended without a record", f"see logs/{group}/{node['job_ref']}_{index}.out"
-            else:
-                state, detail = node["status"], ""
-            rows.append(Row(task, values, state, detail))
+            start = len(rows)
+            _task_row(line, group, files, receipt, attempts, live, node, rows)
+            # A table of 6 columns names each experiment's config file.
+            config_file = (line.split("\t")[5:6] or [""])[0] or None
+            if config_file:
+                rows[start:] = [dataclasses.replace(row, config_file=config_file) for row in rows[start:]]
     return rows
+
+
+def _task_row(line, group, files, receipt, attempts, live, node, rows) -> None:
+    """The row of one experiment-table line (5 columns, or 6 with the
+    experiment's config file, shown first in its values)."""
+    fields = line.split("\t")
+    index, task, variant, config, _hash = fields[:5]
+    values = _variant_text(json.loads(variant))
+    if len(fields) > 5 and fields[5]:
+        values = " ".join(item for item in (f"config={fields[5]}", values) if item)
+    record = files.records.get(f"{config.rsplit('/', 1)[0]}/record.json")
+    if (group, int(index)) in attempts:
+        attempt, attempt_node = attempts[(group, int(index))]
+        rows.append(_attempt_row(task, values, group, index, attempt, attempt_node,
+                                 record, live, _cancelled(receipt, task, attempt)))
+        return
+    element = f"{node.get('job_ref')}_{index}"
+    if record:
+        state, detail = _record_state(record)
+    elif element in live:
+        rows.append(Row(task, values, live[element], f"job {element}", True))
+        return
+    elif _cancelled(receipt, task, 1):
+        # Its element left the queue; the job may run on for others.
+        state, detail = "cancelled", ""
+    elif node.get("job_ref") in live:
+        rows.append(Row(task, values, live[node["job_ref"]], f"job {node['job_ref']}", True))
+        return
+    elif node["status"] in ("cancelled", "unknown", "refused", "cancel failed"):
+        state, detail = node["status"], ""
+    elif node["status"] == "submitted":
+        state, detail = "ended without a record", f"see logs/{group}/{node['job_ref']}_{index}.out"
+    else:
+        state, detail = node["status"], ""
+    rows.append(Row(task, values, state, detail))
 
 
 def receipt_problem(receipt) -> str | None:

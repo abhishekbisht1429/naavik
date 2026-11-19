@@ -40,11 +40,17 @@ def plan_files(plan: ExecutionPlan, manifest_raw: dict) -> dict[str, str]:
     files["data.tsv"] = "\n".join(rows) + "\n"
 
     tables: dict[str, list[str]] = {}
+    # A 6th column names each experiment's session config file, only when
+    # the mission uses more than one (`status` shows it), so other missions'
+    # tables are as they were.
+    several_files = any(task.config_file for task in plan.tasks)
+    header = "index\ttask\tvariant\tconfig\tconfig_hash" + ("\tconfig_file" if several_files else "")
     for task in plan.tasks:
-        tables.setdefault(task.group, ["index\ttask\tvariant\tconfig\tconfig_hash"]).append(
+        tables.setdefault(task.group, [header]).append(
             "\t".join([
                 str(task.array_index), task.name, canonical_json(list(task.variant)),
                 f"{task.directory}/config.yaml", task.config_hash,
+                *([task.config_file or ""] if several_files else []),
             ])
         )
         files[f"{task.directory}/config.yaml"] = yaml.safe_dump(task.config, sort_keys=False)

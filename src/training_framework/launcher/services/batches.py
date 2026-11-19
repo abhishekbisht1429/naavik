@@ -298,6 +298,9 @@ def as_json(views: list[BatchView], *, tasks: bool) -> list[dict]:
             "attempts": receipt.get("attempts") or [],
         }
         if tasks:
-            entry["tasks"] = [row.__dict__ for row in view.rows or []]
+            # `config_file` only for experiments that have one.
+            entry["tasks"] = [{key: value for key, value in row.__dict__.items()
+                               if key != "config_file" or value is not None}
+                              for row in view.rows or []]
         output.append(entry)
     return output
