@@ -290,11 +290,38 @@ Used by jobs, `prepare_on_host` sources (`allocation`), and the host's
 | `config_file` | no | Its own session config (a repository path; default `base.config_file`), for a change of structure. Its session is `base.session_index`, and its overrides and `vary` are checked against it. When any recipe sets it, every experiment records its file (`config_file`), compared as `config` by `summarize`. |
 | `overrides` | no | List of `{component?, path, value}`: values set for every experiment of the recipe. |
 | `vary` | no | List of `{component?, path, values}`: one experiment per combination of the values; the last entry varies fastest. Without it the recipe is one experiment. |
+| `from_mission` | no | Take the recipe's experiments from another mission's checkpoints: one experiment per chosen checkpoint (below). Its session must be an analysis session. |
 
 Each experiment's config is: its session config (with its includes merged),
-then the recipe's `overrides`, then its combination of `vary` values. A
-`${...}` interpolation brought in by an override or a varied value is
-refused, as in the session config itself.
+then the recipe's `overrides`, then its checkpoint (with `from_mission`),
+then its combination of `vary` values. A `${...}` interpolation brought in
+by an override or a varied value is refused, as in the session config
+itself.
+
+#### from_mission
+
+| Key | Required | Default | Meaning |
+|---|---|---|---|
+| `id` | yes | | The mission whose checkpoints are analysed, as `naavik missions` lists it. Its receipt must be on this machine. |
+| `experiments` | no | all | Names or globs of its experiments (`short/*`). A glob that matches none is an error. |
+| `checkpoint` | no | `latest` | `latest`: each experiment's newest complete checkpoint; `all`: every complete one. |
+| `into` | no | `{component: trained_model, path: model_checkpoint_path}` | The address the checkpoint's path is written at. It must not also be set by `overrides` or `vary`. |
+
+The checkpoints are chosen when the mission is compiled (`validate`,
+`render`, `launch`), so the plan names each experiment's exact checkpoint
+and a resume reuses it. The checkpoint is the slowest axis: each checkpoint
+with every combination of `vary` values. An experiment without a complete
+checkpoint is left out with a note; if none is left, it is an error.
+
+The source is read where the analysis runs: on the same host (read-only;
+`validate` connects for it and says so), or, for a mission on this
+machine, from the source's copy fetched into `./hpc-results/<id>`
+(`naavik fetch`, with `--checkpoints all` for `checkpoint: all`). A source
+on another host is refused.
+
+Each experiment records its `source`: `{mission, experiment, checkpoint,
+iteration, into, variant}` (`variant`: the source experiment's varied
+values), in the plan and in its `record.json`.
 
 ### Addresses
 

@@ -217,6 +217,60 @@ jobs:
 - `note` (optional) says why the mission runs; it is kept in the receipt and
   in each experiment's run record.
 
+### Analysing another mission's checkpoints: `from_mission`
+
+An [analysis session](07-analysis-sessions.md) evaluates one trained
+checkpoint. To evaluate every checkpoint a training mission wrote, a recipe
+takes its experiments from that mission:
+
+```yaml
+# missions/eval-arch.yaml
+format_version: 1
+name: eval-arch
+project_file: naavik-project.yaml
+base: {config_file: configs/analysis/test-set.yaml}   # session_type: analysis
+jobs:
+  eval:
+    per_experiment: {walltime: "00:30:00", gpus: 1, cpus: 8, memory: 32G}
+    recipes:
+      - name: test-set
+        from_mission:
+          id: arch-20261118T090000Z-9e04101571a2   # the training mission
+          experiments: ["short/*"]                 # optional: names or globs
+          checkpoint: latest                       # latest (default) | all
+          # into: {component: trained_model, path: model_checkpoint_path}   (the default)
+```
+
+```text
+$ naavik validate missions/eval-arch.yaml --host workstation
+note: listed the checkpoints of arch-20261118T090000Z-9e04101571a2 on host 'workstation' (read-only)
+note: eval/test-set: short/base/003 of arch-... has no complete checkpoint; left out
+ok: 6 experiment(s) in 1 job(s); commit ...
+```
+
+- **One experiment per checkpoint**, with the checkpoint's path written at
+  `into`. `checkpoint: latest` takes each source experiment's newest
+  complete checkpoint; `all` takes every one. It combines with `overrides`
+  and `vary`: each checkpoint with every combination.
+- **Chosen when the mission is compiled.** The plan names each
+  experiment's exact checkpoint, so `validate` shows what will run, and
+  `resume` continues with the same checkpoints. A training mission still
+  running gives the checkpoints written so far.
+- **Where the source is read.** On the host the analysis runs on, if the
+  training ran there. For a mission on this machine, a training mission
+  from another host is read from its fetched copy, `./hpc-results/<id>`
+  (`naavik fetch <id>`; add `--checkpoints all` for `checkpoint: all`).
+  A source on another host is refused, naming both: checkpoints are never
+  copied between hosts. The source's receipt must be on this machine.
+- **Refused:** a session that is not an analysis session, an `into` that
+  `overrides` or `vary` also sets, a glob that matches no experiment, and
+  a choice left with no complete checkpoint.
+- **Each experiment records its source** (mission, experiment, checkpoint,
+  iteration, and what the source experiment varied). `summarize` compares
+  the results by those training settings, so analyses of training runs
+  that differ only in their seed are one group
+  ([Comparing runs](12-comparing-runs.md#analysis-missions-compared-by-their-training)).
+
 ### Sharing settings: the project file
 
 `code_transfer`, `code`, `python_packages`, and `data_sources` are usually
@@ -363,7 +417,9 @@ naavik render   missions/sweep.yaml --output /tmp/preview
 ```
 
 `validate` runs the same compiler as `launch`, entirely on your machine: it
-never connects to the host, uploads, or submits. It builds the whole plan
+never uploads or submits, and never connects to the host, except to list the
+checkpoints a recipe's [`from_mission`](#analysing-another-missions-checkpoints-from_mission)
+names (read-only; it says so in a note). It builds the whole plan
 and reports every problem at once, each with the file and key it concerns,
 instead of stopping at the first. In order, it checks:
 

@@ -194,6 +194,47 @@ run --note`, a mission file's `note`), or whose run record has one, gets
 it in a `note` column of the runs table (and `note` in JSON), only when
 some run has one. Runs with different notes still share a seed group.
 
+### Analysis missions: compared by their training
+
+The experiments of an analysis mission ([`from_mission`](08-hpc-batches.md#analysing-another-missions-checkpoints-from_mission))
+differ in the checkpoint each one analyses, a path no two runs share. The
+path itself is not compared. What trained the checkpoint is compared in
+its place:
+
+- `source <label>`: each value the source experiment varied, labelled as in
+  the training mission file (`source optimizer:optimizer.kwargs.lr`);
+- `source iteration`: the checkpoint's iteration, so checkpoints from
+  different points of training (`checkpoint: all`) are never one group.
+
+The source's training seed is a seed (`source session_config.rng_seed`, or
+whatever `--seed-key` names). Analyses of training runs that differ only in
+their seed therefore form one group, with the mean ± std over the training
+seeds:
+
+```text
+## Seed groups
+
+| group | source optimizer:optimizer.kwargs.lr | runs | seeds | test/acc best |
+|---|---|---|---|---|
+| G1 | 0.001 | 2 | session_config.rng_seed=0, source session_config.rng_seed=41, ... | 0.912 ± 0.004 (n=2) |
+| G2 | 0.01  | 2 | session_config.rng_seed=0, source session_config.rng_seed=41, ... | 0.874 ± 0.010 (n=2) |
+
+## Runs
+
+| run | group | source experiment | source optimizer:optimizer.kwargs.lr | source session_config.rng_seed | ... |
+|---|---|---|---|---|---|
+| eval/test/000 | G1 | probe/lr/000 | 0.001 | 41 | ... |
+| eval/test/001 | G1 | probe/lr/001 | 0.001 | 42 | ... |
+```
+
+Each run's seeds are its own (`session_config.rng_seed` of the analysis
+session, the same in every run here) and its source's. `source iteration`
+equal in every run is listed under the shared settings. The runs table has
+a `source experiment` column (and `source` in JSON), shown, not compared. `--ignore-key "source iteration"` (or any `source ...`
+name, quoted, as the report writes it) leaves one out. A record that does
+not say where its checkpoint was written is compared by the checkpoint's
+path, and the report says so.
+
 ## Problems and `--strict`
 
 The **Problems** section lists, among others: a truncated or corrupt event

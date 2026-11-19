@@ -70,6 +70,12 @@ sessions:
       output_path: ./analysis-runs/report.json
 ```
 
+To analyse every checkpoint of a training mission instead of one, a mission
+file's recipe can take them from it: one experiment per checkpoint, its path
+written at `trained_model.model_checkpoint_path`, compared in summaries by
+the training settings behind it. See
+[`from_mission`](08-hpc-batches.md#analysing-another-missions-checkpoints-from_mission).
+
 `max_iterations: 1` runs a single iteration. To go through the whole analysis
 dataset once, give `epochs: 1` in its place. The session then runs as many
 iterations as the analysis `data_manager` has batches
