@@ -282,6 +282,8 @@ still running when it reported), `exception_type` (`ValueError`, or
 A rank runs on CUDA ordinal `rank % <visible devices>`. Ordinals are relative
 to `CUDA_VISIBLE_DEVICES`, so which physical GPUs a run uses is controlled
 there: `CUDA_VISIBLE_DEVICES=4,5,6,7` puts rank 0 on physical GPU 4.
+Set `session_config.device` to `cuda`: any other value is replaced by the
+rank's device, with a warning naming both.
 
 The worker pins that device before it constructs anything, so no component is
 ever built or restored against the wrong one, and the session's CUDA RNG

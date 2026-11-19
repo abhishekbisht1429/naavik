@@ -28,6 +28,7 @@ from training_framework.session.config import (
     SessionPhase,
     normalize_session_config,
     normalize_session_type,
+    resolve_device,
 )
 from training_framework.session.io import write_session_config
 from training_framework.session.registry import session_class_for_type
@@ -97,7 +98,7 @@ class Session(Stateful, metaclass=CaptureInitMeta):
 
         self._session_context: dict[str, Any] = {}
 
-        self._init_transient_infra()
+        self._init_transient_infra(restored=False)
         # Read once: a legacy bindings key warns here, not again on registering.
         config_view = read_session_config(
             self._config,
@@ -153,8 +154,8 @@ class Session(Stateful, metaclass=CaptureInitMeta):
         self._session_type = stored_session_type
         self._restore_session_type_state(state)
 
-    def _init_transient_infra(self):
-        self._device = self._check_and_get_device()
+    def _init_transient_infra(self, *, restored: bool):
+        self._device = self._check_and_get_device(strict=not restored)
         # The values steps and hooks hand each other this iteration. Not
         # public: every key is declared with @reads/@writes and passed as an
         # argument or returned, so the checks see every exchange.
@@ -222,7 +223,7 @@ class Session(Stateful, metaclass=CaptureInitMeta):
             False,
         )
 
-        self._init_transient_infra()
+        self._init_transient_infra(restored=True)
         bindings = stored_bindings(state)
         restored_components = SessionComponents(
             role_bindings=bindings.roles,
@@ -471,13 +472,16 @@ class Session(Stateful, metaclass=CaptureInitMeta):
     def unregister_resource(self, resource_name):
         self._components.unregister_resource(resource_name)
 
-    def _check_and_get_device(self):
-        if 'device' not in self._session_settings:
-            return torch.device('cpu')
-        if self._session_settings['device'].startswith('cuda') and torch.cuda.is_available():
-            return torch.device(self._session_settings['device'])
-        else:
-            return torch.device('cpu')
+    def _check_and_get_device(self, *, strict: bool):
+        """The device `session_config.device` names; see `resolve_device`.
+
+        `strict` for a session built from a configuration, which must say
+        exactly where it runs; not for one restored from a checkpoint.
+        """
+        return resolve_device(
+            self._session_settings.get("device", "cpu"),
+            strict=strict,
+        )
 
     def _raise_if_not_new(self):
         if self._phase is not SessionPhase.NEW:

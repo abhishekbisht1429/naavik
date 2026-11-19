@@ -2,6 +2,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Any
+import warnings
+
+import torch
 
 
 TRAINING_SESSION_TYPE = "training"
@@ -97,6 +100,87 @@ def normalize_session_config(config: Mapping[str, Any]) -> dict[str, Any]:
         raise TypeError("session_config.show_execution_graph must be a boolean")
 
     return normalized
+
+
+#: The device types `session_config.device` may name.
+SUPPORTED_DEVICE_TYPES = ("cpu", "cuda")
+
+
+def device_spelling_problem(spec: str) -> str | None:
+    """Why `spec` is not a device a session can name on any machine, or None.
+
+    Depends on nothing about this machine, so a config can be checked before
+    it reaches the machine that runs it; `device_problem` adds what does.
+    """
+    try:
+        device = torch.device(spec)
+    except (RuntimeError, ValueError):
+        return (
+            f"session_config.device {spec!r} is not a device; give one of "
+            "cpu, cuda or cuda:N"
+        )
+    if device.type not in SUPPORTED_DEVICE_TYPES:
+        return (
+            f"session_config.device {spec!r} is a {device.type} device; "
+            f"sessions run on {' or '.join(SUPPORTED_DEVICE_TYPES)}"
+        )
+    return None
+
+
+def device_problem(spec: str) -> str | None:
+    """Why `spec` cannot be this session's device here, or None when it can.
+
+    `spec` is a `session_config.device` string: `cpu`, `cuda`, or `cuda:N`,
+    where N counts the devices `CUDA_VISIBLE_DEVICES` leaves visible.
+    """
+    spelling_problem = device_spelling_problem(spec)
+    if spelling_problem is not None:
+        return spelling_problem
+    device = torch.device(spec)
+    if device.type != "cuda":
+        return None
+    if not torch.cuda.is_available():
+        return (
+            f"session_config.device is {spec!r}, but CUDA is not available "
+            "to this process"
+        )
+    count = torch.cuda.device_count()
+    if device.index is not None and device.index >= count:
+        return (
+            f"session_config.device is {spec!r}, but only {count} CUDA "
+            "device(s) are visible to this process. N in cuda:N counts the "
+            "devices CUDA_VISIBLE_DEVICES leaves visible, from 0."
+        )
+    return None
+
+
+def resolve_device(spec: str, *, strict: bool) -> torch.device:
+    """The device `session_config.device` asks for.
+
+    `strict` -- a session built from a configuration -- raises when it
+    cannot be used here. Otherwise -- a session restored from a checkpoint,
+    whose stored device may name a GPU this machine lacks -- a device that is
+    not a usable CUDA one falls back to CPU with a warning, as checkpoints
+    have always loaded; an out-of-range `cuda:N` is kept, as it always was.
+    """
+    problem = device_problem(spec)
+    if problem is None:
+        return torch.device(spec)
+    if strict:
+        raise ValueError(problem)
+    try:
+        device = torch.device(spec)
+    except (RuntimeError, ValueError):
+        device = None
+    if (
+            device is not None
+            and device.type == "cuda"
+            and torch.cuda.is_available()
+    ):
+        # Only the ordinal is out of range; a worker pins it and says so.
+        return device
+    warnings.warn(f"{problem}; running on cpu instead", stacklevel=3)
+    return torch.device("cpu")
 
 
 def run_length_field(settings: Mapping[str, Any]) -> str:

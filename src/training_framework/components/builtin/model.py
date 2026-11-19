@@ -63,6 +63,10 @@ class TrainedModel(Resource):
                 "model",
                 map_location="cpu",
                 session_type=TRAINING_SESSION_TYPE,
+                # Every part, not only the model: a part the model reaches
+                # without holding it as a submodule is not moved by
+                # `model.to` below, and no setup() runs on a loaded part.
+                device=session.device,
             )
         except (KeyError, ComponentDependencyError) as error:
             # Missing, or several instances with nothing to choose between

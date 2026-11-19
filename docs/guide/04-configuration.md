@@ -42,7 +42,7 @@ sessions:
 | `max_iterations` | One of these two | Number of training or analysis iterations |
 | `epochs` | One of these two | Length of the run in epochs of the data; the session turns it into `max_iterations` (see below) |
 | `components_package` | Yes | Importable package recursively scanned for decorated components |
-| `device` | No | Requested device string; defaults to CPU, and unavailable CUDA requests currently fall back to CPU |
+| `device` | No | `cpu` (default), `cuda` or `cuda:N`, N counting the devices `CUDA_VISIBLE_DEVICES` leaves visible. Anything else, CUDA where it is not available, or an N past the visible devices is refused when the session is built. A checkpoint restored where its CUDA device is unavailable loads on CPU with a warning. Under `nccl` DDP each rank runs on its own GPU instead (see [Devices and ranks](06-distributed-training.md#devices-and-ranks)) |
 | `show_execution_graph` | No | Print the resolved lifecycle graph on entry; defaults to `true` |
 
 ### Run length in epochs

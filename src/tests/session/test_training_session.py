@@ -165,13 +165,15 @@ def test_training_session_initialization_and_device_validation(minimal_session_c
     bad_device = deepcopy(minimal_session_config_2)
     bad_device["session_config"]["device"] = "tpu"
 
-    assert TrainingSession(bad_device).device == torch.device("cpu")
+    with pytest.raises(ValueError, match="session_config.device .tpu. is not a device"):
+        TrainingSession(bad_device)
 
     unavailable_cuda = deepcopy(minimal_session_config_2)
     unavailable_cuda["session_config"]["device"] = "cuda:0"
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
 
-    assert TrainingSession(unavailable_cuda).device == torch.device("cpu")
+    with pytest.raises(ValueError, match="CUDA is not available"):
+        TrainingSession(unavailable_cuda)
 
 
 def test_registration_validation_and_lookup(minimal_session_config_2):

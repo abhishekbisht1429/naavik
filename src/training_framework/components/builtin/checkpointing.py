@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import os
 import warnings
-from collections.abc import Collection, Mapping
+from collections.abc import Collection, Iterable, Mapping
 from contextlib import ExitStack
 from copy import deepcopy
 from typing import TYPE_CHECKING, Any, override
 
 import torch
+from torch import nn
 
 from training_framework.components import (
     ExtendableComponent,
@@ -248,6 +249,7 @@ class Checkpointer(LifecycleHook, Stateful, ExtendableComponent):
             with_dependencies: bool = True,
             map_location="cpu",
             session_type: str | None = None,
+            device: torch.device | str | None = None,
     ):
         """Return one resource out of a checkpoint.
 
@@ -266,13 +268,18 @@ class Checkpointer(LifecycleHook, Stateful, ExtendableComponent):
         `load_component_state`, which returns its saved state alone.
 
         `session_type`, when given, is the kind of session the checkpoint must
-        hold. Raises `KeyError` when the checkpoint has no such resource, and
+        hold. `device`, when given, is where every rebuilt `nn.Module` -- the
+        resource and each it was wired to -- is moved. Moving only the
+        returned one would leave behind a part it reaches without holding it
+        as a submodule. `map_location` only says where the saved tensors are
+        read to; they are copied into modules built on CPU. Raises `KeyError` when the checkpoint has no such resource, and
         `ComponentDependencyError` when several instances answer and nothing
         in the checkpoint decides between them.
         """
         if not is_checkpoint_directory(path):
             return cls._load_legacy_component(
                 path, name, with_dependencies, map_location, session_type,
+                device,
             )
 
         record = read_session_record(path, map_location=map_location)
@@ -312,11 +319,15 @@ class Checkpointer(LifecycleHook, Stateful, ExtendableComponent):
         )
         with rng_preserved():
             components.set_state(state["components_state"], partial=True)
+        _move_modules(
+            (components.components[name] for name in needed), device,
+        )
         return components.components[instance]
 
     @classmethod
     def _load_legacy_component(
             cls, path, name, with_dependencies, map_location, session_type,
+            device,
     ):
         from training_framework.session import Session as FrameworkSession
 
@@ -337,7 +348,30 @@ class Checkpointer(LifecycleHook, Stateful, ExtendableComponent):
                 "with_dependencies=True, or read its saved state alone with "
                 "Checkpointer.load_component_state()."
             )
+        _move_modules(_dependency_tree(resource), device)
         return resource
+
+
+def _dependency_tree(component) -> list:
+    """`component` and every component it was given, transitively."""
+    seen: dict[int, Any] = {}
+    pending = [component]
+    while pending:
+        current = pending.pop()
+        if id(current) in seen:
+            continue
+        seen[id(current)] = current
+        pending.extend(getattr(current, "_dependencies", {}).values())
+    return list(seen.values())
+
+
+def _move_modules(components: Iterable, device) -> None:
+    """Move every `nn.Module` among `components` to `device`, if given."""
+    if device is None:
+        return
+    for component in components:
+        if isinstance(component, nn.Module):
+            component.to(device)
 
 
 def _check_session_type(stored: str | None, expected: str | None) -> None:

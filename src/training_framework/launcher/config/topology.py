@@ -28,12 +28,18 @@ def check_topology(session: Mapping, resources: Resources) -> list[str]:
 
 
 def _device_problems(session: Mapping, resources: Resources) -> list[str]:
-    """`session_config.device` against the GPUs the task will see: its
-    group's, renumbered from 0 (so `cuda:N` needs N < gpus), and none in a
-    group that asks for none. Caught here, not in the running task."""
+    """`session_config.device`: a device a session can name at all, and
+    against the GPUs the task will see: its group's, renumbered from 0 (so
+    `cuda:N` needs N < gpus), and none in a group that asks for none. Caught
+    here, not in the running task."""
     config = session.get("session_config")
     device = config.get("device") if isinstance(config, Mapping) else None
-    if not isinstance(device, str) or not device.startswith("cuda"):
+    if not isinstance(device, str):
+        return []
+    spelling_problem = framework.device_spelling_problem(device)
+    if spelling_problem is not None:
+        return [spelling_problem]
+    if not device.startswith("cuda"):
         return []
     gpus = resources.gpus
     if gpus == 0:

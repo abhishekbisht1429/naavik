@@ -182,7 +182,22 @@ class DDPResource(Resource):
             # Usually already pinned before the session was built; repeating
             # it keeps a hand-driven session working.
             torch.cuda.set_device(self._local_rank)
-            session.set_device(torch.device("cuda", self._local_rank))
+            rank_device = torch.device("cuda", self._local_rank)
+            configured = session.device
+            # `cuda` with no ordinal leaves the choice to the rank; anything
+            # else names a device this rank is about to replace.
+            if configured != rank_device and not (
+                    configured.type == "cuda" and configured.index is None
+            ):
+                warnings.warn(
+                    f"session_config.device is {str(configured)!r}, but the "
+                    f"nccl backend runs rank {self._rank} on {rank_device} "
+                    "(rank % visible devices). Choose the GPUs with "
+                    "CUDA_VISIBLE_DEVICES and set session_config.device to "
+                    "cuda.",
+                    stacklevel=2,
+                )
+            session.set_device(rank_device)
 
         if self._joins_hosted_store:
             self._store = torch.distributed.TCPStore(

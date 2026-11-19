@@ -104,9 +104,9 @@ Analysis configurations must place the source checkpoint at `trained_model.model
 
 ## Environment
 
-### An unavailable CUDA device currently falls back to CPU
+### A restored checkpoint can fall back to CPU
 
-Validate the final `session.device` in application code when silent fallback is undesirable.
+A new session refuses a device it cannot use. A session restored from a checkpoint whose stored device is unavailable on this machine runs on CPU instead, with a warning, so the checkpoint still loads. Validate the final `session.device` in application code when that fallback is undesirable.
 
 ### TensorBoard is an external process
 

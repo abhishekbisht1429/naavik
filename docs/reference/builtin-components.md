@@ -189,8 +189,10 @@ Because it is an iteration hook, it saves on:
 
 A component that needs something another run produced reads it with
 `Checkpointer.load_component(path, name, *, with_dependencies=True,
-session_type=None)`, which rebuilds only that resource and the instances it
-was wired to. The name is
+session_type=None, device=None)`, which rebuilds only that resource and the
+instances it was wired to; `device` moves every rebuilt `nn.Module` among them
+there, including a part the resource reaches without holding it as a
+submodule. The name is
 resolved through the *checkpoint's* bindings -- `model` finds whatever that
 run bound it to -- and the checkpoint's RNG is not adopted. The caller's RNG
 is left exactly as it was, even when the rebuilt components draw from it, so

@@ -6,7 +6,8 @@ every component name, the wiring, companions, singletons, and each planned
 component's `config_schema` -- and says what it cannot check without
 building: the order of the components' work (it needs them built),
 configs a component reads itself in its constructor, imports (they restore
-from checkpoints), and the device (it depends on the machine that runs).
+from checkpoints), and whether the device is available (it depends on the
+machine that runs). How the device is spelled is checked.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ from dataclasses import dataclass, field
 NOT_CHECKED = (
     "the order of the components' work (it needs them built)",
     "configs a component reads in its own constructor (no config_schema)",
-    "the device (it depends on the machine that runs the session)",
+    "whether the device is available (it depends on the machine that runs the session)",
 )
 
 
@@ -52,6 +53,7 @@ def check_session_config(config: Mapping, session_type: str | None = None) -> Co
     )
     from training_framework.session.config import (
         TRAINING_SESSION_TYPE,
+        device_spelling_problem,
         normalize_session_config,
         normalize_session_type,
     )
@@ -66,6 +68,9 @@ def check_session_config(config: Mapping, session_type: str | None = None) -> Co
         kind = normalize_session_type(session_type or config.get("session_type") or TRAINING_SESSION_TYPE)
         session_class = session_class_for_type(kind)
         settings = normalize_session_config(config["session_config"])
+        device_problem = device_spelling_problem(settings["device"])
+        if device_problem is not None:
+            result.problems.append(device_problem)
         import_all_modules(settings["components_package"])
         body = {key: value for key, value in config.items()
                 if key not in ("session_type", "session_kwargs")}

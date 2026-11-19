@@ -18,10 +18,12 @@ from training_framework.components.config import (
     reserved_config_names,
     with_component_entry,
 )
+from training_framework.session.config import device_spelling_problem
 
 __all__ = [
     "COMPONENT_GROUPS",
     "component_entry_of",
+    "device_spelling_problem",
     "is_listed_component",
     "reserved_names",
     "with_entry",
