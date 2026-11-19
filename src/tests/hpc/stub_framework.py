@@ -27,10 +27,13 @@ def interpreter():
 if __name__ == "__main__":
     plan = json.load(open(sys.argv[sys.argv.index("--preflight") + 1]))
     import training_framework
-    try:
-        distribution = importlib.metadata.version("training-framework")
-    except importlib.metadata.PackageNotFoundError:
-        distribution = None
+    distribution = None
+    for name in ("naavik", "training-framework"):      # as the real one: either name
+        try:
+            distribution = importlib.metadata.version(name)
+            break
+        except importlib.metadata.PackageNotFoundError:
+            continue
     components = {}
     for package in plan["preflight"]["components_packages"]:
         try:

@@ -51,13 +51,11 @@ def framework_facts() -> dict:
 
     location = Path(naavik.__file__).resolve().parent
     facts = {"location": str(location), "version": None}
-    try:
-        distribution = importlib.metadata.distribution("training-framework")
-        installed = Path(distribution.locate_file("naavik/__init__.py")).resolve()
-        if installed.parent == location:
-            facts["version"] = distribution.version
-    except importlib.metadata.PackageNotFoundError:
-        pass
+    from naavik.distribution import distribution_of
+
+    distribution = distribution_of(location)
+    if distribution is not None:
+        facts["version"] = distribution.version
     from naavik.launcher.errors import HpcError
     from naavik.launcher.ports.repository import GitRepository
 

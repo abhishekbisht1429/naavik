@@ -259,7 +259,7 @@ def test_dependency_mode_expects_the_pinned_framework(tmp_path):
 
 def test_dependency_mode_needs_exactly_one_framework_pin(tmp_path):
     root = make_repo(tmp_path, requirements="torch==2.13.0\n")
-    assert "pin training-framework exactly once" in problems_of(root)
+    assert "must pin naavik (or its earlier name training-framework) exactly once" in problems_of(root)
 
 
 def test_checkout_mode_refuses_a_framework_pin(tmp_path):

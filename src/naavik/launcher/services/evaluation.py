@@ -44,7 +44,9 @@ def _checkout_version(location: str | None) -> str | None:
                 project = tomllib.loads(candidate.read_text()).get("project", {})
             except (OSError, ValueError):
                 return None
-            return project.get("version") if project.get("name") == "training-framework" else None
+            from naavik.distribution import is_framework_project
+
+            return project.get("version") if is_framework_project(project.get("name")) else None
     return None
 
 
@@ -79,14 +81,16 @@ def framework_mismatch(manifest, sha, managed, repository, framework: dict, tree
     raw = repository.read(sha, manifest.requirements) if manifest.requirements else None
     if raw is None:
         return None
-    pins = parse_requirements(raw.decode(), manifest.requirements).pins_named("training-framework")
+    from naavik.distribution import framework_pins
+
+    pins = framework_pins(parse_requirements(raw.decode(), manifest.requirements))
     if len(pins) != 1:
         return None                        # the compiler reports this already
     pin, mine = pins[0], framework
     commit = _FULL_SHA.search(pin.url or "")
     if commit is not None:
         if mine.get("sha") != commit.group(1) or mine.get("dirty"):
-            return (f"the host runs training-framework at commit {commit.group(1)[:12]}, but the "
+            return (f"the host runs {pin.name} at commit {commit.group(1)[:12]}, but the "
                     f"framework here is {(mine.get('sha') or 'not a Git checkout')[:12]}"
                     f"{' with uncommitted changes' if mine.get('dirty') else ''} "
                     f"({mine.get('location')}); install the pinned framework here "

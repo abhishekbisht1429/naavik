@@ -179,12 +179,9 @@ def _manifest(state: Mapping[str, Any], records: Mapping[str, Mapping]) -> dict:
 
 
 def _framework_version() -> str | None:
-    from importlib.metadata import PackageNotFoundError, version
+    from naavik.distribution import installed_version
 
-    try:
-        return version("training-framework")
-    except PackageNotFoundError:
-        return None
+    return installed_version()
 
 
 def _save(value: Any, path: str) -> str:

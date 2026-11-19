@@ -45,11 +45,9 @@ def interpreter_facts() -> dict:
 def framework_facts() -> dict:
     import naavik
 
-    try:
-        distribution = importlib.metadata.version("training-framework")
-    except importlib.metadata.PackageNotFoundError:
-        distribution = None
-    return {"file": os.path.realpath(naavik.__file__), "distribution": distribution}
+    from naavik.distribution import installed_version
+
+    return {"file": os.path.realpath(naavik.__file__), "distribution": installed_version()}
 
 
 

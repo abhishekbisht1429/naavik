@@ -62,7 +62,9 @@ from naavik.launcher.config.topology import check_topology, parse_engine_options
 
 UNSET_VARIABLES = ("WORLD_SIZE", "MASTER_ADDR", "MASTER_PORT")
 SET_VARIABLES = (("PYTHONNOUSERSITE", "1"),)
-FRAMEWORK_DISTRIBUTION = "training-framework"
+#: The framework's distribution name (its earlier one is read too:
+#: `naavik.distribution`).
+FRAMEWORK_DISTRIBUTION = "naavik"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -627,18 +629,27 @@ def _requirements(manifest, repository, sha, managed, problems) -> Requirements 
 
 
 def _framework_expectation(manifest, requirements, managed, problems) -> dict:
-    pins = requirements.pins_named(FRAMEWORK_DISTRIBUTION) if requirements else []
+    from naavik.distribution import DESCRIBED, framework_pins
+
+    pins = framework_pins(requirements) if requirements else []
     if manifest.code_framework == "checkout":
         if pins:
+            pinned = " and ".join(sorted({pin.name for pin in pins}))
             problems.add(
                 "code.framework is 'checkout', so the requirements must not "
-                f"contain {FRAMEWORK_DISTRIBUTION} (it comes from the checkout)"
+                f"contain {pinned} (it comes from the checkout)"
             )
         return {"location": "checkout", "distribution": None}
+    if requirements is not None and len({pin.name for pin in pins}) > 1:
+        problems.add(
+            "the requirements pin both naavik and training-framework: they are the same "
+            "framework under its current and earlier name; keep one"
+        )
+        return {"location": "environment", "distribution": None}
     if requirements is not None and len(pins) != 1:
         problems.add(
             "code.framework is 'dependency', so the requirements must pin "
-            f"{FRAMEWORK_DISTRIBUTION} exactly once"
+            f"{DESCRIBED} exactly once"
         )
         return {"location": "environment", "distribution": None}
     version = pins[0].version if pins and managed else None
