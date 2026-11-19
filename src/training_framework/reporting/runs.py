@@ -83,6 +83,10 @@ class RunRecord:
     #: Why it ran (`naavik run --note`, a manifest's `description`): from
     #: its task record or its run record; shown, never compared.
     note: str | None = None
+    #: For an experiment of a recipe with `from_mission`: the checkpoint it
+    #: analysed, from its record ({mission, experiment, checkpoint,
+    #: iteration, into, variant}); None otherwise.
+    source: dict | None = None
 
 
 @dataclass
@@ -155,8 +159,8 @@ def discover_runs(
             continue
         run = _load(run_id, located[session_dir])
         run.problems[:0] = run_problems.get(session_dir, [])
-        run.code, run.config_file, run.note = _task_facts(located[session_dir].task_dir,
-                                                          run.problems)
+        run.code, run.config_file, run.note, run.source = _task_facts(
+            located[session_dir].task_dir, run.problems)
         recorded = recorded_code.get(os.path.realpath(session_dir)) or {}
         if run.code is None:
             run.code = code_text(recorded.get("code"))
@@ -289,25 +293,25 @@ def code_text(code: dict | None) -> str | None:
 
 
 def _task_facts(task_dir: str | None, problems: list[str]) -> tuple:
-    """(code, config file, note) of an HPC task, from its record: its
-    batch's commit, the training config file it was made from, and why it
-    ran."""
+    """(code, config file, note, source) of an HPC task, from its record:
+    its batch's commit, the training config file it was made from, why it
+    ran, and the checkpoint it analysed (`from_mission`)."""
     if task_dir is None:
-        return None, None, None
+        return None, None, None, None
     path = os.path.join(task_dir, TASK_RECORD_FILE)
     if not os.path.exists(path):
-        return None, None, None            # still running, or not fetched
+        return None, None, None, None      # still running, or not fetched
     try:
         with open(path, encoding="utf-8") as handle:
             record = json.load(handle)
     except (OSError, ValueError) as error:
         problems.append(f"{TASK_RECORD_FILE} cannot be read ({error!r}); its code is unknown")
-        return None, None, None
+        return None, None, None, None
     if not isinstance(record, dict):
-        return None, None, None
-    config_file, note = record.get("config_file"), record.get("note")
+        return None, None, None, None
+    config_file, note, source = record.get("config_file"), record.get("note"), record.get("source")
     return (code_text(record), config_file if isinstance(config_file, str) else None,
-            note if isinstance(note, str) else None)
+            note if isinstance(note, str) else None, source if isinstance(source, dict) else None)
 
 
 def _recorded_code() -> dict[str, dict]:
@@ -462,6 +466,16 @@ def component_entry(config: dict | None, component: str) -> tuple[str, ...] | No
     return None
 
 
+def variant_label(address: dict) -> str:
+    """How a varied value is labelled: `component:path`, or `path`."""
+    segments = address["path"]
+    if isinstance(segments, str):
+        segments = [segments]
+    path_text = format_path(tuple(segments))
+    component = address.get("component")
+    return f"{component}:{path_text}" if component else path_text
+
+
 def _load_variant(
         task_dir: str,
         config: dict | None,
@@ -480,7 +494,7 @@ def _load_variant(
                 segments = [segments]
             path_text = format_path(tuple(segments))
             component = address.get("component")
-            label = f"{component}:{path_text}" if component else path_text
+            label = variant_label(address)
             values[label] = item["value"]
             if not component:
                 paths[label] = path_text

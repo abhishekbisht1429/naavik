@@ -126,6 +126,7 @@ def render_json(summary: Summary) -> str:
             "attempts": [asdict(attempt) for attempt in record.attempts],
             "metrics": {tag: asdict(metric) for tag, metric in run.metrics.items()},
             **({"note": record.note} if record.note else {}),
+            **({"source": record.source} if record.source else {}),
         }
 
     def group_json(group: GroupSummary) -> dict[str, Any]:
@@ -177,6 +178,10 @@ def _run_rows(summary: Summary, plain: bool = False):
     header = ["run"]
     if summary.groups is not None:
         header.append("group")
+    # What an analysis run analysed: shown, not compared (its settings are).
+    sources = any(run.run.source for run in summary.runs)
+    if sources:
+        header.append("source experiment")
     header += [column.name for column in summary.columns]
     header += ["extended", "attempts"]
     notes = any(run.run.note for run in summary.runs)
@@ -198,6 +203,8 @@ def _run_rows(summary: Summary, plain: bool = False):
         row: list[Any] = [run.run_id]
         if summary.groups is not None:
             row.append(run.group)
+        if sources:
+            row.append((run.run.source or {}).get("experiment") or ("" if plain else "-"))
         row += [_cell(run.hyperparameters[column.name], plain) for column in summary.columns]
         row.append(run.run.extensions if plain else (run.run.extensions or "-"))
         rewritten = max(run.run.rewritten.values(), default=0)

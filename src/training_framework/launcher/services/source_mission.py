@@ -86,7 +86,20 @@ def _read(mission_id, profile, receipts_dir, fetched, require_tools):
         {name: tuple(SourceCheckpoint(checkpoint.path, checkpoint.iteration)
                      for checkpoint in found.get(name, []) if checkpoint.iteration is not None)
          for name in names},
-        [], where)
+        [], where, _variants(executor, mission_dir, mission_id))
+
+
+def _variants(executor, mission_dir, mission_id) -> dict[str, tuple[dict, ...]]:
+    """Each experiment's varied values, from the mission's plan."""
+    import json
+
+    result = executor.run(["cat", f"{mission_dir}/plan.json"])
+    try:
+        plan = json.loads(result.stdout) if result.status == 0 else None
+        return {task["name"]: tuple(task.get("variant", ())) for task in plan["tasks"]}
+    except (ValueError, TypeError, KeyError):
+        raise HpcError(f"the plan of {mission_id} ({mission_dir}/plan.json) cannot be read"
+                       + (f": {result.stderr.strip()}" if result.stderr.strip() else "")) from None
 
 
 def _receipt(mission_id, receipts_dir) -> dict:

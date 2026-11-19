@@ -90,7 +90,9 @@ def test_one_experiment_per_latest_checkpoint_with_its_source(tmp_path):
     assert [task.name for task in tasks] == ["eval/test-set/000", "eval/test-set/001", "eval/test-set/002"]
     assert [task.source["experiment"] for task in tasks] == ["short/base/000", "short/base/001", "long/full/000"]
     assert tasks[0].source == {"mission": SOURCE, "experiment": "short/base/000",
-                               "checkpoint": checkpoint("short/base/000", 2000).path, "iteration": 2000}
+                               "checkpoint": checkpoint("short/base/000", 2000).path, "iteration": 2000,
+                               "into": {"component": "trained_model", "path": ["model_checkpoint_path"]},
+                               "variant": []}
     assert [checkpoint_of(task) for task in tasks] == [task.source["checkpoint"] for task in tasks]
     notes = "\n".join(compiled.plan.notes)
     assert f"listed the checkpoints of {SOURCE} on cluster" in notes
@@ -379,11 +381,16 @@ def test_a_fetched_copy_is_read_for_a_mission_on_this_machine(tmp_path):
     checkpoint_dir = copy_dir / "tasks/short/base/000/sessions/session_1/checkpoints/iteration_7"
     checkpoint_dir.mkdir(parents=True)
     (checkpoint_dir / "manifest.json").write_text(json.dumps({"iteration": 7}))
+    lr = lambda value: [{"address": {"component": "optimizer", "path": ["optimizer", "kwargs", "lr"]},  # noqa: E731
+                         "value": value}]
+    (copy_dir / "plan.json").write_text(json.dumps({"tasks": [
+        {"name": "short/base/000", "variant": lr(0.001)}, {"name": "short/base/001", "variant": lr(0.01)}]}))
     found = read(tmp_path, "here", receipts_dir=write_receipt(tmp_path / "receipts"),
                  fetched=str(tmp_path / "hpc-results"))
     assert found.problems == []
     assert found.experiments == {"short/base/000": (SourceCheckpoint(str(checkpoint_dir), 7),),
                                  "short/base/001": ()}
+    assert found.variants == {"short/base/000": tuple(lr(0.001)), "short/base/001": tuple(lr(0.01))}
     assert found.where == f"from its fetched copy {copy_dir}"
 
 
@@ -417,3 +424,55 @@ def test_a_source_whose_directory_is_gone_is_named(tmp_path):
                              target={"transport": "local", "host": socket.gethostname()})
     found = read(tmp_path, "here", receipts_dir=receipts)
     assert found.problems and "mission directory" in found.problems[0] and "not found" in found.problems[0]
+
+
+def hand_made_mission(directory, plan=True):
+    """A mission directory as a launch leaves it: an experiment table, a
+    plan, and one complete checkpoint."""
+    (directory / "groups" / "cpu").mkdir(parents=True)
+    (directory / "groups" / "cpu" / "tasks.tsv").write_text("index\ttask\n0\tcpu/seeds/000\n")
+    checkpoint_dir = directory / "tasks/cpu/seeds/000/sessions/session_1/checkpoints/iteration_4"
+    checkpoint_dir.mkdir(parents=True)
+    (checkpoint_dir / "manifest.json").write_text(json.dumps({"iteration": 4}))
+    if plan:
+        (directory / "plan.json").write_text(json.dumps({"tasks": [{"name": "cpu/seeds/000", "variant": [
+            {"address": {"path": ["session_config", "rng_seed"]}, "value": 41}]}]}))
+    return checkpoint_dir
+
+
+def local_receipt(tmp_path, mission_dir):
+    import socket
+
+    return write_receipt(tmp_path / "receipts", ssh_host=None, batch_dir=str(mission_dir),
+                         target={"transport": "local", "host": socket.gethostname()})
+
+
+def test_the_same_host_gives_each_experiments_checkpoints_and_varied_values(tmp_path):
+    mission_dir = tmp_path / "missions" / SOURCE
+    checkpoint_dir = hand_made_mission(mission_dir)
+    found = read(tmp_path, "here", receipts_dir=local_receipt(tmp_path, mission_dir))
+    assert found.problems == [] and found.where == "on host 'here' (read-only)"
+    assert found.experiments == {"cpu/seeds/000": (SourceCheckpoint(str(checkpoint_dir), 4),)}
+    assert found.variants == {"cpu/seeds/000": (
+        {"address": {"path": ["session_config", "rng_seed"]}, "value": 41},)}
+
+
+def test_a_source_without_its_plan_is_named(tmp_path):
+    mission_dir = tmp_path / "missions" / SOURCE
+    hand_made_mission(mission_dir, plan=False)
+    found = read(tmp_path, "here", receipts_dir=local_receipt(tmp_path, mission_dir))
+    assert found.problems == [f"the plan of {SOURCE} ({mission_dir}/plan.json) cannot be read: "
+                              f"cat: {mission_dir}/plan.json: No such file or directory"]
+
+
+def test_each_experiment_carries_its_sources_varied_values(tmp_path):
+    class WithVariants(Port):
+        def __call__(self, mission_id):
+            found = super().__call__(mission_id)
+            found.variants = {name: ({"address": {"path": ["session_config", "rng_seed"]},
+                                      "value": number},)
+                              for number, name in enumerate(found.experiments)}
+            return found
+
+    tasks = compile_with(tmp_path, mission(), WithVariants()).plan.tasks
+    assert [task.source["variant"][0]["value"] for task in tasks] == [0, 1, 3]

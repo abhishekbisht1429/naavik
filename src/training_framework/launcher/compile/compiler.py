@@ -177,6 +177,9 @@ class SourceMission:
     problems: list[str] = field(default_factory=list)
     #: Where it was read, for the note: "on workstation", "from a fetched copy".
     where: str = ""
+    #: Experiment name -> its varied values, as its plan has them
+    #: ([{address, value}]), so summaries compare what trained each checkpoint.
+    variants: dict[str, tuple[dict, ...]] = field(default_factory=dict)
 
 
 #: `checkpoint_facts(mission_id)`: another mission's complete checkpoints,
@@ -773,7 +776,7 @@ def _parse_entries(entries, field, where, base, problems):
 
 
 def _choose_checkpoints(manifest, checkpoint_facts, problems, notes):
-    """(job, recipe) -> [(source experiment, SourceCheckpoint)] for every
+    """(job, recipe) -> [(source experiment, SourceCheckpoint, its variant)] for every
     recipe with `from_mission`, in the source's order of experiments, then
     by iteration. Each mission is asked for once."""
     import fnmatch
@@ -816,7 +819,7 @@ def _choose_checkpoints(manifest, checkpoint_facts, problems, notes):
                 left_out.append(name)
                 continue
             for checkpoint in (checkpoints[-1:] if origin.checkpoint == "latest" else checkpoints):
-                picked.append((name, checkpoint))
+                picked.append((name, checkpoint, tuple(source.variants.get(name, ()))))
         if left_out:
             notes.append(f"{group.name}/{experiment.name}: {', '.join(left_out)} of {origin.id} "
                          "has no complete checkpoint; left out")
@@ -861,7 +864,8 @@ def _expand(manifest, session_of, dialect, problems, chosen=None):
     per task; `session_of(experiment)`: the selected session of its
     training config. `chosen`: the checkpoints of recipes with
     `from_mission` (`_choose_checkpoints`): one more axis, the slowest; a
-    task's source is then {mission, experiment, checkpoint, iteration}
+    task's source is then {mission, experiment, checkpoint, iteration,
+    into, variant}
     (None otherwise)."""
     chosen = chosen or {}
     tasks = []
@@ -887,9 +891,13 @@ def _expand(manifest, session_of, dialect, problems, chosen=None):
             if origin is not None:
                 into = _check_into(experiment, origin, base_session, overrides, matrix,
                                    e_where, problems)
+                # `into` and the source's own varied values: what summaries
+                # compare in place of the checkpoint's path.
                 sources = [{"mission": origin.id, "experiment": name, "checkpoint": checkpoint.path,
-                            "iteration": checkpoint.iteration}
-                           for name, checkpoint in chosen.get((group.name, experiment.name), [])]
+                            "iteration": checkpoint.iteration,
+                            "into": into.as_json() if into is not None else None,
+                            "variant": [dict(item) for item in variant]}
+                           for name, checkpoint, variant in chosen.get((group.name, experiment.name), [])]
                 if into is None:
                     sources = []
             combinations = list(itertools.product(*(values for _, values in matrix))) if matrix else [()]

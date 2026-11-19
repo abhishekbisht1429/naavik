@@ -20,7 +20,13 @@ from training_framework.reporting.config_paths import (
 import re
 
 from training_framework.reporting.config_paths import format_path, parse_path
-from training_framework.reporting.runs import Discovery, ReportError, RunRecord, component_entry
+from training_framework.reporting.runs import (
+    Discovery,
+    ReportError,
+    RunRecord,
+    component_entry,
+    variant_label,
+)
 
 DIRECTIONS = ("min", "max")
 DEFAULT_SEED_KEYS = ("session_config.rng_seed",)
@@ -184,7 +190,10 @@ def summarize_runs(
         raise ReportError(f"last_n must be a positive integer; got {last_n!r}")
     chosen = _choose_metrics(runs, metrics, tags)
     sort_metric = _sort_metric(sort, chosen)
-    ignored = [_path(key, "ignored key") for key in ignored_keys]
+    # A source setting (`source iteration`) is named as written: no config
+    # path starts with `source ` (a top-level key with a space is quoted).
+    ignored = [key if isinstance(key, str) and key.startswith(SOURCE_PREFIX)
+               else _path(key, "ignored key") for key in ignored_keys]
     seeds = [_seed_key(key) for key in seed_keys] if group_by_seed else []
 
     problems = list(discovery.problems)
@@ -193,9 +202,10 @@ def summarize_runs(
                   problems)
     _add_run_fact(CONFIG_KEY, "config file",
                   {run.run_id: run.config_file for run in runs}, runs, flat, ignored, problems)
+    _add_source(runs, flat, ignored, problems)
     # Each run's seeds as config paths: a `component:path` key resolves to
     # where that component's entry is in the run's own config.
-    run_seeds = {run.run_id: _config_seeds(run, seeds) for run in runs}
+    run_seeds = {run.run_id: _config_seeds(run, seeds) + _source_seeds(run, seeds) for run in runs}
     columns, shared = _columns(runs, flat, seeds, run_seeds)
     if group_by_seed:
         unmatched = [key for key in seeds if not _found_anywhere(key, runs, flat)]
@@ -339,6 +349,61 @@ def _add_run_fact(key, what, values, runs, flat, ignored, problems) -> None:
     for run in runs:
         if flat[run.run_id] is not None:
             flat[run.run_id][key] = values[run.run_id] or "unknown"
+
+
+#: How the facts of the checkpoint an analysis run analysed are named among
+#: its settings (`source iteration`, `source <label>`): never a config path.
+SOURCE_PREFIX = "source "
+
+
+def _add_source(runs, flat, ignored, problems) -> None:
+    """For a run of a recipe with `from_mission`: compare what trained the
+    checkpoint it analysed, in place of the checkpoint's path (which differs
+    between every two runs): the source experiment's varied values
+    (`source <label>`) and the checkpoint's iteration (`source iteration`).
+    The source's seed is a seed (`_source_seeds`), so analyses of runs that
+    differ only in their training seed are one group."""
+    for run in runs:
+        source, config = run.source, flat[run.run_id]
+        if source is None or config is None:
+            continue
+        path = _into_path(run.config, source.get("into"))
+        if path is None:
+            problems.append(f"{run.run_id}: its record does not say where its checkpoint was "
+                            "written (from_mission into); it is compared by the checkpoint's path")
+        else:
+            for key in [key for key in config if covers(path, key)]:
+                del config[key]
+        facts = {f"{SOURCE_PREFIX}iteration": source.get("iteration")}
+        for item in source.get("variant") or ():
+            facts[SOURCE_PREFIX + variant_label(item["address"])] = item["value"]
+        for key, value in facts.items():
+            if not any(covers(name, key) for name in ignored):
+                config[key] = value
+
+
+def _into_path(config, into) -> str | None:
+    """Where `into` ({component?, path}) is in a run's config, or None."""
+    if not isinstance(into, dict) or not isinstance(into.get("path"), list):
+        return None
+    segments = tuple(into["path"])
+    if into.get("component") is None:
+        return format_path(segments)
+    entry = component_entry(config, into["component"])
+    return None if entry is None else format_path(entry + segments)
+
+
+def _source_seeds(run: RunRecord, seeds: list[str]) -> list[str]:
+    """The source's varied values that are seeds, as `source <label>`: a
+    seed key names its label (`data_manager:seed`) or covers its path."""
+    if run.source is None:
+        return []
+    found = []
+    for item in run.source.get("variant") or ():
+        label = variant_label(item["address"])
+        if any(key == label or covers(key, label) for key in seeds):
+            found.append(SOURCE_PREFIX + label)
+    return found
 
 
 def _flat_config(run: RunRecord, ignored: list[str]) -> dict[str, Any] | None:
