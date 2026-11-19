@@ -10,7 +10,7 @@ import pytest
 import yaml
 
 from tests.hpc.batch_repo import MANIFEST, PROFILE, TRAINING_CONFIG, make_repo
-from training_framework.hpc.__main__ import main
+from naavik.hpc.__main__ import main
 
 OPTIMIZER = {"optimizer": {"optimizer": {"name": "AdamW", "kwargs": {"lr": 0.001, "weight_decay": 0.05}}}}
 

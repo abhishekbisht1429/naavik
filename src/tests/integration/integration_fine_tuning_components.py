@@ -9,7 +9,7 @@ import torch
 from torch import nn
 from torch.nn import functional
 
-from training_framework.components import (
+from naavik.components import (
     ModuleResource,
     SessionHook,
     Step,

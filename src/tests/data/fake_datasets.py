@@ -7,7 +7,7 @@ import os
 import time
 from dataclasses import dataclass
 
-from training_framework.data import DataRequirement
+from naavik.data import DataRequirement
 
 
 @dataclass

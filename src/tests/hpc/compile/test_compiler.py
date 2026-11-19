@@ -7,8 +7,8 @@ from datetime import timedelta
 import pytest
 import yaml
 
-from training_framework.hpc import EXECUTION_PROTOCOL_VERSION
-from training_framework.hpc.errors import PlanError
+from naavik.hpc import EXECUTION_PROTOCOL_VERSION
+from naavik.hpc.errors import PlanError
 from tests.hpc.batch_repo import (
     CLOCK,
     MANIFEST,
@@ -87,9 +87,9 @@ def test_a_dirty_repository_is_refused(tmp_path):
 def test_an_uncommitted_manifest_is_refused(tmp_path):
     root = make_repo(tmp_path)
     with pytest.raises(PlanError, match="not committed"):
-        from training_framework.hpc.compile.compiler import compile_plan
-        from training_framework.hpc.ports.repository import GitRepository
-        from training_framework.hpc.config.schema import parse_profiles
+        from naavik.hpc.compile.compiler import compile_plan
+        from naavik.hpc.ports.repository import GitRepository
+        from naavik.hpc.config.schema import parse_profiles
         compile_plan(manifest_path="missing.yaml", repository=GitRepository(root),
                      profile=parse_profiles(PROFILE, None, "p"), facts=FakeFacts(root),
                      clock=CLOCK)

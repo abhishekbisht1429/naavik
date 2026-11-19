@@ -15,15 +15,15 @@ import numpy as np
 import pytest
 import torch
 
-from training_framework.components.builtin import Checkpointer
-from training_framework.components import (
+from naavik.components.builtin import Checkpointer
+from naavik.components import (
     hook,
     reads,
     resource,
     step, Stateful, SessionHook, LifecycleHook, Resource, Step,
     writes,
 )
-from training_framework.session import TrainingSession
+from naavik.session import TrainingSession
 
 from tests.test_utils import make_config, resource_named
 

@@ -9,10 +9,10 @@ from pathlib import Path
 
 import pytest
 
-from training_framework.hpc.__main__ import main
-from training_framework.hpc.errors import HpcError
-from training_framework.hpc.ports.local import LocalFileTransfer
-from training_framework.hpc.services.artifacts import PENDING_SUFFIX
+from naavik.hpc.__main__ import main
+from naavik.hpc.errors import HpcError
+from naavik.hpc.ports.local import LocalFileTransfer
+from naavik.hpc.services.artifacts import PENDING_SUFFIX
 from tests.hpc.fakes import FakeSubmitter
 from tests.hpc.services import test_submission
 from tests.hpc.services.test_artifact_services import local_data, run, upload_batch

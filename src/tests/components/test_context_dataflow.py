@@ -7,7 +7,7 @@ registry fixture clears the global registries before each test.
 import pytest
 
 from tests.test_utils import build_session, component_names, make_config
-from training_framework.components import (
+from naavik.components import (
     LifecycleHook,
     Resource,
     SessionHook,
@@ -21,9 +21,9 @@ from training_framework.components import (
     step,
     writes,
 )
-from training_framework.components.edges import Edge, EdgeKind
-from training_framework.engine import load_session_for_worker
-from training_framework.session import TrainingSession
+from naavik.components.edges import Edge, EdgeKind
+from naavik.engine import load_session_for_worker
+from naavik.session import TrainingSession
 
 
 class _Hook(LifecycleHook):

@@ -13,7 +13,7 @@ from typing import Any
 
 from torch import nn
 
-from training_framework.components import (
+from naavik.components import (
     LifecycleHook,
     Resource,
     Stateful,
@@ -93,7 +93,7 @@ def make_config(tmp_path, max_iterations=2, seed=123):
             "sessions_dir": str(tmp_path),
             "max_iterations": max_iterations,
             "device": "cpu",
-            "components_package": "training_framework.components.builtin",
+            "components_package": "naavik.components.builtin",
         }
     }
 
@@ -113,7 +113,7 @@ def build_session(
     construction only checks that the file exists, and the checkpoint is not
     read until `setup`.
     """
-    from training_framework.session import AnalysisSession, TrainingSession
+    from naavik.session import AnalysisSession, TrainingSession
 
     config = make_config(tmp_path)
     config["session_config"]["show_execution_graph"] = False
@@ -152,7 +152,7 @@ def configurator_for(tmp_path, monkeypatch, *sessions):
     the command line hands it one."""
     import yaml
 
-    from training_framework.engine import Configurator
+    from naavik.engine import Configurator
 
     path = tmp_path / "configurator.yaml"
     path.write_text(yaml.safe_dump({"sessions": list(sessions)}), encoding="utf-8")
@@ -167,7 +167,7 @@ def inject_dependencies(component, **dependencies):
     is registered, so `Component.get_dependency` finds them. Lets a test
     drive one lifecycle method with a fake session and stub prerequisites.
     """
-    from training_framework.components.base import _give_prerequisites
+    from naavik.components.base import _give_prerequisites
 
     _give_prerequisites(component, dependencies)
     return component
@@ -338,7 +338,7 @@ def stub_process_group(monkeypatch) -> None:
     """Run the `ddp` resource in one process: DDP is the recording stand-in
     and no process group is created."""
     import torch
-    from training_framework.components.builtin import distributed
+    from naavik.components.builtin import distributed
 
     monkeypatch.setattr(distributed, "DDP", RecordingDistributedDataParallel)
     monkeypatch.setattr(torch.distributed, "init_process_group", lambda **_: None)

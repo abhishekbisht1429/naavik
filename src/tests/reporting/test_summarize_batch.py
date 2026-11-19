@@ -7,8 +7,8 @@ import json
 
 import pytest
 
-from training_framework.launcher.ports.targets import Target
-from training_framework.reporting.__main__ import main
+from naavik.launcher.ports.targets import Target
+from naavik.reporting.__main__ import main
 
 from .helpers import config, losses, write_run
 

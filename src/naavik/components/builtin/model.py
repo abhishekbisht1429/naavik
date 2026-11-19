@@ -1,0 +1,115 @@
+from __future__ import annotations
+
+import os
+from collections.abc import Mapping
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, ClassVar, cast
+
+from naavik.components import (
+    ComponentDependencyError,
+    Resource,
+    resource,
+)
+from naavik.components.builtin.checkpointing import Checkpointer
+from naavik.util import requires_context
+
+if TYPE_CHECKING:
+    from naavik.session import Session
+
+
+@dataclass(frozen=True)
+class TrainedModelConfig:
+    """The `trained_model` config. Whether the checkpoint exists is checked
+    when the component is built: it depends on the machine that runs."""
+
+    model_checkpoint_path: Any
+    unknown_keys_dropped_on_restore: ClassVar[bool] = True
+
+    @staticmethod
+    def check_keys(values: Mapping) -> None:
+        if values.get("model_checkpoint_path") is None:
+            raise ValueError("trained_model.model_checkpoint_path is required")
+
+    def __post_init__(self) -> None:
+        try:
+            path = os.fspath(cast(Any, self.model_checkpoint_path))
+        except TypeError as error:
+            raise TypeError(
+                "trained_model.model_checkpoint_path must be a string or "
+                "path-like object"
+            ) from error
+        if not isinstance(path, str):
+            raise TypeError(
+                "trained_model.model_checkpoint_path must resolve to a "
+                "string path"
+            )
+
+
+@resource("trained_model")
+class TrainedModel(Resource):
+    """Expose the model resource restored from a training-session checkpoint."""
+
+    config_schema = TrainedModelConfig
+
+    def __init__(self, config: Mapping):
+        if not isinstance(config, Mapping):
+            raise TypeError("trained_model config must be a mapping")
+        super().__init__(config)
+        checkpoint_path = self._cfg.model_checkpoint_path
+        try:
+            normalized_path = os.fspath(cast(Any, checkpoint_path))
+        except TypeError as error:
+            raise TypeError(
+                "trained_model.model_checkpoint_path must be a string or "
+                "path-like object"
+            ) from error
+        if not isinstance(normalized_path, str):
+            raise TypeError(
+                "trained_model.model_checkpoint_path must resolve to a "
+                "string path"
+            )
+        if not os.path.exists(normalized_path):
+            raise FileNotFoundError(
+                f"Model checkpoint does not exist: {normalized_path}"
+            )
+
+        self._model: Any = None
+        self._model_checkpoint_path = normalized_path
+
+    @property
+    @requires_context
+    def model(self):
+        return self._model
+
+    def setup(self, session: Session) -> Any:
+        from naavik.session import TRAINING_SESSION_TYPE
+
+        try:
+            model = Checkpointer.load_component(
+                self._model_checkpoint_path,
+                "model",
+                map_location="cpu",
+                session_type=TRAINING_SESSION_TYPE,
+                # Every part, not only the model: a part the model reaches
+                # without holding it as a submodule is not moved by
+                # `model.to` below, and no setup() runs on a loaded part.
+                device=session.device,
+            )
+        except (KeyError, ComponentDependencyError) as error:
+            # Missing, or several instances with nothing to choose between
+            # them: either way the checkpoint names no single model.
+            raise ValueError(
+                "Training checkpoint does not contain a resolvable 'model' resource"
+            ) from error
+
+        if not callable(getattr(model, "to", None)):
+            raise TypeError("The checkpoint 'model' resource must provide to(device)")
+        if not callable(getattr(model, "eval", None)):
+            raise TypeError("The checkpoint 'model' resource must provide eval()")
+
+        moved_model = model.to(session.device)
+        self._model = model if moved_model is None else moved_model
+        self._model.eval()
+
+    def teardown(self, session: Session) -> None:
+        self._model = None

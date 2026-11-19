@@ -11,9 +11,9 @@ import pytest
 import yaml
 
 from tests.hpc.batch_repo import MANIFEST, compile_repo, make_repo
-from training_framework.launcher.compile.render import plan_files
-from training_framework.launcher.config.schema import RunDefaults, parse_mission_file, parse_project
-from training_framework.launcher.errors import PlanError
+from naavik.launcher.compile.render import plan_files
+from naavik.launcher.config.schema import RunDefaults, parse_mission_file, parse_project
+from naavik.launcher.errors import PlanError
 
 #: MANIFEST (earlier names) in the current names.
 CURRENT = {
@@ -126,13 +126,13 @@ def test_the_project_file_in_its_current_names():
 
 def test_earlier_names_are_warned_about_once_with_the_fix(tmp_path, capsys, monkeypatch):
     from tests.launcher.test_hosts_file import CURRENT as HOSTS
-    from training_framework.cli import main as naavik
+    from naavik.cli import main as naavik_cli
 
     hosts = tmp_path / "hosts.yaml"
     hosts.write_text(yaml.safe_dump(HOSTS))
     monkeypatch.chdir(tmp_path)                                  # not the repository
     root = make_repo(tmp_path)                                   # MANIFEST: earlier names
-    assert naavik(["validate", str(root / "batch.yaml"), "--targets", str(hosts)]) == 0
+    assert naavik_cli(["validate", str(root / "batch.yaml"), "--targets", str(hosts)]) == 0
     warnings = [line for line in capsys.readouterr().err.splitlines()
                 if line.startswith("warning:") and "earlier names" in line]
     assert len(warnings) == 1 and "groups -> jobs" in warnings[0]

@@ -11,8 +11,8 @@ import pytest
 import yaml
 
 from tests.hpc.batch_repo import MANIFEST, TRAINING_CONFIG, compile_repo, make_repo
-from training_framework.launcher.compile.render import plan_files
-from training_framework.launcher.errors import PlanError
+from naavik.launcher.compile.render import plan_files
+from naavik.launcher.errors import PlanError
 
 ATTNPOOL = copy.deepcopy(TRAINING_CONFIG)
 ATTNPOOL["sessions"][0]["attention_pool"] = {"heads": 4}
@@ -109,7 +109,7 @@ from tests.launcher.test_host_end_to_end import here, launch, record, wait_for  
 
 def test_each_task_records_its_config_file_and_summaries_compare_it(tmp_path, here, capsys):
     from tests.launcher.test_code_check import project
-    from training_framework.reporting import discover_runs
+    from naavik.reporting import discover_runs
 
     longer = dict(session(max_iterations=4))
     root = project(tmp_path / "p", session(), extra={

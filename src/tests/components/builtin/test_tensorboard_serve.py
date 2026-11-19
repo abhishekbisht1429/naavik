@@ -5,8 +5,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from training_framework.components.builtin import Tensorboard
-from training_framework.components.builtin import observability
+from naavik.components.builtin import Tensorboard
+from naavik.components.builtin import observability
 
 
 def _session(tmp_path):

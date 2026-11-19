@@ -10,11 +10,11 @@ from pathlib import Path
 
 import pytest
 
-from training_framework.hpc.__main__ import main
-from training_framework.hpc.ports.local import LocalExecutor
-from training_framework.launcher.ports.targets import Target
-from training_framework.hpc.services import batches as listing
-from training_framework.hpc.services.status import Row, summarize
+from naavik.hpc.__main__ import main
+from naavik.hpc.ports.local import LocalExecutor
+from naavik.launcher.ports.targets import Target
+from naavik.hpc.services import batches as listing
+from naavik.hpc.services.status import Row, summarize
 from tests.hpc.fake_cluster import fake_cluster, submitted_jobs  # noqa: F401 (fixture)
 from tests.hpc.test_cli_submit import probed_identity, setup as cli_setup
 from tests.hpc.test_logs_and_status import _batch
@@ -214,7 +214,7 @@ def test_batches_needs_no_profile_for_the_offline_list(tmp_path, monkeypatch, ca
 
 
 def test_pending_array_ranges_count_for_each_element():
-    from training_framework.hpc.services.status import expand_ranges
+    from naavik.hpc.services.status import expand_ranges
 
     live = expand_ranges({"7_0": "running", "7_[1-3,5%2]": "pending", "8": "running"})
     assert [live[f"7_{i}"] for i in (0, 1, 2, 3, 5)] == ["running"] + ["pending"] * 4

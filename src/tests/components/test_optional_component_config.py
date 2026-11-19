@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from training_framework.engine import load_session_for_worker
-from training_framework.components import (
+from naavik.engine import load_session_for_worker
+from naavik.components import (
     Hook,
     LifecycleHook,
     Resource,
@@ -18,7 +18,7 @@ from training_framework.components import (
     wraps,
     writes,
 )
-from training_framework.session import TrainingSession
+from naavik.session import TrainingSession
 from tests.test_utils import configurator_for, has_resource_named, resource_named
 
 
@@ -28,7 +28,7 @@ def _session_config(tmp_path):
         "sessions_dir": str(tmp_path),
         "max_iterations": 1,
         "device": "cpu",
-        "components_package": "training_framework.components.builtin",
+        "components_package": "naavik.components.builtin",
         "show_execution_graph": False,
     }
 

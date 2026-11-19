@@ -9,9 +9,9 @@ import pytest
 import yaml
 
 from tests.hpc.batch_repo import MANIFEST, compile_repo, make_repo
-from training_framework.launcher.compile.render import plan_files
-from training_framework.launcher.config import schema
-from training_framework.launcher.errors import PlanError
+from naavik.launcher.compile.render import plan_files
+from naavik.launcher.config import schema
+from naavik.launcher.errors import PlanError
 
 
 def test_a_mission_stages_its_file_as_mission_yaml_in_the_current_names(tmp_path):
@@ -36,8 +36,8 @@ def test_messages_name_the_mission_file(tmp_path):
 
 
 def test_the_cli_calls_it_the_mission_file(capsys):
-    from training_framework.cli import main as naavik
+    from naavik.cli import main as naavik_cli
 
     with pytest.raises(SystemExit):
-        naavik(["validate", "--help"])
+        naavik_cli(["validate", "--help"])
     assert "path to the committed mission file" in capsys.readouterr().out

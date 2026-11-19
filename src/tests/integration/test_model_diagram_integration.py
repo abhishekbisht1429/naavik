@@ -14,7 +14,7 @@ from tests.integration.test_training_flow_integration import (
     _ddp_session_config,
     _register_integration_components,
 )
-from training_framework.engine import Configurator, TrainingEngine
+from naavik.engine import Configurator, TrainingEngine
 
 pytestmark = pytest.mark.skipif(
     not torch.distributed.is_available()

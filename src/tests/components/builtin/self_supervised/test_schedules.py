@@ -6,11 +6,11 @@ import math
 
 import pytest
 
-from training_framework.components.builtin.self_supervised import (
+from naavik.components.builtin.self_supervised import (
     Schedule,
     parse_schedule,
 )
-from training_framework.components.builtin.self_supervised.schedules import (
+from naavik.components.builtin.self_supervised.schedules import (
     check_range,
 )
 

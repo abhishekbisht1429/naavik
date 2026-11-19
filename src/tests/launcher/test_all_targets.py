@@ -10,7 +10,7 @@ import shutil
 import pytest
 import yaml
 
-from training_framework.cli import main as naavik
+from naavik.cli import main as naavik
 
 
 def receipt(batch_id, target, batch_dir):

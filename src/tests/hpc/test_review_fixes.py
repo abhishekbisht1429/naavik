@@ -10,12 +10,12 @@ from pathlib import Path
 
 import pytest
 
-from training_framework.hpc.compile.plan import ExecutionContext, JobNode
-from training_framework.hpc.config.schema import Resources, parse_profiles
-from training_framework.hpc.errors import PlanError
-from training_framework.hpc.ports.local import LocalExecutor
-from training_framework.hpc.scheduler import SCHEDULERS, SchedulerBundle
-from training_framework.hpc.scheduler.slurm import SlurmDialect, SlurmSettings
+from naavik.hpc.compile.plan import ExecutionContext, JobNode
+from naavik.hpc.config.schema import Resources, parse_profiles
+from naavik.hpc.errors import PlanError
+from naavik.hpc.ports.local import LocalExecutor
+from naavik.hpc.scheduler import SCHEDULERS, SchedulerBundle
+from naavik.hpc.scheduler.slurm import SlurmDialect, SlurmSettings
 from tests.hpc.batch_repo import MANIFEST, PROFILE, compile_repo, make_repo, profile
 
 
@@ -158,8 +158,8 @@ def test_settings_for_an_unselected_scheduler_are_refused(monkeypatch):
 
 
 def test_staging_removes_the_bundle_after_checkout(tmp_path):
-    from training_framework.hpc.ports.repository import GitRepository
-    from training_framework.hpc.services.staging import SourceStager
+    from naavik.hpc.ports.repository import GitRepository
+    from naavik.hpc.services.staging import SourceStager
 
     root = make_repo(tmp_path)
     sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, capture_output=True,

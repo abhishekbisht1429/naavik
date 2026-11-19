@@ -9,9 +9,9 @@ import copy
 import pytest
 
 from tests.hpc.test_end_to_end import session
-from training_framework.components.builtin.optimization import OptimizerResource
-from training_framework.components.config_schema import parse_component_config
-from training_framework.session import check_session_config
+from naavik.components.builtin.optimization import OptimizerResource
+from naavik.components.config_schema import parse_component_config
+from naavik.session import check_session_config
 
 PACKAGE = "tests.integration.integration_training_components"
 
@@ -81,7 +81,7 @@ def test_legacy_keys_keep_their_message():
 
 
 def test_a_class_taking_any_keyword_is_not_checked_by_name():
-    from training_framework.components.builtin.optimization import _check_kwargs
+    from naavik.components.builtin.optimization import _check_kwargs
 
     class Flexible:
         def __init__(self, params, **options):

@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from training_framework.engine import Configurator
-from training_framework.session import TrainingSession
+from naavik.engine import Configurator
+from naavik.session import TrainingSession
 from tests.test_utils import has_resource_named, resource_named
 
 
@@ -29,7 +29,7 @@ def test_configurator_reads_overrides_and_returns_deep_copies(tmp_path, monkeypa
                     "sessions_dir": str(tmp_path / "sessions_1"),
                     "device": "cpu",
                     "rng_seed": 123,
-                    "components_package": "training_framework.components.builtin",
+                    "components_package": "naavik.components.builtin",
                 },
                 "logger": {"log_every": 1, "log_file": str(tmp_path / "log_1.txt"), "nested": {"enabled": True}},
                 "checkpointer": {"checkpoint_every": 2, "checkpoints_dir": str(tmp_path / "ckpts_1")},
@@ -41,7 +41,7 @@ def test_configurator_reads_overrides_and_returns_deep_copies(tmp_path, monkeypa
                     "sessions_dir": str(tmp_path / "sessions_2"),
                     "device": "cpu",
                     "rng_seed": 456,
-                    "components_package": "training_framework.components.builtin",
+                    "components_package": "naavik.components.builtin",
                 },
                 "logger": {"log_every": 3, "log_file": str(tmp_path / "log_2.txt")},
                 "checkpointer": {"checkpoint_every": 4, "checkpoints_dir": str(tmp_path / "ckpts_2")},
@@ -123,7 +123,7 @@ def test_configurator_create_sessions_attaches_expected_components(tmp_path, mon
                             "sessions_dir": str(tmp_path / "s1"),
                     "device": "cpu",
                     "rng_seed": 1,
-                    "components_package": "training_framework.components.builtin",
+                    "components_package": "naavik.components.builtin",
                 },
                 "tensorboard": {"host": "0.0.0.0", "port": 16050},
             },
@@ -133,7 +133,7 @@ def test_configurator_create_sessions_attaches_expected_components(tmp_path, mon
                             "sessions_dir": str(tmp_path / "s1"),
                     "device": "cpu",
                     "rng_seed": 1,
-                    "components_package": "training_framework.components.builtin",
+                    "components_package": "naavik.components.builtin",
                 },
             },
         ]

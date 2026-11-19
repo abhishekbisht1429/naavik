@@ -5,7 +5,7 @@ from copy import deepcopy
 import pytest
 import torch
 
-from training_framework.components import (
+from naavik.components import (
     LifecycleHook,
     Resource,
     Step,
@@ -13,7 +13,7 @@ from training_framework.components import (
     resource,
     step,
 )
-from training_framework.session import TrainingSession
+from naavik.session import TrainingSession
 from tests.test_utils import (
     AdditionalHookBase,
     AdditionalResourceBase,
@@ -138,7 +138,7 @@ def test_execution_graph_is_printed_only_for_ddp_rank_zero(
             "sessions_dir": str(tmp_path / f"rank-{rank}"),
             "max_iterations": 1,
             "device": "cpu",
-            "components_package": "training_framework.components.builtin",
+            "components_package": "naavik.components.builtin",
             "show_execution_graph": True,
         },
         "ddp": {"rank": rank},

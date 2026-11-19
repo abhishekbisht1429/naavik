@@ -11,8 +11,8 @@ import pytest
 import yaml
 
 from tests.hpc.batch_repo import MANIFEST, compile_repo, make_repo
-from training_framework.launcher.config.schema import PROJECT_FILE, RunDefaults, parse_project
-from training_framework.launcher.errors import PlanError
+from naavik.launcher.config.schema import PROJECT_FILE, RunDefaults, parse_project
+from naavik.launcher.errors import PlanError
 
 SHARED = {"code": MANIFEST["code"], "environment": MANIFEST["environment"]}
 
@@ -56,7 +56,7 @@ def test_a_manifest_naming_its_project_compiles_like_one_that_repeats_it(tmp_pat
 
 
 def test_the_batch_keeps_the_manifest_as_compiled(tmp_path):
-    from training_framework.launcher.compile.render import plan_files
+    from naavik.launcher.compile.render import plan_files
 
     compiled = compile_repo(project_repo(tmp_path))
     staged = yaml.safe_load(plan_files(compiled.plan, compiled.manifest.raw)["mission.yaml"])

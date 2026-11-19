@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from training_framework.config_files import (
+from naavik.config_files import (
     ConfigFileError,
     RepositoryFiles,
     check_no_interpolation,

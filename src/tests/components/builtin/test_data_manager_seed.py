@@ -3,7 +3,7 @@ restored state keeps the seed it was saved with."""
 
 from __future__ import annotations
 
-from training_framework.session import TrainingSession
+from naavik.session import TrainingSession
 from tests.components.builtin.test_sampler_resharding import (  # noqa: F401 (fixture)
     _COMPONENTS_PACKAGE,
     integration_components,

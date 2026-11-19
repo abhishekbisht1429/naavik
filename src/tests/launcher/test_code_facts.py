@@ -13,12 +13,12 @@ from tests.data import data_components
 from tests.hpc.test_end_to_end import environment  # noqa: F401 (fixture)
 from tests.launcher.test_host_end_to_end import here  # noqa: F401 (fixture)
 from tests.hpc.batch_repo import CLOCK, MANIFEST, PROFILE, FakeFacts, make_repo
-from training_framework.launcher.compile.compiler import CodeFacts, compile_plan
-from training_framework.launcher.compile.render import plan_files
-from training_framework.launcher.config.schema import parse_profiles
-from training_framework.launcher.errors import PlanError
-from training_framework.launcher.evaluate import evaluate
-from training_framework.launcher.ports.repository import GitRepository
+from naavik.launcher.compile.compiler import CodeFacts, compile_plan
+from naavik.launcher.compile.render import plan_files
+from naavik.launcher.config.schema import parse_profiles
+from naavik.launcher.errors import PlanError
+from naavik.launcher.evaluate import evaluate
+from naavik.launcher.ports.repository import GitRepository
 
 DATA_PACKAGE = "tests.data.data_components"
 
@@ -125,8 +125,8 @@ def test_the_batchs_own_code_reports_its_requirements(tmp_path, here, registered
     import yaml
 
     from tests.launcher.test_code_check import project
-    from training_framework.launcher.compile.compiler import TaskRequirement
-    from training_framework.launcher.services.evaluation import evaluate_batch
+    from naavik.launcher.compile.compiler import TaskRequirement
+    from naavik.launcher.services.evaluation import evaluate_batch
 
     config = session(tmp_path, fake_data={"root": "/d/x", "version": "3"})["sessions"][0]
     root = project(tmp_path / "repo", config)

@@ -12,9 +12,9 @@ import torch
 from torch import nn
 
 from tests.test_utils import make_config
-from training_framework.components import ComponentDependencyError, Resource, resource
-from training_framework.components.builtin import Checkpointer
-from training_framework.session import TrainingSession
+from naavik.components import ComponentDependencyError, Resource, resource
+from naavik.components.builtin import Checkpointer
+from naavik.session import TrainingSession
 
 
 class LoadableModel(nn.Linear, Resource):

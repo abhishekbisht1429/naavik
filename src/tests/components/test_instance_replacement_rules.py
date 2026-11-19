@@ -15,13 +15,13 @@ registry fixture clears the global registries before each test.
 import pytest
 
 from tests.test_utils import make_config, resource_named
-from training_framework.components import (
+from naavik.components import (
     ComponentDependencyError,
     Resource,
     requires_resource,
     resource,
 )
-from training_framework.session import TrainingSession
+from naavik.session import TrainingSession
 
 
 def declare(*, take_in):

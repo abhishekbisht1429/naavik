@@ -20,14 +20,14 @@ import pytest
 from torch import nn
 
 from tests.test_utils import make_config
-from training_framework.components import (
+from naavik.components import (
     ComponentDependencyError,
     Resource,
     requires_resource,
     resource,
 )
-from training_framework.components.builtin import DDPResource
-from training_framework.session import TrainingSession
+from naavik.components.builtin import DDPResource
+from naavik.session import TrainingSession
 
 
 def declare_dependency():

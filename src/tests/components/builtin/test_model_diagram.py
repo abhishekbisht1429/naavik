@@ -14,14 +14,14 @@ import pytest
 import torch
 
 from tests.test_utils import resource_named
-from training_framework.components.builtin import Checkpointer
-from training_framework.components.builtin.diagram import graph as graph_module
-from training_framework.components.builtin.diagram import component as component_module
-from training_framework.engine import load_session_for_worker
-from training_framework.session import TrainingSession
+from naavik.components.builtin import Checkpointer
+from naavik.components.builtin.diagram import graph as graph_module
+from naavik.components.builtin.diagram import component as component_module
+from naavik.engine import load_session_for_worker
+from naavik.session import TrainingSession
 
 D = 16
-PATCH = "training_framework.components.builtin.transformer.ConvPatchEmbedding"
+PATCH = "naavik.components.builtin.transformer.ConvPatchEmbedding"
 
 
 def model_config(tmp_path, *, diagram=None, layers=3, **extra):
@@ -29,7 +29,7 @@ def model_config(tmp_path, *, diagram=None, layers=3, **extra):
         "session_config": {
             "rng_seed": 3, "sessions_dir": str(tmp_path), "max_iterations": 1,
             "device": "cpu",
-            "components_package": "training_framework.components.builtin",
+            "components_package": "naavik.components.builtin",
             "show_execution_graph": False,
         },
         "role_bindings": {

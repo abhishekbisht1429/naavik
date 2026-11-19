@@ -9,8 +9,8 @@ import time
 import pytest
 import torch
 
-from training_framework.components import Step, requires_resource, step
-from training_framework.session import TrainingSession
+from naavik.components import Step, requires_resource, step
+from naavik.session import TrainingSession
 from tests.test_utils import resource_named
 
 

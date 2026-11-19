@@ -15,19 +15,19 @@ from pathlib import Path
 
 import pytest
 
-from training_framework.launcher.compile.plan import ExecutionContext, JobNode
-from training_framework.launcher.ports import Owner
-from training_framework.launcher.ports.local import LocalExecutor
-from training_framework.launcher.remote import host_runner
-from training_framework.launcher.remote.bootstrap import render_runner
-from training_framework.launcher.remote.runtime import current_owner, owner_probe
-from training_framework.launcher.scheduler.host_submitter import (
+from naavik.launcher.compile.plan import ExecutionContext, JobNode
+from naavik.launcher.ports import Owner
+from naavik.launcher.ports.local import LocalExecutor
+from naavik.launcher.remote import host_runner
+from naavik.launcher.remote.bootstrap import render_runner
+from naavik.launcher.remote.runtime import current_owner, owner_probe
+from naavik.launcher.scheduler.host_submitter import (
     HostSubmitter,
     job_states,
     target_check,
     user_job_states,
 )
-from training_framework.launcher.scheduler.host import HostSettings
+from naavik.launcher.scheduler.host import HostSettings
 
 TIMEOUT = 60
 FAKE_NVIDIA_SMI = r'''
@@ -366,7 +366,7 @@ def test_the_target_check_needs_nvidia_smi_only_for_a_gpu_pool(host, tmp_path, m
 
 
 def test_the_remote_process_probe_checks_owners_on_their_host():
-    from training_framework.launcher.ports.remote_probe import RemoteProcessProbe
+    from naavik.launcher.ports.remote_probe import RemoteProcessProbe
 
     me = Owner(**current_owner("host"))
     probe = RemoteProcessProbe(LocalExecutor())

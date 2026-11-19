@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import torch
 
-from training_framework.session import TrainingSession
+from naavik.session import TrainingSession
 
 
 def quiet_session(config) -> TrainingSession:

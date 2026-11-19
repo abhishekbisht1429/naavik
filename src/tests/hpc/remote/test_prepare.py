@@ -5,9 +5,9 @@ import json
 import sys
 from pathlib import Path
 
-from training_framework.hpc.compile.render import plan_files
-from training_framework.hpc.ports.local import LocalFilesystem
-from training_framework.hpc.remote.prepare import run_prepare
+from naavik.hpc.compile.render import plan_files
+from naavik.hpc.ports.local import LocalFilesystem
+from naavik.hpc.remote.prepare import run_prepare
 from tests.hpc.batch_repo import PROFILE, TRAINING_CONFIG, compile_repo, make_repo, manifest
 
 MAKE_DIR = "import os, sys; os.makedirs(sys.argv[1]); open(os.path.join(sys.argv[1], 'done'), 'w').close()"

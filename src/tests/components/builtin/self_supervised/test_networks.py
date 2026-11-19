@@ -12,13 +12,13 @@ from torch.nn import functional
 
 from tests.integration.integration_ssl_components import EMBED_DIM, dino_config, vit
 from tests.test_utils import build_session, make_config, resource_named
-from training_framework.components import ModuleResource, resource
-from training_framework.components.builtin import (
+from naavik.components import ModuleResource, resource
+from naavik.components.builtin import (
     BackboneWithHead,
     Checkpointer,
     FineTunedModel,
 )
-from training_framework.session import TrainingSession
+from naavik.session import TrainingSession
 
 from .helpers import quiet_session
 

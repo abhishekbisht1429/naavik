@@ -7,7 +7,7 @@ import torch
 from torch import nn
 from torch.utils.data import Dataset
 
-from training_framework.components import (
+from naavik.components import (
     EpochSource,
     Resource,
     StatefulResource,
@@ -16,9 +16,9 @@ from training_framework.components import (
     resource,
     step,
 )
-from training_framework.hpc.services import resume as resuming
-from training_framework.session import AnalysisSession, TrainingSession
-from training_framework.session.checkpoint_format import (
+from naavik.hpc.services import resume as resuming
+from naavik.session import AnalysisSession, TrainingSession
+from naavik.session.checkpoint_format import (
     read_manifest,
     write_checkpoint,
 )
@@ -132,7 +132,7 @@ def _session_settings(root, **length):
         "rng_seed": 5,
         "sessions_dir": str(root),
         "device": "cpu",
-        "components_package": "training_framework.components.builtin",
+        "components_package": "naavik.components.builtin",
         "show_execution_graph": False,
         **length,
     }

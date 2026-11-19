@@ -21,8 +21,8 @@ from torch.nn import functional
 
 from tests.integration.integration_ssl_components import byol_config, dino_config
 from tests.test_utils import component_named, resource_named
-from training_framework.components import Step, reads, step
-from training_framework.components.builtin import Checkpointer
+from naavik.components import Step, reads, step
+from naavik.components.builtin import Checkpointer
 
 from .helpers import quiet_session, run, snapshot
 from .test_losses import _dino_reference

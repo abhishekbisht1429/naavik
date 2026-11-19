@@ -6,7 +6,7 @@ import pytest
 import torch
 from torch.nn import functional
 
-from training_framework.components.builtin.self_supervised import (
+from naavik.components.builtin.self_supervised import (
     byol_loss,
     cross_view_pairs,
     dino_cross_entropy,

@@ -1,7 +1,7 @@
 """Compatibility tests: `hpc/framework.py` wraps internal session-config
 helpers; these pin the behaviour the HPC layer relies on."""
 
-from training_framework.hpc import framework
+from naavik.hpc import framework
 
 SESSION = {
     "session_config": {"rng_seed": 0},

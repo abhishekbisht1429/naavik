@@ -7,13 +7,13 @@ from typing import Any
 
 import pytest
 
-from training_framework.dataloader import (
+from naavik.dataloader import (
     SAMPLER_STATE_VERSION,
     DistributedInfiniteSampler,
     InfiniteSampler,
     consumed_in_epoch,
 )
-from training_framework.session import TrainingSession
+from naavik.session import TrainingSession
 from tests.test_utils import resource_named
 
 

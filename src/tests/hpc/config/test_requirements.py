@@ -1,6 +1,6 @@
 import pytest
 
-from training_framework.hpc.config.requirements import RequirementsError, parse_requirements
+from naavik.hpc.config.requirements import RequirementsError, parse_requirements
 
 SHA = "a" * 40
 

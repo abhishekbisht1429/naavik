@@ -8,14 +8,14 @@ import pytest
 import torch
 
 from tests.hpc.batch_repo import make_repo
-from training_framework.runs.facts import (
+from naavik.runs.facts import (
     RUN_REFS,
     code_identity,
     device_facts,
     environment_facts,
     package_directory,
 )
-from training_framework.runs.ids import new_run_id
+from naavik.runs.ids import new_run_id
 
 
 def git(root, *args):
@@ -75,7 +75,7 @@ def test_the_environment_names_python_torch_and_the_packages():
 
 
 def test_a_package_is_located_without_importing_it():
-    assert package_directory("training_framework.runs").name == "runs"
+    assert package_directory("naavik.runs").name == "runs"
     assert package_directory("no_such_package_anywhere") is None
     assert package_directory(None) is None
 
@@ -103,15 +103,15 @@ def test_the_framework_is_the_imported_one_not_whatever_is_installed():
     import importlib.metadata
     from pathlib import Path
 
-    import training_framework
-    from training_framework.runs.facts import framework_facts
+    import naavik
+    from naavik.runs.facts import framework_facts
 
     facts = framework_facts()
-    location = Path(training_framework.__file__).resolve().parent
+    location = Path(naavik.__file__).resolve().parent
     assert facts["location"] == str(location)
     try:
         distribution = importlib.metadata.distribution("training-framework")
-        installed_here = (Path(distribution.locate_file("training_framework/__init__.py"))
+        installed_here = (Path(distribution.locate_file("naavik/__init__.py"))
                           .resolve().parent == location)
         expected = distribution.version if installed_here else None
     except importlib.metadata.PackageNotFoundError:

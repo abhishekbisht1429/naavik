@@ -17,7 +17,7 @@ import pytest
 import torch
 import yaml
 
-from training_framework.engine import Configurator, TrainingEngine
+from naavik.engine import Configurator, TrainingEngine
 
 
 _BASE_COMPONENTS = "tests.integration.integration_training_components"

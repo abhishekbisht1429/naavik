@@ -5,7 +5,7 @@ import torch
 from torch import nn
 from torch.utils.data import Dataset
 
-from training_framework.components import (
+from naavik.components import (
     Resource,
     StatefulResource,
     Step,
@@ -13,12 +13,12 @@ from training_framework.components import (
     resource,
     step,
 )
-from training_framework.components.builtin import (
+from naavik.components.builtin import (
     AnalysisDataManager,
     DataManager,
 )
-from training_framework.components import component_registry
-from training_framework.session import AnalysisSession, Session, TrainingSession
+from naavik.components import component_registry
+from naavik.session import AnalysisSession, Session, TrainingSession
 from tests.test_utils import resource_named
 
 
@@ -91,7 +91,7 @@ def _session_config(root, max_iterations):
         "sessions_dir": str(root),
         "max_iterations": max_iterations,
         "device": "cpu",
-        "components_package": "training_framework.components.builtin",
+        "components_package": "naavik.components.builtin",
         "show_execution_graph": False,
     }
 

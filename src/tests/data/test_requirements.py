@@ -12,19 +12,19 @@ from pathlib import Path
 
 import pytest
 
-import training_framework
-from training_framework.data import (
+import naavik
+from naavik.data import (
     DataError,
     DataRequirement,
     ensure,
     requirement_key,
     requirements_of,
 )
-from training_framework.launcher.remote.lease import KeyMismatch
+from naavik.launcher.remote.lease import KeyMismatch
 
 from .fake_datasets import ByHand, Fetchable, NotDeclared
 
-SRC = Path(training_framework.__file__).resolve().parents[1]
+SRC = Path(naavik.__file__).resolve().parents[1]
 
 
 def located(cls, root, **config):
@@ -128,7 +128,7 @@ def test_a_fetch_that_fails_verification_leaves_no_marker(tmp_path):
 
 def test_ready_data_is_used_without_taking_a_lease(tmp_path):
     # A ready location may be on a shared, read-only filesystem.
-    from training_framework.launcher.remote.runtime import StdlibFilesystem
+    from naavik.launcher.remote.runtime import StdlibFilesystem
 
     class NoLocks(StdlibFilesystem):
         def mkdir_atomic(self, path):

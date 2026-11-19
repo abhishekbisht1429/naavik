@@ -10,8 +10,8 @@ import pytest
 import yaml
 
 from tests.test_utils import COMPONENTS_PACKAGE, register_test_components, session_config
-from training_framework.engine import Configurator, TrainingEngine
-from training_framework.session import TrainingSession
+from naavik.engine import Configurator, TrainingEngine
+from naavik.session import TrainingSession
 
 
 def _files(root, files):

@@ -13,8 +13,8 @@ import torch
 
 from tests.components.builtin import test_fine_tuning as ft
 from tests.test_utils import resource_named, stub_process_group
-from training_framework.components.builtin import Checkpointer
-from training_framework.session import TrainingSession
+from naavik.components.builtin import Checkpointer
+from naavik.session import TrainingSession
 
 
 @pytest.fixture(autouse=True)

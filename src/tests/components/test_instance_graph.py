@@ -14,7 +14,7 @@ depths, or it passes whichever way the edge goes.
 import pytest
 
 from tests.test_utils import make_config
-from training_framework.components import (
+from naavik.components import (
     IterationHook,
     Resource,
     hook,
@@ -22,7 +22,7 @@ from training_framework.components import (
     resource,
     wraps,
 )
-from training_framework.session import TrainingSession
+from naavik.session import TrainingSession
 
 
 class TracedResource(Resource):

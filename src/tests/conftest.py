@@ -2,13 +2,13 @@ import os
 
 import pytest
 
-from training_framework.components.registry import (
+from naavik.components.registry import (
     _SESSION_COMPONENT_REGISTRIES,
     _SESSION_ROLE_REGISTRIES,
     _SHARED_COMPONENT_REGISTRY,
     _SHARED_ROLE_REGISTRY,
 )
-from training_framework.session.registry import _SESSION_TYPE_REGISTRY
+from naavik.session.registry import _SESSION_TYPE_REGISTRY
 
 
 _DEFAULT_SHARED_COMPONENTS = dict(_SHARED_COMPONENT_REGISTRY)
@@ -60,7 +60,7 @@ def minimal_session_config_1(tmp_path):
             "sessions_dir": str(tmp_path / "sessions"),
             "device": "cpu",
             "rng_seed": 7,
-            "components_package": "training_framework.components.builtin",
+            "components_package": "naavik.components.builtin",
         }
     }
 
@@ -73,7 +73,7 @@ def minimal_session_config_2(tmp_path):
             "sessions_dir": str(tmp_path / "sessions"),
             "device": "cpu",
             "rng_seed": 11,
-            "components_package": "training_framework.components.builtin",
+            "components_package": "naavik.components.builtin",
         }
     }
 

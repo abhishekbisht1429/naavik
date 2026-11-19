@@ -13,7 +13,7 @@ from collections.abc import Callable
 
 import pytest
 
-from training_framework.components import (
+from naavik.components import (
     Hook,
     Resource,
     Step,
@@ -26,7 +26,7 @@ from training_framework.components import (
     topological_sort_of_components,
     wraps,
 )
-from training_framework.components.registry import _COMPONENT_REGISTRY, component_registry
+from naavik.components.registry import _COMPONENT_REGISTRY, component_registry
 
 
 ClassFactory = Callable[[str], type]

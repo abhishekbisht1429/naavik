@@ -8,13 +8,13 @@ import json
 import pytest
 
 from tests.hpc.batch_repo import PROFILE, compile_repo, make_repo
-from training_framework.launcher.compile.plan import ExecutionContext, JobNode
-from training_framework.launcher.compile.render import plan_files
-from training_framework.launcher.config.schema import Resources, parse_profiles
-from training_framework.launcher.errors import PlanError
-from training_framework.launcher.remote.bootstrap import render_runner
-from training_framework.launcher.scheduler import get_scheduler, script_path
-from training_framework.launcher.scheduler.host import HostDialect, HostSettings
+from naavik.launcher.compile.plan import ExecutionContext, JobNode
+from naavik.launcher.compile.render import plan_files
+from naavik.launcher.config.schema import Resources, parse_profiles
+from naavik.launcher.errors import PlanError
+from naavik.launcher.remote.bootstrap import render_runner
+from naavik.launcher.scheduler import get_scheduler, script_path
+from naavik.launcher.scheduler.host import HostDialect, HostSettings
 
 CONTEXT = ExecutionContext(
     phase="task", interpreter="/env/bin/python", environment="/env",

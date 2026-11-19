@@ -12,8 +12,8 @@ from types import SimpleNamespace
 import pytest
 
 from tests.data import data_components
-from training_framework.data.direct import ensure_downloads
-from training_framework.engine import TrainingEngine
+from naavik.data.direct import ensure_downloads
+from naavik.engine import TrainingEngine
 
 PACKAGE = "tests.data.data_components"
 
@@ -97,7 +97,7 @@ def test_the_engine_ensures_before_it_builds(tmp_path, monkeypatch):
 
 
 def test_only_a_true_download_counts():
-    from training_framework.data.direct import asks_for_download
+    from naavik.data.direct import asks_for_download
 
     assert asks_for_download({"download": True})
     for value in ("false", "yes", 1, None):

@@ -1,6 +1,6 @@
 """Application-style entry point for spawned training integration tests."""
 
-from training_framework.engine import Configurator, TrainingEngine
+from naavik.engine import Configurator, TrainingEngine
 
 
 def main() -> None:

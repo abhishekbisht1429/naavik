@@ -13,8 +13,8 @@ from typing import Any
 import pytest
 import torch
 
-from training_framework.engine import SessionProcessWrapper, TrainingEngine
-from training_framework.session import AnalysisSession, TrainingSession
+from naavik.engine import SessionProcessWrapper, TrainingEngine
+from naavik.session import AnalysisSession, TrainingSession
 
 
 _COMPONENTS_PACKAGE = "tests.integration.integration_analysis_components"

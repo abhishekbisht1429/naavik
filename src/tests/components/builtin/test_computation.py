@@ -18,7 +18,7 @@ from tests.test_utils import (
     resource_named,
     stub_process_group,
 )
-from training_framework.components import (
+from naavik.components import (
     Resource,
     StatefulResource,
     Step,
@@ -27,9 +27,9 @@ from training_framework.components import (
     resource,
     step,
 )
-from training_framework.components.builtin import Compute
-from training_framework.functions import weighted_sum
-from training_framework.session import AnalysisSession, TrainingSession
+from naavik.components.builtin import Compute
+from naavik.functions import weighted_sum
+from naavik.session import AnalysisSession, TrainingSession
 
 
 @pytest.fixture(autouse=True)

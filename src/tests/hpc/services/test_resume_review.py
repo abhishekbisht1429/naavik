@@ -11,12 +11,12 @@ from pathlib import Path
 import pytest
 import yaml
 
-from training_framework.hpc.__main__ import main
-from training_framework.hpc.errors import HpcError
-from training_framework.hpc.ports.local import LocalFilesystem
-from training_framework.hpc.services import resume as resuming
-from training_framework.hpc.services.receipt import Receipt
-from training_framework.hpc.services.status import receipt_problem
+from naavik.hpc.__main__ import main
+from naavik.hpc.errors import HpcError
+from naavik.hpc.ports.local import LocalFilesystem
+from naavik.hpc.services import resume as resuming
+from naavik.hpc.services.receipt import Receipt
+from naavik.hpc.services.status import receipt_problem
 from tests.hpc.batch_repo import compile_repo, make_repo
 from tests.hpc.fake_cluster import fake_cluster  # noqa: F401 (fixture)
 from tests.hpc.fakes import FakeSubmitter

@@ -12,8 +12,8 @@ import sys
 import pytest
 
 from tests.hpc.test_end_to_end import session
-from training_framework.components.builtin.data import AnalysisDataManager, DataManager
-from training_framework.session import TrainingSession, check_session_config
+from naavik.components.builtin.data import AnalysisDataManager, DataManager
+from naavik.session import TrainingSession, check_session_config
 
 PACKAGE = "tests.integration.integration_training_components"
 
@@ -106,7 +106,7 @@ def test_a_checkpoint_with_a_key_the_data_manager_ignored_still_restores(tmp_pat
 
 
 def test_a_component_without_the_flag_still_refuses_on_restore(tmp_path):
-    from training_framework.session.components import _without_unread_keys
+    from naavik.session.components import _without_unread_keys
 
     class Strict:
         config_schema = type("Schema", (), {})

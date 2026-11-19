@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 from typing import override
 
-from training_framework.components import (
+from naavik.components import (
     LifecycleHook,
     Step,
     reads,
@@ -21,7 +21,7 @@ from training_framework.components import (
     step,
     writes,
 )
-from training_framework.session import TrainingSession
+from naavik.session import TrainingSession
 
 # Imported for its registrations: the model, dataset, training and loss
 # steps are reused as they are.

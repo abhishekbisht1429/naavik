@@ -7,7 +7,7 @@ import sys
 
 import yaml
 
-from training_framework.engine import Configurator, TrainingEngine
+from naavik.engine import Configurator, TrainingEngine
 from tests.integration.test_training_flow_integration import (
     _ddp_session_config,
     _register_integration_components,

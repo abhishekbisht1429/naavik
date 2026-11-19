@@ -14,12 +14,12 @@ from pathlib import Path
 import pytest
 import yaml
 
-import training_framework
+import naavik
 from tests.hpc.batch_repo import PROFILE, make_repo
-from training_framework.cli import main as naavik
-from training_framework.hpc.__main__ import main as hpc_main
+from naavik.cli import main as naavik_cli
+from naavik.hpc.__main__ import main as hpc_main
 
-SRC = Path(training_framework.__file__).resolve().parents[1]
+SRC = Path(naavik.__file__).resolve().parents[1]
 PYPROJECT = SRC.parent / "pyproject.toml"
 
 
@@ -39,14 +39,14 @@ def _targets(**extra):
 
 
 def _validate(root, *options):
-    return naavik(["validate", str(root / "batch.yaml"), *options])
+    return naavik_cli(["validate", str(root / "batch.yaml"), *options])
 
 
 def test_both_command_names_are_installed_and_run_the_cli():
     scripts = tomllib.loads(PYPROJECT.read_text())["project"]["scripts"]
-    assert scripts == {"naavik": "training_framework.cli:main",
-                       "navik": "training_framework.cli:main"}
-    result = subprocess.run([sys.executable, "-m", "training_framework.cli", "--help"],
+    assert scripts == {"naavik": "naavik.cli:main",
+                       "navik": "naavik.cli:main"}
+    result = subprocess.run([sys.executable, "-m", "naavik.cli", "--help"],
                             capture_output=True, text=True, check=False,
                             env={**os.environ, "PYTHONPATH": str(SRC)})
     assert result.returncode == 0, result.stderr
@@ -55,10 +55,10 @@ def test_both_command_names_are_installed_and_run_the_cli():
 
 def test_launch_and_submit_are_one_command(capsys):
     with pytest.raises(SystemExit):
-        naavik(["launch", "--help"])
+        naavik_cli(["launch", "--help"])
     launch = capsys.readouterr().out
     with pytest.raises(SystemExit):
-        naavik(["submit", "--help"])
+        naavik_cli(["submit", "--help"])
     submit = capsys.readouterr().out
     assert launch.startswith("usage: naavik launch ")
     assert launch.split("\n", 1)[1] == submit.split("\n", 1)[1]
@@ -66,7 +66,7 @@ def test_launch_and_submit_are_one_command(capsys):
 
 def test_launch_is_listed_and_submit_kept_as_its_alias(capsys):
     with pytest.raises(SystemExit):
-        naavik(["--help"])
+        naavik_cli(["--help"])
     assert "launch (submit)" in capsys.readouterr().out
 
 
@@ -74,7 +74,7 @@ def test_launch_and_submit_fail_the_same_way(tmp_path, capsys):
     missing = tmp_path / "missing.yaml"
     results = []
     for name in ("launch", "submit"):
-        code = naavik([name, "batch.yaml", "--targets", str(missing)])
+        code = naavik_cli([name, "batch.yaml", "--targets", str(missing)])
         results.append((code, capsys.readouterr().err))
     assert results[0] == results[1]
     assert results[0][0] == 2
@@ -90,7 +90,7 @@ def test_launch_and_submit_both_reach_the_launch(tmp_path, monkeypatch, capsys, 
     empty = tmp_path / "empty-bin"
     empty.mkdir()
     monkeypatch.setenv("PATH", str(empty))
-    assert naavik([name, str(root / "batch.yaml"), "--targets", str(targets)]) == 2
+    assert naavik_cli([name, str(root / "batch.yaml"), "--targets", str(targets)]) == 2
     assert "ssh and rsync not found on this machine's PATH" in capsys.readouterr().err
 
 
@@ -161,17 +161,17 @@ def test_a_target_file_with_both_entry_keys_is_refused(tmp_path, capsys):
 
 def test_summarize_is_a_naavik_command(capsys):
     with pytest.raises(SystemExit):
-        naavik(["summarize", "--help"])
+        naavik_cli(["summarize", "--help"])
     assert capsys.readouterr().out.startswith("usage: naavik summarize ")
 
 
 def test_the_earlier_entry_points_keep_their_names(capsys):
     with pytest.raises(SystemExit):
         hpc_main(["--help"])
-    assert capsys.readouterr().out.startswith("usage: python -m training_framework.hpc ")
-    from training_framework.reporting.__main__ import main as reporting_main
+    assert capsys.readouterr().out.startswith("usage: python -m naavik.hpc ")
+    from naavik.reporting.__main__ import main as reporting_main
 
     with pytest.raises(SystemExit):
         reporting_main(["summarize", "--help"])
     assert capsys.readouterr().out.startswith(
-        "usage: python -m training_framework.reporting summarize ")
+        "usage: python -m naavik.reporting summarize ")

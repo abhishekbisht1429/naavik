@@ -14,9 +14,9 @@ import yaml
 from tests.hpc.batch_repo import compile_repo, make_repo, manifest, profile
 from tests.hpc.test_end_to_end import environment, session  # noqa: F401 (fixture)
 from tests.launcher.test_host_end_to_end import here, launch, record, repo, wait_for  # noqa: F401
-from training_framework.cli import main as naavik
-from training_framework.launcher.errors import PlanError
-from training_framework.launcher.ports.repository import SNAPSHOT_REFS
+from naavik.cli import main as naavik_cli
+from naavik.launcher.errors import PlanError
+from naavik.launcher.ports.repository import SNAPSHOT_REFS
 
 
 def git(root, *args) -> str:
@@ -132,7 +132,7 @@ def test_a_changed_submodule_is_refused(tmp_path):
 
 
 def test_an_unknown_worktree_mode_is_refused():
-    from training_framework.launcher.config.schema import parse_profiles
+    from naavik.launcher.config.schema import parse_profiles
 
     with pytest.raises(PlanError, match="run_code_from must be one of commit, working_tree"):
         parse_profiles(profile(worktree="stash"), None, "targets.yaml")
@@ -147,9 +147,9 @@ def test_validate_and_render_leave_no_ref(tmp_path, monkeypatch, capsys):
     targets = tmp_path / "targets.yaml"
     targets.write_text(yaml.safe_dump(_snapshot_profile()))
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
-    assert naavik(["validate", str(root / "batch.yaml"), "--targets", str(targets)]) == 0
+    assert naavik_cli(["validate", str(root / "batch.yaml"), "--targets", str(targets)]) == 0
     assert "note: snapshot of the working tree on" in capsys.readouterr().out
-    assert naavik(["render", str(root / "batch.yaml"), "--targets", str(targets),
+    assert naavik_cli(["render", str(root / "batch.yaml"), "--targets", str(targets),
                    "--output", str(tmp_path / "preview")]) == 0
     assert SNAPSHOT_REFS not in git(root, "for-each-ref")
 

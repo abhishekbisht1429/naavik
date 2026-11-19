@@ -1,0 +1,441 @@
+import os
+import signal
+import time
+from collections.abc import Mapping
+
+import torch
+from torch import distributed, multiprocessing
+
+from naavik.components.edges import (
+    recorded_context_keys,
+    recorded_wiring,
+)
+from naavik.engine.topology import (
+    LaunchTopology,
+    pin_process_device,
+)
+from naavik.session import Session, TrainingSession
+from naavik.runs.recorder import ENV_RUN_DIRECTORY, record_worker_device
+from naavik.components.config import (
+    component_entry,
+    find_component_entry,
+    with_component_entry,
+)
+from naavik.session.failure_report import worker_failure_report
+from naavik.session.imports import stored_bindings
+from naavik.session.components import SessionComponents
+from naavik.session.config import normalize_session_type
+from naavik.session.progress import ProgressBeacon
+from naavik.session.state import configuration_from_state
+from naavik.util import import_all_modules
+
+
+_STOP_SYNC_GRACE_PERIOD = 0.01
+_STOP_SYNC_POLL_INTERVAL = 0.005
+
+
+def prepare_worker_state(
+        session_state,
+        rank: int,
+        topology: LaunchTopology | None = None,
+):
+    """Return `session_state` adjusted for `rank`, before anything is built.
+
+    Components are wired to each other as they are constructed, so a rank's
+    component set and the rank-specific `ddp` configuration have to be settled
+    first. Both are decided by data the state already carries: the dependency
+    graph is class-level, so the closure a rank needs can be resolved without
+    constructing a single component.
+
+    `topology` is this launch's process topology. It overrides whatever the
+    state carries, because a checkpoint's own topology describes the machine
+    that wrote it and says nothing about this one.
+    """
+    components_state = session_state.get("components_state") or {}
+    if not components_state:
+        return session_state
+
+    _, session_settings, _ = configuration_from_state(session_state)
+    import_all_modules(session_settings["components_package"])
+    bindings = stored_bindings(session_state)
+    components = SessionComponents(
+        role_bindings=bindings.roles,
+        dependency_bindings=bindings.dependencies,
+        session_type=normalize_session_type(session_state["session_type"]),
+    )
+    ddp_name = components.resolve_name("ddp")
+    if ddp_name not in components_state:
+        return session_state
+
+    session_state = dict(session_state)
+    components_state = {
+        name: dict(info) for name, info in components_state.items()
+    }
+    session_state["components_state"] = components_state
+
+    ddp_info = components_state[ddp_name]
+    ddp_info["init_args"] = _topology_init_args(
+        ddp_info["init_args"],
+        rank,
+        topology,
+    )
+
+    if topology is not None:
+        # The session config is diffed against by a later --extend-session,
+        # so it has to agree with the arguments the component was built from.
+        session_state["config"] = _topology_config(
+            session_state["config"],
+            ddp_name,
+            topology,
+        )
+
+    if rank > 0:
+        ddp_config = _ddp_config(ddp_info["init_args"])
+        keep = components.rank_parallel_names(
+            active_names=components_state,
+            parallel_components=ddp_config.get("parallel_components"),
+            rank_zero_components=ddp_config.get("rank_zero_components"),
+            context_keys=recorded_context_keys(components_state),
+            wiring=recorded_wiring(components_state),
+        )
+        for name in list(components_state):
+            if name not in keep:
+                del components_state[name]
+
+    return session_state
+
+
+def _topology_init_args(init_args, rank: int, topology) -> dict:
+    """Settle the rank-specific and launch-specific `ddp` constructor args."""
+    args = list(init_args["args"])
+    kwargs = dict(init_args["kwargs"])
+    kwargs["rank"] = rank
+
+    if topology is not None:
+        kwargs["local_rank"] = topology.local_rank(rank)
+        overlay = topology.config_overlay()
+        if args and isinstance(args[0], Mapping):
+            args[0] = {**dict(args[0]), **overlay}
+        elif isinstance(kwargs.get("config"), Mapping):
+            kwargs["config"] = {**dict(kwargs["config"]), **overlay}
+
+    return {"args": tuple(args), "kwargs": kwargs}
+
+
+def _topology_config(config, ddp_name: str, topology) -> Mapping:
+    # `ddp` may be listed at the top level or under `resources`; an empty
+    # value lists it with no settings.
+    if not isinstance(config, Mapping):
+        return config
+    if find_component_entry(config, ddp_name) is None:
+        return config
+    ddp_config = component_entry(config, ddp_name)
+    if ddp_config is None:
+        ddp_config = {}
+    if not isinstance(ddp_config, Mapping):
+        return config
+    return with_component_entry(
+        config,
+        ddp_name,
+        {**dict(ddp_config), **topology.config_overlay()},
+    )
+
+
+def _ddp_config(init_args) -> dict:
+    args = init_args["args"]
+    if args and isinstance(args[0], Mapping):
+        return dict(args[0])
+    config = init_args["kwargs"].get("config")
+    return dict(config) if isinstance(config, Mapping) else {}
+
+
+def load_session_for_worker(
+        session_state,
+        rank,
+        session_update_params: dict | None = None,
+        launch_topology: LaunchTopology | None = None,
+):
+    # Before anything is constructed: no component can then be built or
+    # restored against the wrong device, and the session's CUDA RNG stream
+    # has a definite device to land on.
+    pin_process_device(launch_topology, rank, session_state)
+
+    session = Session.from_state(
+        prepare_worker_state(session_state, rank, launch_topology)
+    )
+    if (
+            launch_topology is not None
+            and launch_topology.store_hosted
+            and session._components.has_resource("ddp")
+    ):
+        # Runtime only, never saved: a checkpoint of this session must not
+        # send a later, hand-driven session looking for a store that is gone.
+        session._components.get_resource("ddp").join_hosted_store()
+
+    if (
+            session_update_params is not None
+            and "max_iterations" in session_update_params
+    ):
+        if not isinstance(session, TrainingSession):
+            raise TypeError("max_iterations updates require a TrainingSession")
+        session.update_max_iters(session_update_params["max_iterations"])
+
+    return session
+
+
+class _StopVote:
+    """This rank's stop request, all-reduced across the ranks in flight.
+
+    Casting does not wait: the ranks agree while the iteration runs, and the
+    result is read once it is over. The flag is a CPU tensor, so reading it
+    never waits for the GPU.
+    """
+
+    def __init__(self, session: Session, local_stop_requested: bool, group):
+        self._session = session
+        self._flag = torch.tensor(int(local_stop_requested), dtype=torch.int32)
+        # The default group of a CPU backend takes the CPU flag as it is; an
+        # NCCL launch passes its gloo side group.
+        group_kwargs = {} if group is None else {"group": group}
+        session.send_heartbeat("Synchronizing worker stop state")
+        self._sync = distributed.all_reduce(
+            self._flag,
+            op=distributed.ReduceOp.MAX,
+            async_op=True,
+            **group_kwargs,
+        )
+
+    def result(
+            self,
+            *,
+            stop_sync_grace_period: float = _STOP_SYNC_GRACE_PERIOD,
+            stop_sync_poll_interval: float = _STOP_SYNC_POLL_INTERVAL,
+    ) -> bool:
+        poll_started = time.monotonic()
+        while not self._sync.is_completed():
+            self._session.send_heartbeat("Synchronizing worker stop state")
+            if time.monotonic() - poll_started >= stop_sync_grace_period:
+                time.sleep(stop_sync_poll_interval)
+        self._sync.wait()
+        return bool(self._flag.item())
+
+
+def _stop_vote_group(session: Session):
+    """The process group stop votes travel on: `None` for the default group.
+
+    NCCL carries only CUDA tensors, and reading a CUDA flag waits for every
+    kernel queued before it, so an NCCL launch votes on a gloo side group.
+    Every rank calls this at the same point, after `ddp` has set up.
+    """
+    if not session._components.has_resource("ddp"):
+        return None
+    if session._components.get_resource("ddp").backend != "nccl":
+        return None
+    return distributed.new_group(backend="gloo")
+
+
+def _cast_stop_vote(session: Session, stop_event, group) -> _StopVote | None:
+    """Cast this rank's stop vote; `None` when there are no other ranks."""
+    if not session._components.has_resource("ddp"):
+        return None
+    return _StopVote(session, stop_event.is_set(), group)
+
+
+def _vote_says_stop(
+        vote: _StopVote | None,
+        stop_event,
+        **stop_sync_timing,
+) -> bool:
+    if vote is None:
+        return stop_event.is_set()
+    return vote.result(**stop_sync_timing)
+
+
+def _stop_requested(
+        session: Session,
+        stop_event,
+        *,
+        group=None,
+        stop_sync_grace_period: float = _STOP_SYNC_GRACE_PERIOD,
+        stop_sync_poll_interval: float = _STOP_SYNC_POLL_INTERVAL,
+) -> bool:
+    """Agree on a stop now, waiting for every rank's vote."""
+    return _vote_says_stop(
+        _cast_stop_vote(session, stop_event, group),
+        stop_event,
+        stop_sync_grace_period=stop_sync_grace_period,
+        stop_sync_poll_interval=stop_sync_poll_interval,
+    )
+
+
+def session_process_worker(
+        session_state,
+        rank: int,
+        stop_event,
+        error_conn,
+        progress_beacon,
+        **kwargs,
+) -> None:
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    session = None
+    try:
+        session = load_session_for_worker(
+            session_state,
+            rank,
+            session_update_params=kwargs.get("session_update_params"),
+            launch_topology=kwargs.get("launch_topology"),
+        )
+        session.set_dist_manager_err_conn(error_conn)
+        session.set_progress_beacon(progress_beacon)
+        stop_sync_grace_period = kwargs.get(
+            "stop_sync_grace_period",
+            _STOP_SYNC_GRACE_PERIOD,
+        )
+        stop_sync_poll_interval = kwargs.get(
+            "stop_sync_poll_interval",
+            _STOP_SYNC_POLL_INTERVAL,
+        )
+        stop_sync_timing = {
+            "stop_sync_grace_period": stop_sync_grace_period,
+            "stop_sync_poll_interval": stop_sync_poll_interval,
+        }
+        with session:
+            # Its device as this worker uses it, into the launch's run record.
+            record_worker_device(os.environ.get(ENV_RUN_DIRECTORY), rank, session)
+            group = _stop_vote_group(session)
+            # A stop requested before the first iteration runs none.
+            if not _stop_requested(
+                    session, stop_event, group=group, **stop_sync_timing,
+            ):
+                while True:
+                    # Every rank votes before an iteration and reads the
+                    # result after it, so all of them stop after the same
+                    # iteration without waiting on the vote in between.
+                    vote = _cast_stop_vote(session, stop_event, group)
+                    try:
+                        next(session)
+                    except StopIteration:
+                        # Every rank cast this vote; let it finish before
+                        # teardown destroys the process group.
+                        _vote_says_stop(vote, stop_event, **stop_sync_timing)
+                        break
+                    if _vote_says_stop(vote, stop_event, **stop_sync_timing):
+                        break
+    except BaseException as error:
+        try:
+            # Session.__exit__ already reports failures raised while the
+            # session was active; only report the rest (e.g. load or setup).
+            if session is None or not session.worker_exception_reported:
+                error_conn.send(worker_failure_report(rank, error))
+        except OSError:
+            # The parent already closed the pipe; re-raise the real error.
+            pass
+        finally:
+            error_conn.close()
+        raise
+    else:
+        error_conn.close()
+    print(f"Session rank[{rank}] exiting.", flush=True)
+
+
+class SessionProcessWrapper:
+    def __init__(
+            self,
+            session: Session,
+            rank: int,
+            **kwargs,
+    ):
+        self._session = session
+        self._rank = rank
+
+        context = multiprocessing.get_context("spawn")
+        self._stop_event = context.Event()
+        self._recv_conn, self._send_conn = context.Pipe(duplex=False)
+        self._progress_beacon = ProgressBeacon(context)
+        self._session_process = context.Process(
+            name=f"training-session-rank-{rank}",
+            target=session_process_worker,
+            args=(
+                self._session.get_state(),
+                rank,
+                self._stop_event,
+                self._send_conn,
+                self._progress_beacon,
+            ),
+            kwargs=kwargs,
+        )
+        self._started = False
+        self._heartbeat_timeout = kwargs["heartbeat_timeout"]
+        self._deadline = time.monotonic() + self._heartbeat_timeout
+        self._last_seq = 0
+        self._last_iteration = 0
+        self._last_stage = "Starting worker"
+        self._last_progress_time = time.monotonic()
+
+    @property
+    def error_conn(self):
+        return self._recv_conn
+
+    @property
+    def rank(self) -> int:
+        return self._rank
+
+    @property
+    def process(self):
+        return self._session_process
+
+    @property
+    def started(self) -> bool:
+        return self._started
+
+    @property
+    def deadline(self) -> float:
+        return self._deadline
+
+    @property
+    def heartbeat_timeout(self) -> float:
+        return self._heartbeat_timeout
+
+    @property
+    def last_iteration(self) -> int:
+        return self._last_iteration
+
+    @property
+    def last_stage(self) -> str:
+        return self._last_stage
+
+    @property
+    def last_progress_time(self) -> float:
+        return self._last_progress_time
+
+    def reset_deadline(self):
+        self._deadline = time.monotonic() + self._heartbeat_timeout
+
+    def check_progress(self, now: float | None = None) -> bool:
+        seq, iteration, stage = self._progress_beacon.snapshot()
+        if seq == self._last_seq:
+            return False
+        if now is None:
+            now = time.monotonic()
+        self._last_seq = seq
+        self._last_iteration = iteration
+        self._last_stage = stage
+        self._last_progress_time = now
+        self._deadline = now + self._heartbeat_timeout
+        return True
+
+    def start(self) -> None:
+        if self._started:
+            raise RuntimeError(
+                f"Session rank[{self._rank}] has already been started"
+            )
+        self._session_process.start()
+        self._send_conn.close()
+        self._started = True
+
+    def request_stop(self) -> None:
+        self._stop_event.set()
+
+    def join(self):
+        self._session_process.join()
+        self._recv_conn.close()

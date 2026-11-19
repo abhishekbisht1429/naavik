@@ -13,9 +13,9 @@ from pathlib import Path
 
 import pytest
 
-from training_framework.launcher.remote.runtime import process_start_time
-from training_framework.runs.ids import new_run_id
-from training_framework.runs.registry import (
+from naavik.launcher.remote.runtime import process_start_time
+from naavik.runs.ids import new_run_id
+from naavik.runs.registry import (
     CONFIGS,
     ENDED_WITHOUT_RECORD,
     RUNNING,

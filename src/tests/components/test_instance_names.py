@@ -11,7 +11,7 @@ fixture clears the global registries before each test.
 
 import pytest
 
-from training_framework.components import (
+from naavik.components import (
     ComponentBindings,
     Hook,
     Resource,

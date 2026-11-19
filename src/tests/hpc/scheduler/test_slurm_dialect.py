@@ -1,6 +1,6 @@
-from training_framework.hpc.compile.plan import ExecutionContext, JobNode
-from training_framework.hpc.config.schema import Resources, SlurmSettings
-from training_framework.hpc.scheduler.slurm import SlurmDialect
+from naavik.hpc.compile.plan import ExecutionContext, JobNode
+from naavik.hpc.config.schema import Resources, SlurmSettings
+from naavik.hpc.scheduler.slurm import SlurmDialect
 
 SETTINGS = SlurmSettings(
     defaults={"account": "lab", "qos": "normal"},

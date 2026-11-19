@@ -3,7 +3,7 @@ constructions, so a test can prove checking builds nothing."""
 
 from dataclasses import dataclass
 
-from training_framework.components import Resource, requires_resource, resource
+from naavik.components import Resource, requires_resource, resource
 
 CONSTRUCTED: list[str] = []
 

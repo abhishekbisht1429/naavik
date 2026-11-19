@@ -3,11 +3,11 @@ import socket
 
 import pytest
 
-from training_framework.hpc.compile.plan import ExecutionContext, JobNode
-from training_framework.hpc.ports import Owner, SubmissionUncertain
-from training_framework.hpc.remote.runtime import current_process_owner
-from training_framework.hpc.ports.ssh import SshExecutor, TransportError
-from training_framework.hpc.scheduler.slurm_submitter import RemoteOwnerProbe, SlurmSubmitter
+from naavik.hpc.compile.plan import ExecutionContext, JobNode
+from naavik.hpc.ports import Owner, SubmissionUncertain
+from naavik.hpc.remote.runtime import current_process_owner
+from naavik.hpc.ports.ssh import SshExecutor, TransportError
+from naavik.hpc.scheduler.slurm_submitter import RemoteOwnerProbe, SlurmSubmitter
 from tests.hpc.fake_cluster import fake_cluster, submitted_jobs  # noqa: F401 (fixture)
 
 NODE = JobNode(id="group-g", kind="task_set", location="job", depends_on=(),

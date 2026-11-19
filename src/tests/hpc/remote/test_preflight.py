@@ -3,7 +3,7 @@ import inspect
 
 import pytest
 
-from training_framework.hpc.remote import preflight
+from naavik.hpc.remote import preflight
 
 SOURCE = "/b/source"
 IDENTITY = {"implementation": "cpython", "version": "3.12.4",
@@ -14,7 +14,7 @@ def facts(**changes):
     data = {
         "protocol_versions": [1],
         "interpreter": dict(IDENTITY),
-        "framework": {"file": "/env/lib/site-packages/training_framework/__init__.py",
+        "framework": {"file": "/env/lib/site-packages/naavik/__init__.py",
                       "distribution": "0.5.0"},
         "components": {"my_project.components": None},
         "cluster_paths": {"/data/x": True},
@@ -59,7 +59,7 @@ def test_a_pinned_version_prefix_is_compared():
 
 def test_checkout_mode_needs_the_checkout_and_no_distribution():
     checkout = expected(framework={"location": "checkout", "distribution": None})
-    good = facts(framework={"file": f"{SOURCE}/src/training_framework/__init__.py", "distribution": None})
+    good = facts(framework={"file": f"{SOURCE}/src/naavik/__init__.py", "distribution": None})
     assert preflight.compare(good, checkout, SOURCE) == []
     problems = preflight.compare(facts(), checkout, SOURCE)
     assert any("instead of the checkout" in p for p in problems)
@@ -67,10 +67,10 @@ def test_checkout_mode_needs_the_checkout_and_no_distribution():
 
 
 def test_dependency_mode_needs_the_environment_and_the_pinned_version():
-    from_checkout = facts(framework={"file": f"{SOURCE}/training_framework/__init__.py", "distribution": "0.5.0"})
+    from_checkout = facts(framework={"file": f"{SOURCE}/naavik/__init__.py", "distribution": "0.5.0"})
     assert any("should come from the environment" in p
                for p in preflight.compare(from_checkout, expected(), SOURCE))
-    wrong = facts(framework={"file": "/env/training_framework/__init__.py", "distribution": "0.4.0"})
+    wrong = facts(framework={"file": "/env/naavik/__init__.py", "distribution": "0.4.0"})
     assert any("pin 0.5.0" in p for p in preflight.compare(wrong, expected(), SOURCE))
 
 

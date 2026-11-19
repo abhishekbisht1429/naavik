@@ -20,16 +20,16 @@ from tests.test_utils import (
     make_config,
     resource_named,
 )
-from training_framework.components import (
+from naavik.components import (
     ComponentDependencyError,
     ModuleResource,
     Resource,
     requires_resource,
     resource,
 )
-from training_framework.components.builtin import Checkpointer
-from training_framework.engine import load_session_for_worker
-from training_framework.session import TrainingSession
+from naavik.components.builtin import Checkpointer
+from naavik.engine import load_session_for_worker
+from naavik.session import TrainingSession
 
 
 # -- components ------------------------------------------------------------------

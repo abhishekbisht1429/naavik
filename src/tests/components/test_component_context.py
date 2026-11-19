@@ -4,11 +4,11 @@ from typing import TYPE_CHECKING, cast
 
 import pytest
 
-from training_framework.components import LifecycleHook, Resource
-from training_framework.util import call_outside_context, requires_context
+from naavik.components import LifecycleHook, Resource
+from naavik.util import call_outside_context, requires_context
 
 if TYPE_CHECKING:
-    from training_framework.session import Session
+    from naavik.session import Session
 
 
 def _assert_requires_context(instance) -> None:

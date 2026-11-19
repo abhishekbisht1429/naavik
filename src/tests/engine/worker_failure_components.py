@@ -10,8 +10,8 @@ import os
 import signal
 from typing import override
 
-from training_framework.components import SessionHook, Step, hook, step
-from training_framework.session import Session, TrainingSession
+from naavik.components import SessionHook, Step, hook, step
+from naavik.session import Session, TrainingSession
 
 
 @step("wf_raise")

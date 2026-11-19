@@ -24,9 +24,9 @@ import yaml
 from torch.nn import functional
 
 from tests.test_utils import resource_named
-from training_framework.components.builtin import Checkpointer
-from training_framework.engine import Configurator, TrainingEngine
-from training_framework.session import TrainingSession
+from naavik.components.builtin import Checkpointer
+from naavik.engine import Configurator, TrainingEngine
+from naavik.session import TrainingSession
 
 _COMPONENTS_PACKAGE = "tests.integration.integration_fine_tuning_components"
 ITERATIONS = 3

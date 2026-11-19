@@ -12,16 +12,16 @@ import pytest
 import yaml
 
 from tests.hpc.batch_repo import CLOCK, MANIFEST, PROFILE, FakeFacts, make_repo
-from training_framework.data import DataRequirement, requirement_key
-from training_framework.launcher.compile.compiler import CodeFacts, TaskRequirement, compile_plan
-from training_framework.launcher.compile.data import expand_command
-from training_framework.launcher.compile.render import plan_files
-from training_framework.launcher.config.schema import parse_profiles
-from training_framework.launcher.errors import PlanError
-from training_framework.launcher.ports.repository import GitRepository
+from naavik.data import DataRequirement, requirement_key
+from naavik.launcher.compile.compiler import CodeFacts, TaskRequirement, compile_plan
+from naavik.launcher.compile.data import expand_command
+from naavik.launcher.compile.render import plan_files
+from naavik.launcher.config.schema import parse_profiles
+from naavik.launcher.errors import PlanError
+from naavik.launcher.ports.repository import GitRepository
 
 FLOWERS = DataRequirement("flowers102", "root", "1", size_hint=1000)
-CLASS = "training_framework.components.builtin.datasets.flowers102.Flowers102"
+CLASS = "naavik.components.builtin.datasets.flowers102.Flowers102"
 
 
 def requirement(spec=FLOWERS, path="/placeholder/flowers", component="flowers102"):
@@ -206,7 +206,7 @@ def test_data_obtained_by_hand_is_placed_before_an_upload(tmp_path):
 from tests.hpc.test_end_to_end import environment, session  # noqa: E402,F401 (fixture)
 from tests.launcher.test_host_end_to_end import here, record, wait_for  # noqa: E402,F401
 from tests.launcher.test_code_check import project  # noqa: E402
-from training_framework.cli import main as naavik  # noqa: E402
+from naavik.cli import main as naavik_cli  # noqa: E402
 
 
 @pytest.fixture
@@ -229,7 +229,7 @@ def with_modes(targets_path, modes):
 
 
 def launched(root, targets, capsys):
-    assert naavik(["launch", str(root / "batch.yaml"), "--targets", str(targets), "--yes"]) == 0, \
+    assert naavik_cli(["launch", str(root / "batch.yaml"), "--targets", str(targets), "--yes"]) == 0, \
         capsys.readouterr().err
     output = capsys.readouterr().out
     from pathlib import Path
@@ -260,7 +260,7 @@ def test_launch_fetches_upload_data_here_first(tmp_path, here, checked, capsys):
     data_root = tmp_path / "datasets" / "fake"
     with_modes(here, {"fake": "upload"})
     root = data_project(tmp_path, data_root)
-    assert naavik(["validate", str(root / "batch.yaml"), "--targets", str(here)]) == 2
+    assert naavik_cli(["validate", str(root / "batch.yaml"), "--targets", str(here)]) == 2
     assert "`naavik launch` fetches it here first" in capsys.readouterr().err
     batch_dir, output = launched(root, here, capsys)
     assert f"fetching data 'fake' here, into {data_root}" in output

@@ -12,12 +12,12 @@ from typing import Any
 
 import pytest
 
-from training_framework.components import (
+from naavik.components import (
     hook,
     resource,
     step, LifecycleHook, Resource, SessionHook, Step,
 )
-from training_framework.session import TrainingSession
+from naavik.session import TrainingSession
 from tests.test_utils import make_config
 
 class LifecycleSetupError(RuntimeError):

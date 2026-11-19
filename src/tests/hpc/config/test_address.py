@@ -1,6 +1,6 @@
 import pytest
 
-from training_framework.hpc.config import address
+from naavik.hpc.config import address
 
 SESSION = {
     "session_config": {"rng_seed": 0, "sessions_dir": "./runs"},

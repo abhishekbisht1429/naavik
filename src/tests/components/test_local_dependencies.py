@@ -11,7 +11,7 @@ import warnings
 import pytest
 
 from tests.test_utils import make_config, resource_named
-from training_framework.components import (
+from naavik.components import (
     DependencyDeclaration,
     Resource,
     RoleBindings,
@@ -26,9 +26,9 @@ from training_framework.components import (
     role,
     role_registry,
 )
-from training_framework.components.builtin import Checkpointer
-from training_framework.components.config import parse_session_config
-from training_framework.session import TrainingSession
+from naavik.components.builtin import Checkpointer
+from naavik.components.config import parse_session_config
+from naavik.session import TrainingSession
 
 
 # -- components --------------------------------------------------------------------
@@ -209,7 +209,7 @@ def test_the_role_registry_follows_later_declarations():
 
 
 def test_built_in_roles_that_became_local_dependencies_are_deprecated():
-    from training_framework.components.builtin.fine_tuning import (
+    from naavik.components.builtin.fine_tuning import (
         BackboneWithHead,
         FineTunedModel,
         ModulePart,

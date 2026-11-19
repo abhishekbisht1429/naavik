@@ -12,9 +12,9 @@ import pytest
 
 from tests.hpc.batch_repo import compile_repo, make_repo
 from tests.launcher.test_config_files_axis import FILES, VARY, compile_mission, mission
-from training_framework.launcher.compile.render import plan_files
-from training_framework.launcher.services.batches import as_json
-from training_framework.launcher.services.status import BatchFiles, task_rows
+from naavik.launcher.compile.render import plan_files
+from naavik.launcher.services.batches import as_json
+from naavik.launcher.services.status import BatchFiles, task_rows
 
 FIVE = "index\ttask\tvariant\tconfig\tconfig_hash"
 LR = json.dumps([{"address": {"component": "optimizer", "path": ["optimizer", "kwargs", "lr"]},
@@ -61,7 +61,7 @@ def test_a_table_of_five_columns_reads_as_before():
 
 @pytest.mark.parametrize("config_file", [None, "configs/a.yaml"])
 def test_json_carries_the_file_only_when_there_is_one(config_file):
-    from training_framework.launcher.services.status import Row
+    from naavik.launcher.services.status import Row
 
     view = SimpleNamespace(batch_id="m", receipt={}, origin="here", now="running", problem=None,
                            rows=[Row("g/e/000", "", "running", "job 5_0", True, config_file)])

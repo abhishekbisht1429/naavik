@@ -1,5 +1,5 @@
 """The generated bootstrap on a "cluster" (this machine) that has only a bare
-python3: no environment and no installed training_framework."""
+python3: no environment and no installed naavik."""
 
 from __future__ import annotations
 
@@ -13,10 +13,10 @@ from pathlib import Path
 
 import pytest
 
-from training_framework.hpc.remote.bootstrap import render_bootstrap
-from training_framework.hpc.ports.local import LocalFilesystem, LocalSourceStager
-from training_framework.hpc.compile.render import plan_files
-from training_framework.hpc.remote.task import interpreter_facts
+from naavik.hpc.remote.bootstrap import render_bootstrap
+from naavik.hpc.ports.local import LocalFilesystem, LocalSourceStager
+from naavik.hpc.compile.render import plan_files
+from naavik.hpc.remote.task import interpreter_facts
 from tests.hpc.batch_repo import MANIFEST, PROFILE, compile_repo, make_repo
 from tests.hpc.stub_framework import FILES, build_wheel, pinned_line
 
@@ -30,7 +30,7 @@ def test_the_bundle_is_standard_library_python_3_8():
             roots |= {alias.name.split(".")[0] for alias in node.names}
         elif isinstance(node, ast.ImportFrom):
             roots.add(node.module.split(".")[0])
-    assert "training_framework" not in roots
+    assert "naavik" not in roots
     assert roots <= set(sys.stdlib_module_names)
     for name in ("class Lease", "class StdlibFilesystem", "class ProcessProbe",
                  "class SlurmJobProbe", "class OwnerProbeRouter", "def compare", "def main"):

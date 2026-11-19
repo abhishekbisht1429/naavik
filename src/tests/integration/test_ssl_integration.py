@@ -18,8 +18,8 @@ import torch
 import yaml
 
 from tests.test_utils import resource_named
-from training_framework.engine import Configurator, TrainingEngine
-from training_framework.session import TrainingSession
+from naavik.engine import Configurator, TrainingEngine
+from naavik.session import TrainingSession
 
 _COMPONENTS_PACKAGE = "tests.integration.integration_ssl_components"
 ITERATIONS = 3

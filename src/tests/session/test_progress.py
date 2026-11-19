@@ -4,8 +4,8 @@ from types import SimpleNamespace
 
 from torch import multiprocessing
 
-from training_framework.session import runtime
-from training_framework.session.progress import ProgressBeacon
+from naavik.session import runtime
+from naavik.session.progress import ProgressBeacon
 
 
 def _beacon() -> ProgressBeacon:

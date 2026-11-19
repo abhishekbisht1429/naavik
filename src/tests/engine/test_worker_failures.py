@@ -16,12 +16,12 @@ from typing import Any
 
 import pytest
 
-from training_framework.engine import (
+from naavik.engine import (
     RemoteTraceback,
     TrainingEngine,
     WorkerFailedError,
 )
-from training_framework.engine.failures import failure_from_report
+from naavik.engine.failures import failure_from_report
 
 
 _COMPONENTS_PACKAGE = "tests.engine.worker_failure_components"

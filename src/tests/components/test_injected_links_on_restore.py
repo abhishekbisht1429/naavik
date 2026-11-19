@@ -14,12 +14,12 @@ import pytest
 from torch import nn
 
 from tests.test_utils import make_config, resource_named
-from training_framework.components import (
+from naavik.components import (
     ModuleResource,
     requires_resource,
     resource,
 )
-from training_framework.session import TrainingSession
+from naavik.session import TrainingSession
 
 
 def declare_components(*, take_in):

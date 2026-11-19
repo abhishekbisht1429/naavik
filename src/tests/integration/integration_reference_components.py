@@ -17,7 +17,7 @@ from typing import Any
 import torch
 from torch import nn
 
-from training_framework.components import (
+from naavik.components import (
     Resource,
     StatefulLifeCycleHook,
     StatefulResource,

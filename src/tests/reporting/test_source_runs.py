@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import json
 
-from training_framework.reporting import discover_runs, summarize_runs
-from training_framework.reporting.render import render_json, render_markdown
+from naavik.reporting import discover_runs, summarize_runs
+from naavik.reporting.render import render_json, render_markdown
 
-from training_framework.reporting.summary import DEFAULT_IGNORED_KEYS
+from naavik.reporting.summary import DEFAULT_IGNORED_KEYS
 
 from .helpers import config, losses, write_run
 

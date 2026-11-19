@@ -6,9 +6,9 @@ import sys
 
 import pytest
 
-from training_framework.hpc.remote import lease as lease_module
-from training_framework.hpc.remote import runtime
-from training_framework.hpc.remote.lease import (
+from naavik.hpc.remote import lease as lease_module
+from naavik.hpc.remote import runtime
+from naavik.hpc.remote.lease import (
     KeyMismatch,
     Lease,
     LeaseError,
@@ -16,7 +16,7 @@ from training_framework.hpc.remote.lease import (
     read_marker,
     write_marker,
 )
-from training_framework.hpc.remote.runtime import (
+from naavik.hpc.remote.runtime import (
     OwnerProbeRouter,
     ProcessProbe,
     SlurmJobProbe,

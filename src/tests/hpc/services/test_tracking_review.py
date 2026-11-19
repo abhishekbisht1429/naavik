@@ -10,10 +10,10 @@ from pathlib import Path
 
 import pytest
 
-from training_framework.hpc.__main__ import main
-from training_framework.hpc.ports.local import LocalExecutor
-from training_framework.hpc.services import batches as listing
-from training_framework.hpc.services.status import Row, summarize
+from naavik.hpc.__main__ import main
+from naavik.hpc.ports.local import LocalExecutor
+from naavik.hpc.services import batches as listing
+from naavik.hpc.services.status import Row, summarize
 from tests.hpc.fake_cluster import fake_cluster  # noqa: F401 (fixture)
 from tests.hpc.services.test_batches import NOW, receipt, submitted_batch, write_receipts
 from tests.hpc.test_logs_and_status import _batch

@@ -13,14 +13,14 @@ import pytest
 import torch
 
 from tests.test_utils import make_config, resource_named
-from training_framework.components import (
+from naavik.components import (
     Resource,
     Stateful,
     requires_resource,
     resource,
 )
-from training_framework.components.builtin import Checkpointer
-from training_framework.session import TrainingSession
+from naavik.components.builtin import Checkpointer
+from naavik.session import TrainingSession
 
 REBUILD_FAILS = {"fragile": False}
 CONSTRUCTOR_NEEDS_SCALE = {"scaled": False}

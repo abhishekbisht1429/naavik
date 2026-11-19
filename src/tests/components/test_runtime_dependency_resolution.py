@@ -17,7 +17,7 @@ registry fixture clears the global registries before each test.
 import pytest
 
 from tests.test_utils import make_config
-from training_framework.components import (
+from naavik.components import (
     ComponentDependencyError,
     LifecycleHook,
     Resource,
@@ -27,7 +27,7 @@ from training_framework.components import (
     resource,
     step,
 )
-from training_framework.session import TrainingSession
+from naavik.session import TrainingSession
 
 
 def declare_dependency():

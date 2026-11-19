@@ -3,10 +3,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from training_framework.components import Step, step
-from training_framework.components import component_registry
-from training_framework.engine import TrainingEngine
-from training_framework.session import (
+from naavik.components import Step, step
+from naavik.components import component_registry
+from naavik.engine import TrainingEngine
+from naavik.session import (
     Session,
     TrainingSession,
     normalize_session_config,
@@ -20,7 +20,7 @@ def _config(tmp_path, name: str = "session") -> dict:
             "rng_seed": 7,
             "sessions_dir": str(tmp_path / name),
             "max_iterations": 1,
-            "components_package": "training_framework.components.builtin",
+            "components_package": "naavik.components.builtin",
         },
     }
 
@@ -126,7 +126,7 @@ def test_engine_dispatches_mixed_session_types_and_constructor_kwargs(
             captured_sessions.append(session)
 
     monkeypatch.setattr(
-        "training_framework.engine.core.SessionProcessWrapper",
+        "naavik.engine.core.SessionProcessWrapper",
         Wrapper,
     )
     configurator = SimpleNamespace(

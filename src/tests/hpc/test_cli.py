@@ -3,7 +3,7 @@ import json
 import pytest
 import yaml
 
-from training_framework.hpc.__main__ import main
+from naavik.hpc.__main__ import main
 from tests.hpc.batch_repo import PROFILE, TRAINING_CONFIG, make_repo
 
 

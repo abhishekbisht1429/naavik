@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from training_framework.components import Resource, Step, resource, step
-from training_framework.session import TrainingSession
-from training_framework.session.runtime import report_worker_exception
+from naavik.components import Resource, Step, resource, step
+from naavik.session import TrainingSession
+from naavik.session.runtime import report_worker_exception
 
 
 class _Conn:
@@ -58,7 +58,7 @@ def _session(tmp_path, *, with_ddp: bool) -> TrainingSession:
             "sessions_dir": str(tmp_path),
             "max_iterations": 1,
             "device": "cpu",
-            "components_package": "training_framework.components.builtin",
+            "components_package": "naavik.components.builtin",
             "show_execution_graph": False,
         },
         "report_teardown_recorder": {},

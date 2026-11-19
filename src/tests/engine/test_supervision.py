@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from training_framework.engine import supervision
+from naavik.engine import supervision
 
 
 class _Process:

@@ -4,7 +4,7 @@ import pytest
 import torch
 
 from tests.test_utils import build_session
-from training_framework.components import (
+from naavik.components import (
     LifecycleHook,
     Resource,
     Step,
@@ -15,7 +15,7 @@ from training_framework.components import (
     step,
     topological_sort_of_components,
 )
-from training_framework.components.builtin import Checkpointer
+from naavik.components.builtin import Checkpointer
 
 
 class _Resource(Resource):
@@ -288,7 +288,7 @@ def test_a_rank_plan_naming_an_unconfigured_component_is_reported(tmp_path):
     assert "not active in this session" in message
 
 
-_DATASETS = "training_framework.components.builtin.datasets"
+_DATASETS = "naavik.components.builtin.datasets"
 
 
 def test_binding_to_an_optional_dataset_that_was_not_imported(tmp_path):

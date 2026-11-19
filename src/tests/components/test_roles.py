@@ -8,7 +8,7 @@ pytest collection would be removed before their tests run.
 
 import pytest
 
-from training_framework.components import (
+from naavik.components import (
     ComponentBindings,
     Hook,
     Resource,
@@ -169,9 +169,9 @@ def test_registering_wrong_category_under_declared_role_name_is_rejected():
 
 
 def test_role_public_api_is_importable():
-    from training_framework.components import RoleDeclaration as imported_role_declaration
-    from training_framework.components import role as imported_role
-    from training_framework.components import role_registry as imported_role_registry
+    from naavik.components import RoleDeclaration as imported_role_declaration
+    from naavik.components import role as imported_role
+    from naavik.components import role_registry as imported_role_registry
 
     assert imported_role is role
     assert imported_role_registry is role_registry

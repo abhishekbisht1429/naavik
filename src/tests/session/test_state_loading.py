@@ -14,11 +14,11 @@ from tests.test_utils import (
     make_config,
     resource_named,
 )
-from training_framework.components import (
+from naavik.components import (
     hook,
     resource,
     step, Stateful, SessionHook, Step, StatefulResource, )
-from training_framework.session import TrainingSession
+from naavik.session import TrainingSession
 
 
 class BaseInheritedResource(StatefulResource):

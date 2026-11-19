@@ -9,8 +9,8 @@ from pathlib import Path
 
 
 from tests.test_utils import component_named, make_config
-from training_framework.components import Resource, resource
-from training_framework.session import TrainingSession
+from naavik.components import Resource, resource
+from naavik.session import TrainingSession
 
 
 def test_a_sole_instance_has_no_suffix(tmp_path):

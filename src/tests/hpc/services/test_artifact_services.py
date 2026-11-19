@@ -10,12 +10,12 @@ from pathlib import Path
 
 import pytest
 
-from training_framework.hpc.errors import HpcError
-from training_framework.hpc.ports import ExecResult
-from training_framework.hpc.ports.local import LocalFilesystem, LocalFileTransfer, LocalProcessProbe
-from training_framework.hpc.remote.lease import write_marker
-from training_framework.hpc.services.artifacts import WorkstationProbe
-from training_framework.hpc.services.submit import submit
+from naavik.hpc.errors import HpcError
+from naavik.hpc.ports import ExecResult
+from naavik.hpc.ports.local import LocalFilesystem, LocalFileTransfer, LocalProcessProbe
+from naavik.hpc.remote.lease import write_marker
+from naavik.hpc.services.artifacts import WorkstationProbe
+from naavik.hpc.services.submit import submit
 from tests.hpc.batch_repo import CLOCK, PROFILE, TRAINING_CONFIG, FakeFacts, compile_repo, make_repo, manifest
 from tests.hpc.fakes import FakeJobProbe, FakeSubmitter
 
@@ -38,7 +38,7 @@ class ScriptedExecutor:
         if "--preflight" in argv:
             facts = {
                 "protocol_versions": [1], "interpreter": IDENTITY,
-                "framework": {"file": "/env/training_framework/__init__.py", "distribution": "0.5.0"},
+                "framework": {"file": "/env/naavik/__init__.py", "distribution": "0.5.0"},
                 "components": {p: None for p in self.plan.preflight["components_packages"]},
                 "cluster_paths": {p: True for p in self.plan.preflight["cluster_paths"]},
             }

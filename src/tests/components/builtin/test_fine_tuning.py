@@ -19,7 +19,7 @@ from torch import nn
 from torch.nn import functional
 
 from tests.test_utils import make_config, resource_named, stub_process_group
-from training_framework.components import (
+from naavik.components import (
     ModuleResource,
     Resource,
     StatefulResource,
@@ -29,8 +29,8 @@ from training_framework.components import (
     step,
     writes,
 )
-from training_framework.components.builtin import Checkpointer
-from training_framework.session import TrainingSession
+from naavik.components.builtin import Checkpointer
+from naavik.session import TrainingSession
 
 
 @pytest.fixture(autouse=True)

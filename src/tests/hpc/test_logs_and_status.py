@@ -13,19 +13,19 @@ from pathlib import Path
 import pytest
 import yaml
 
-from training_framework.hpc.__main__ import main
-from training_framework.hpc.errors import HpcError
-from training_framework.hpc.ports.local import LocalExecutor, LocalFilesystem, LocalSourceStager
-from training_framework.hpc.ports import ExecResult
-from training_framework.hpc.ports.ssh import RsyncTransfer
-from training_framework.hpc.remote.lease import Lease
-from training_framework.hpc.remote.prepare import run_prepare
-from training_framework.hpc.remote.runtime import StdlibFilesystem
-from training_framework.hpc.scheduler import get_scheduler
-from training_framework.hpc.scheduler.slurm import _task_body
-from training_framework.hpc.scheduler.slurm_submitter import job_states
-from training_framework.hpc.services.status import batch_status, format_rows
-from training_framework.hpc.services.submit import submit
+from naavik.hpc.__main__ import main
+from naavik.hpc.errors import HpcError
+from naavik.hpc.ports.local import LocalExecutor, LocalFilesystem, LocalSourceStager
+from naavik.hpc.ports import ExecResult
+from naavik.hpc.ports.ssh import RsyncTransfer
+from naavik.hpc.remote.lease import Lease
+from naavik.hpc.remote.prepare import run_prepare
+from naavik.hpc.remote.runtime import StdlibFilesystem
+from naavik.hpc.scheduler import get_scheduler
+from naavik.hpc.scheduler.slurm import _task_body
+from naavik.hpc.scheduler.slurm_submitter import job_states
+from naavik.hpc.services.status import batch_status, format_rows
+from naavik.hpc.services.submit import submit
 from tests.hpc.fake_cluster import fake_cluster, submitted_jobs  # noqa: F401 (fixture)
 from tests.hpc.fakes import FakeSubmitter, LocalScheduler
 from tests.hpc.remote import test_bootstrap, test_prepare
@@ -373,7 +373,7 @@ def test_the_final_upload_line_says_how_much_was_already_there(tmp_path, fake_rs
 
 
 def test_a_dataset_named_by_two_sources_is_hashed_once(tmp_path, monkeypatch):
-    from training_framework.hpc import __main__ as cli
+    from naavik.hpc import __main__ as cli
 
     data = tmp_path / "data"
     data.mkdir()

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from training_framework.components import (
+from naavik.components import (
     Hook,
     IterationHook,
     LifecycleHook,
@@ -14,7 +14,7 @@ from training_framework.components import (
     step,
     wraps,
 )
-from training_framework.session import TrainingSession
+from naavik.session import TrainingSession
 
 
 def _session_config(tmp_path, *, max_iterations=1):
@@ -24,7 +24,7 @@ def _session_config(tmp_path, *, max_iterations=1):
             "sessions_dir": str(tmp_path),
             "max_iterations": max_iterations,
             "device": "cpu",
-            "components_package": "training_framework.components.builtin",
+            "components_package": "naavik.components.builtin",
             "show_execution_graph": False,
         },
     }

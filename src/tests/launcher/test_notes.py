@@ -11,12 +11,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from training_framework.launcher.services.batches import BatchView, as_json, format_views
-from training_framework.reporting import discover_runs, summarize_runs
-from training_framework.reporting.render import render_json, render_markdown
-from training_framework.runs.ids import new_run_id
-from training_framework.runs.registry import RunWriter
-from training_framework.runs.views import table
+from naavik.launcher.services.batches import BatchView, as_json, format_views
+from naavik.reporting import discover_runs, summarize_runs
+from naavik.reporting.render import render_json, render_markdown
+from naavik.runs.ids import new_run_id
+from naavik.runs.registry import RunWriter
+from naavik.runs.views import table
 
 from tests.reporting.helpers import config, losses, write_run
 
@@ -112,24 +112,24 @@ def test_a_direct_runs_note_comes_from_its_run_record(tmp_path, monkeypatch):
 from tests.hpc.test_end_to_end import environment, session  # noqa: E402,F401 (fixture)
 from tests.launcher.test_host_end_to_end import here, record, wait_for  # noqa: E402,F401
 from tests.launcher.test_naavik_run import project  # noqa: E402
-from training_framework.cli import main as naavik  # noqa: E402
+from naavik.cli import main as naavik_cli  # noqa: E402
 
 
 def test_a_note_is_seen_everywhere(tmp_path, here, capsys):
     root = project(tmp_path)
-    assert naavik(["run", str(root / "configs" / "model" / "base.yaml"), "--targets", str(here),
+    assert naavik_cli(["run", str(root / "configs" / "model" / "base.yaml"), "--targets", str(here),
                    "--yes", "--detach", "--note", "attention pooling"]) == 0
     output = capsys.readouterr().out
     batch_dir = Path(output.split("submitted: ")[1].splitlines()[0])
     batch_id = batch_dir.name
     wait_for(lambda: record(batch_dir, "run/base/000"), "the task's record")
     assert record(batch_dir, "run/base/000")["note"] == "attention pooling"
-    assert naavik(["status", batch_id]) == 0
+    assert naavik_cli(["status", batch_id]) == 0
     assert "note: attention pooling" in capsys.readouterr().out.splitlines()[1]
-    assert naavik(["batches"]) == 0
+    assert naavik_cli(["batches"]) == 0
     listing = capsys.readouterr().out
     assert "note" in listing.splitlines()[0] and "attention pooling" in listing
-    assert naavik(["runs", "list"]) == 0
+    assert naavik_cli(["runs", "list"]) == 0
     assert "attention pooling" in capsys.readouterr().out
     (run,) = discover_runs(batch_dir / "tasks").runs
     assert run.note == "attention pooling"
@@ -137,7 +137,7 @@ def test_a_note_is_seen_everywhere(tmp_path, here, capsys):
 
 @pytest.mark.parametrize("live", [False, True])
 def test_an_unreachable_target_row_keeps_its_columns_beside_notes(live):
-    from training_framework.launcher.services.batches import UnreachableTarget
+    from naavik.launcher.services.batches import UnreachableTarget
 
     lines = format_views([view("a", "why")], live=live, tasks=False, origins=True,
                          unreachable=[UnreachableTarget("far", "no route")]).splitlines()

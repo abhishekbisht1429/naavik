@@ -14,7 +14,7 @@ import statistics
 
 import pytest
 
-from training_framework.reporting import (
+from naavik.reporting import (
     DEFAULT_IGNORED_KEYS,
     Metric,
     ReportError,

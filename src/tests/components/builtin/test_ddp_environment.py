@@ -17,9 +17,9 @@ import torch
 from torch import nn
 
 from tests.test_utils import make_config
-from training_framework.components import Resource, resource
-from training_framework.components.builtin import distributed
-from training_framework.session import TrainingSession
+from naavik.components import Resource, resource
+from naavik.components.builtin import distributed
+from naavik.session import TrainingSession
 
 _ENV_KEYS = ("MASTER_ADDR", "MASTER_PORT")
 

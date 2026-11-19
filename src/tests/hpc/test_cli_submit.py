@@ -11,7 +11,7 @@ from pathlib import Path
 
 import yaml
 
-from training_framework.hpc.__main__ import main
+from naavik.hpc.__main__ import main
 from tests.hpc.batch_repo import MANIFEST, PROFILE, make_repo
 from tests.hpc.fake_cluster import fake_cluster, submitted_jobs  # noqa: F401 (fixture)
 from tests.hpc.stub_framework import FILES, build_wheel, pinned_line

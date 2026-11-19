@@ -2,8 +2,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from training_framework.components.builtin.analysis import AnalysisLogger
-from training_framework.components.builtin.observability import Logger
+from naavik.components.builtin.analysis import AnalysisLogger
+from naavik.components.builtin.observability import Logger
 
 
 def _session(iteration):

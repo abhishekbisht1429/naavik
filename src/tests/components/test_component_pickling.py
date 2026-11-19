@@ -19,7 +19,7 @@ import torch
 from torch import nn
 
 from tests.test_utils import build_session, component_named, resource_named
-from training_framework.components import (
+from naavik.components import (
     ModuleResource,
     Resource,
     StatefulResource,

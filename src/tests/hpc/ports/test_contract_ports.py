@@ -9,16 +9,16 @@ from pathlib import Path
 
 import pytest
 
-from training_framework.hpc.ports.local import (
+from naavik.hpc.ports.local import (
     LocalExecutor,
     LocalFilesystem,
     LocalFileTransfer,
     LocalProcessProbe,
 )
-from training_framework.hpc.compile.plan import ExecutionContext, JobNode
-from training_framework.hpc.ports import Owner, SubmissionFailed, SubmissionUncertain
-from training_framework.hpc.ports.ssh import RsyncTransfer, SshExecutor, SshFilesystem
-from training_framework.hpc.scheduler.slurm_submitter import SlurmSubmitter
+from naavik.hpc.compile.plan import ExecutionContext, JobNode
+from naavik.hpc.ports import Owner, SubmissionFailed, SubmissionUncertain
+from naavik.hpc.ports.ssh import RsyncTransfer, SshExecutor, SshFilesystem
+from naavik.hpc.scheduler.slurm_submitter import SlurmSubmitter
 from tests.hpc.fake_cluster import fake_cluster  # noqa: F401 (fixture)
 from tests.hpc.fakes import FakeJobProbe, FakeSubmitter
 

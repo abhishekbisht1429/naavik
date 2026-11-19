@@ -13,12 +13,12 @@ import yaml
 from tests.hpc.batch_repo import make_repo
 from tests.hpc.test_end_to_end import COMPONENTS, environment, session  # noqa: F401 (fixture)
 from tests.launcher.test_host_end_to_end import here  # noqa: F401 (fixture)
-from training_framework.cli import main as naavik
-from training_framework.launcher.config.schema import PROJECT_FILE, RunDefaults
-from training_framework.launcher.errors import HpcError
-from training_framework.launcher.services.follow import DETACHED, Follower
-from training_framework.launcher.services.quick_run import parse_override, run_manifest
-from training_framework.launcher.services.status import Row
+from naavik.cli import main as naavik_cli
+from naavik.launcher.config.schema import PROJECT_FILE, RunDefaults
+from naavik.launcher.errors import HpcError
+from naavik.launcher.services.follow import DETACHED, Follower
+from naavik.launcher.services.quick_run import parse_override, run_manifest
+from naavik.launcher.services.status import Row
 
 RESOURCES = {"walltime": "00:10:00", "cpus": 2, "memory": "4G"}
 
@@ -39,7 +39,7 @@ def project(tmp_path, run_defaults=None, with_project_file=True):
 
 
 def run(root, targets, *extra):
-    return naavik(["run", str(root / "configs" / "model" / "base.yaml"),
+    return naavik_cli(["run", str(root / "configs" / "model" / "base.yaml"),
                    "--targets", str(targets), *extra])
 
 
@@ -173,9 +173,9 @@ def test_the_note_reaches_the_runs_record(tmp_path, here, capsys):
     root = project(tmp_path)
     assert run(root, here, "--yes", "--note", "attention pooling") == 0
     capsys.readouterr()
-    assert naavik(["runs", "list"]) == 0
+    assert naavik_cli(["runs", "list"]) == 0
     run_id = capsys.readouterr().out.splitlines()[1].split()[0]
-    assert naavik(["runs", "show", run_id]) == 0
+    assert naavik_cli(["runs", "show", run_id]) == 0
     assert "note     attention pooling" in capsys.readouterr().out
 
 
@@ -225,13 +225,13 @@ def test_a_config_outside_the_repository_is_refused(tmp_path, here, capsys):
     outside = tmp_path / "elsewhere.yaml"
     outside.write_text("sessions: []\n")
     assert root.exists()
-    assert naavik(["run", str(outside), "--targets", str(here), "--yes"]) == 2
+    assert naavik_cli(["run", str(outside), "--targets", str(here), "--yes"]) == 2
     assert f"{tmp_path} is not inside a Git repository" in capsys.readouterr().err
 
 
 def test_a_missing_config_is_named(tmp_path, here, capsys):
     root = project(tmp_path)
-    assert naavik(["run", str(root / "configs" / "nope.yaml"), "--targets", str(here)]) == 2
+    assert naavik_cli(["run", str(root / "configs" / "nope.yaml"), "--targets", str(here)]) == 2
     assert "nope.yaml does not exist" in capsys.readouterr().err
 
 
@@ -245,7 +245,7 @@ def test_the_code_check_refuses_a_bad_config_before_launch(tmp_path, here, capsy
 def test_ctrl_c_cancels_the_running_task_and_waits_for_it(tmp_path, here, capsys, monkeypatch):
     import signal
 
-    from training_framework.launcher.services import follow
+    from naavik.launcher.services import follow
 
     started = {"following": False, "sent": False}
     original = follow.Follower.run

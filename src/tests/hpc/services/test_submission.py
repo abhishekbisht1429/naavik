@@ -8,10 +8,10 @@ import os
 
 import pytest
 
-from training_framework.hpc.errors import HpcError
-from training_framework.hpc.ports.local import LocalFilesystem
-from training_framework.hpc.ports import ExecResult
-from training_framework.hpc.services.submit import PreflightFailed, submit
+from naavik.hpc.errors import HpcError
+from naavik.hpc.ports.local import LocalFilesystem
+from naavik.hpc.ports import ExecResult
+from naavik.hpc.services.submit import PreflightFailed, submit
 from tests.hpc.batch_repo import PROFILE, compile_repo, make_repo, manifest
 from tests.hpc.fakes import Crash, FakeSubmitter
 
@@ -58,7 +58,7 @@ class FactsExecutor:
             "protocol_versions": [self.plan.protocol_version],
             "interpreter": {"implementation": "cpython", "version": "3.12.4",
                             "executable": "/x", "platform": "linux-x86_64"},
-            "framework": {"file": "/env/training_framework/__init__.py", "distribution": "0.5.0"},
+            "framework": {"file": "/env/naavik/__init__.py", "distribution": "0.5.0"},
             "components": {p: None for p in self.plan.preflight["components_packages"]},
             "cluster_paths": {p: True for p in self.plan.preflight["cluster_paths"]},
         }

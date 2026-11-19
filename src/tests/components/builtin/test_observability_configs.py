@@ -12,9 +12,9 @@ import sys
 import pytest
 
 from tests.hpc.test_end_to_end import session
-from training_framework.components.builtin.checkpointing import Checkpointer
-from training_framework.components.builtin.observability import Logger, Tensorboard, Timer
-from training_framework.session import TrainingSession, check_session_config
+from naavik.components.builtin.checkpointing import Checkpointer
+from naavik.components.builtin.observability import Logger, Tensorboard, Timer
+from naavik.session import TrainingSession, check_session_config
 
 PACKAGE = "tests.integration.integration_training_components"
 

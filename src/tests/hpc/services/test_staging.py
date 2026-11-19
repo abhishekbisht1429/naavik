@@ -2,10 +2,10 @@ import subprocess
 
 import pytest
 
-from training_framework.hpc.errors import HpcError
-from training_framework.hpc.ports.repository import GitRepository
-from training_framework.hpc.ports.ssh import RsyncTransfer, SshExecutor
-from training_framework.hpc.services.staging import SourceStager
+from naavik.hpc.errors import HpcError
+from naavik.hpc.ports.repository import GitRepository
+from naavik.hpc.ports.ssh import RsyncTransfer, SshExecutor
+from naavik.hpc.services.staging import SourceStager
 from tests.hpc.batch_repo import make_repo
 from tests.hpc.fake_cluster import fake_cluster  # noqa: F401 (fixture)
 

@@ -15,9 +15,9 @@ import pytest
 import torch
 import yaml
 
-from training_framework.engine import Configurator, TrainingEngine
-from training_framework.runs.recorder import ENV_RUN_DIRECTORY
-from training_framework.runs.registry import list_runs, parent_of, read_run
+from naavik.engine import Configurator, TrainingEngine
+from naavik.runs.recorder import ENV_RUN_DIRECTORY
+from naavik.runs.registry import list_runs, parent_of, read_run
 
 pytestmark = pytest.mark.skipif(
     not torch.distributed.is_available() or not torch.distributed.is_gloo_available(),

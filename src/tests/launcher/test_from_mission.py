@@ -13,15 +13,15 @@ import pytest
 import yaml
 
 from tests.hpc.batch_repo import CLOCK, PROFILE, FakeFacts, make_repo
-from training_framework.launcher.compile.compiler import (
+from naavik.launcher.compile.compiler import (
     SourceCheckpoint,
     SourceMission,
     compile_plan,
 )
-from training_framework.launcher.compile.render import plan_files
-from training_framework.launcher.config.schema import parse_mission_file, parse_profiles
-from training_framework.launcher.errors import PlanError
-from training_framework.launcher.ports.repository import GitRepository
+from naavik.launcher.compile.render import plan_files
+from naavik.launcher.config.schema import parse_mission_file, parse_profiles
+from naavik.launcher.errors import PlanError
+from naavik.launcher.ports.repository import GitRepository
 
 SOURCE = "arch-20261118T090000Z-9e04101571a2"
 
@@ -286,7 +286,7 @@ def commit(root, relative, data):
 
 
 def test_an_analysis_mission_runs_over_a_trained_missions_checkpoints(tmp_path, here, capsys):
-    from training_framework.cli import main as naavik
+    from naavik.cli import main as naavik_cli
 
     root = trained_and_analysis_repo(tmp_path)
     train_dir, train_receipt = launch(root, here, capsys)
@@ -296,13 +296,13 @@ def test_an_analysis_mission_runs_over_a_trained_missions_checkpoints(tmp_path, 
 
     commit(root, "missions/eval.yaml", analysis_mission(train_receipt["batch_id"]))
     # validate lists the checkpoints, and says it did.
-    assert naavik(["validate", str(root / "missions/eval.yaml"), "--targets", str(here)]) == 0
+    assert naavik_cli(["validate", str(root / "missions/eval.yaml"), "--targets", str(here)]) == 0
     out = capsys.readouterr().out
     assert f"note: listed the checkpoints of {train_receipt['batch_id']} on host 'cluster' (read-only)" in out
     assert "ok: 2 experiment(s) in 1 job(s)" in out
     assert "not data sources" not in out              # a checkpoint path is not data to copy
 
-    assert naavik(["launch", str(root / "missions/eval.yaml"), "--targets", str(here), "--yes"]) == 0
+    assert naavik_cli(["launch", str(root / "missions/eval.yaml"), "--targets", str(here), "--yes"]) == 0
     eval_dir = Path(capsys.readouterr().out.split("submitted: ")[1].splitlines()[0])
     plan = json.loads((eval_dir / "plan.json").read_text())
     sources = [task["source"] for task in plan["tasks"]]
@@ -318,26 +318,26 @@ def test_an_analysis_mission_runs_over_a_trained_missions_checkpoints(tmp_path, 
 
 
 def test_all_checkpoints_and_an_unmatched_glob(tmp_path, here, capsys):
-    from training_framework.cli import main as naavik
+    from naavik.cli import main as naavik_cli
 
     root = trained_and_analysis_repo(tmp_path)
     train_dir, train_receipt = launch(root, here, capsys)
     wait_for(lambda: all(record(train_dir, f"cpu/seeds/00{i}") for i in (0, 1)), "the training records")
     commit(root, "missions/eval.yaml",
            analysis_mission(train_receipt["batch_id"], checkpoint="all", experiments=["cpu/seeds/000"]))
-    assert naavik(["validate", str(root / "missions/eval.yaml"), "--targets", str(here)]) == 0
+    assert naavik_cli(["validate", str(root / "missions/eval.yaml"), "--targets", str(here)]) == 0
     assert "ok: 2 experiment(s)" in capsys.readouterr().out          # iterations 2 and 4
     commit(root, "missions/eval.yaml", analysis_mission(train_receipt["batch_id"], experiments=["gpu/*"]))
-    assert naavik(["validate", str(root / "missions/eval.yaml"), "--targets", str(here)]) == 2
+    assert naavik_cli(["validate", str(root / "missions/eval.yaml"), "--targets", str(here)]) == 2
     assert "'gpu/*' matches no experiment" in capsys.readouterr().err
 
 
 def test_a_source_without_a_receipt_here_is_named(tmp_path, here, capsys):
-    from training_framework.cli import main as naavik
+    from naavik.cli import main as naavik_cli
 
     root = trained_and_analysis_repo(tmp_path)
     commit(root, "missions/eval.yaml", analysis_mission(SOURCE))
-    assert naavik(["validate", str(root / "missions/eval.yaml"), "--targets", str(here)]) == 2
+    assert naavik_cli(["validate", str(root / "missions/eval.yaml"), "--targets", str(here)]) == 2
     err = capsys.readouterr().err
     assert f"recipes[test].from_mission: no receipt for {SOURCE} on this machine" in err
 
@@ -368,7 +368,7 @@ def write_receipt(directory, **changes):
 
 
 def read(tmp_path, host, **kwargs):
-    from training_framework.launcher.services.source_mission import read_source_mission
+    from naavik.launcher.services.source_mission import read_source_mission
 
     return read_source_mission(SOURCE, hosts_profile(host), **kwargs)
 

@@ -14,7 +14,7 @@ from typing import Any, override
 
 import torch
 
-from training_framework.components import (
+from naavik.components import (
     LifecycleHook,
     Resource,
     StatefulLifeCycleHook,
@@ -28,7 +28,7 @@ from training_framework.components import (
     step,
     writes,
 )
-from training_framework.session import TrainingSession
+from naavik.session import TrainingSession
 
 
 def _append_event(path: str | None, event: str, **payload: Any) -> None:

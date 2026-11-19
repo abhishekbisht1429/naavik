@@ -2,7 +2,7 @@
 
 import re
 
-from training_framework.util import timestamp_str
+from naavik.util import timestamp_str
 
 
 def test_timestamp_str_has_expected_shape():

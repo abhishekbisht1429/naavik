@@ -9,9 +9,9 @@ from pathlib import Path
 
 import yaml
 
-from training_framework.hpc.compile.compiler import compile_plan
-from training_framework.hpc.ports.repository import GitRepository
-from training_framework.hpc.config.schema import parse_profiles
+from naavik.hpc.compile.compiler import compile_plan
+from naavik.hpc.ports.repository import GitRepository
+from naavik.hpc.config.schema import parse_profiles
 
 CLOCK = datetime(2026, 10, 9, 12, 0, 0, tzinfo=timezone.utc)
 

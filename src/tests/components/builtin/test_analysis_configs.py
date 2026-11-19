@@ -7,16 +7,16 @@ from __future__ import annotations
 
 import pytest
 
-from training_framework.components.builtin.layer_inspection import LayerInspector
-from training_framework.components.builtin.model import TrainedModel
-from training_framework.components.config_schema import drop_unread_keys
-from training_framework.session import check_session_config
+from naavik.components.builtin.layer_inspection import LayerInspector
+from naavik.components.builtin.model import TrainedModel
+from naavik.components.config_schema import drop_unread_keys
+from naavik.session import check_session_config
 
 
 def analysis(tmp_path, **components):
     return {"session_type": "analysis",
             "session_config": {"rng_seed": 0, "sessions_dir": str(tmp_path), "max_iterations": 1,
-                               "components_package": "training_framework.components.builtin",
+                               "components_package": "naavik.components.builtin",
                                "device": "cpu"},
             "trained_model": {"model_checkpoint_path": str(tmp_path / "elsewhere" / "ckpt")},
             **components}

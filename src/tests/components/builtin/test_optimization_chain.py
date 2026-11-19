@@ -21,7 +21,7 @@ from tests.test_utils import (
     resource_named,
     stub_process_group,
 )
-from training_framework.components import (
+from naavik.components import (
     IterationHook,
     StatefulResource,
     Step,
@@ -32,8 +32,8 @@ from training_framework.components import (
     step,
     writes,
 )
-from training_framework.components.builtin import GradientProcessor
-from training_framework.session import TrainingSession
+from naavik.components.builtin import GradientProcessor
+from naavik.session import TrainingSession
 
 
 @pytest.fixture(autouse=True)

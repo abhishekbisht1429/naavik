@@ -4,9 +4,9 @@ import pytest
 import torch
 from torch import nn
 
-from training_framework.components import Resource, StatefulResource, resource
-from training_framework.components.builtin import TrainedModel
-from training_framework.session import AnalysisSession, Session, TrainingSession
+from naavik.components import Resource, StatefulResource, resource
+from naavik.components.builtin import TrainedModel
+from naavik.session import AnalysisSession, Session, TrainingSession
 from tests.test_utils import resource_named
 
 
@@ -37,7 +37,7 @@ def _session_config(root, *, max_iterations=2):
         "sessions_dir": str(root),
         "max_iterations": max_iterations,
         "device": "cpu",
-        "components_package": "training_framework.components.builtin",
+        "components_package": "naavik.components.builtin",
         "show_execution_graph": False,
     }
 

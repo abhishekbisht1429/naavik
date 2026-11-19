@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from training_framework.components import (
+from naavik.components import (
     LifecycleHook,
     Resource,
     Step,
@@ -10,7 +10,7 @@ from training_framework.components import (
     resource,
     step,
 )
-from training_framework.session import TrainingSession
+from naavik.session import TrainingSession
 
 
 def _config(tmp_path, *, show_execution_graph=None):
@@ -19,7 +19,7 @@ def _config(tmp_path, *, show_execution_graph=None):
         "sessions_dir": str(tmp_path),
         "max_iterations": 3,
         "device": "cpu",
-        "components_package": "training_framework.components.builtin",
+        "components_package": "naavik.components.builtin",
     }
     if show_execution_graph is not None:
         session_config["show_execution_graph"] = show_execution_graph

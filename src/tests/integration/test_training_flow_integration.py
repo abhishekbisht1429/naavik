@@ -14,8 +14,8 @@ import pytest
 import torch
 import yaml
 
-from training_framework.engine import Configurator
-from training_framework.engine import SessionProcessWrapper, TrainingEngine
+from naavik.engine import Configurator
+from naavik.engine import SessionProcessWrapper, TrainingEngine
 
 
 _COMPONENTS_PACKAGE = "tests.integration.integration_training_components"

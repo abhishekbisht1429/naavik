@@ -11,7 +11,7 @@ import torch
 from torch import nn
 
 from tests.test_utils import build_session, make_config, resource_named
-from training_framework.components import (
+from naavik.components import (
     ComponentDependencyError,
     component_registry,
     ModuleResource,
@@ -19,9 +19,9 @@ from training_framework.components import (
     requires_resource,
     resource,
 )
-from training_framework.components.builtin import Checkpointer
-from training_framework.engine import load_session_for_worker
-from training_framework.session import AnalysisSession, TrainingSession
+from naavik.components.builtin import Checkpointer
+from naavik.engine import load_session_for_worker
+from naavik.session import AnalysisSession, TrainingSession
 
 
 class PicklableEncoder(ModuleResource):
@@ -535,7 +535,7 @@ def test_a_composed_model_is_loaded_for_analysis_by_trained_model(tmp_path):
             "sessions_dir": str(tmp_path / "analysis"),
             "max_iterations": 1,
             "device": "cpu",
-            "components_package": "training_framework.components.builtin",
+            "components_package": "naavik.components.builtin",
         },
         "trained_model": {"model_checkpoint_path": str(checkpoint_path)},
     })

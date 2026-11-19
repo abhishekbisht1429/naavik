@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import pytest
 import yaml
 
-from training_framework.components import (
+from naavik.components import (
     Hook,
     Resource,
     Step,
@@ -20,13 +20,13 @@ from training_framework.components import (
     resource,
     step,
 )
-from training_framework.engine import (
+from naavik.engine import (
     Configurator,
     LaunchTopology,
     TrainingEngine,
     load_session_for_worker,
 )
-from training_framework.session import AnalysisSession, TrainingSession
+from naavik.session import AnalysisSession, TrainingSession
 from tests.test_utils import (
     COMPONENTS_PACKAGE,
     configurator_for,
@@ -41,7 +41,7 @@ def _config(tmp_path, entries):
             "sessions_dir": str(tmp_path),
             "max_iterations": 1,
             "device": "cpu",
-            "components_package": "training_framework.components.builtin",
+            "components_package": "naavik.components.builtin",
             "show_execution_graph": False,
         },
         **entries,

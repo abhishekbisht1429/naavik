@@ -10,8 +10,8 @@ import pytest
 import torch
 import yaml
 
-from training_framework.engine import Configurator, TrainingEngine
-from training_framework.session import TrainingSession
+from naavik.engine import Configurator, TrainingEngine
+from naavik.session import TrainingSession
 from tests.test_utils import (
     iteration_events,
     register_test_components,

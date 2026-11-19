@@ -10,30 +10,30 @@ from pathlib import Path
 
 import pytest
 
-import training_framework.launcher as launcher
+import naavik.launcher as launcher
 from tests.hpc.batch_repo import PROFILE, compile_repo, make_repo, manifest
 from tests.hpc.fakes import FakeSubmitter
-from training_framework.launcher.compile.plan import ExecutionContext, JobNode
-from training_framework.launcher.compile.render import plan_files
-from training_framework.launcher.errors import HpcError
-from training_framework.launcher.ports.local import LocalExecutor, LocalFilesystem
-from training_framework.launcher.ports.ssh import RsyncTransfer, SshExecutor, SshFilesystem
-from training_framework.launcher.ports.targets import (
+from naavik.launcher.compile.plan import ExecutionContext, JobNode
+from naavik.launcher.compile.render import plan_files
+from naavik.launcher.errors import HpcError
+from naavik.launcher.ports.local import LocalExecutor, LocalFilesystem
+from naavik.launcher.ports.ssh import RsyncTransfer, SshExecutor, SshFilesystem
+from naavik.launcher.ports.targets import (
     Target,
     ports_for,
     target_of_profile,
     target_of_receipt,
 )
-from training_framework.launcher.scheduler import (
+from naavik.launcher.scheduler import (
     LEGACY_SCHEDULER,
     SCHEDULERS,
     SchedulerBundle,
     get_scheduler,
     script_path,
 )
-from training_framework.launcher.scheduler.common import task_body
-from training_framework.launcher.config.schema import parse_profiles
-from training_framework.launcher.services import submit as submitting
+from naavik.launcher.scheduler.common import task_body
+from naavik.launcher.config.schema import parse_profiles
+from naavik.launcher.services import submit as submitting
 
 LAUNCHER = Path(launcher.__file__).parent
 

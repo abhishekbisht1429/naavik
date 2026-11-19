@@ -11,9 +11,9 @@ import pytest
 import yaml
 
 from tests.hpc.batch_repo import PROFILE, compile_repo, make_repo
-from training_framework.launcher.compile.render import plan_files
-from training_framework.launcher.config.schema import parse_profiles
-from training_framework.launcher.errors import PlanError
+from naavik.launcher.compile.render import plan_files
+from naavik.launcher.config.schema import parse_profiles
+from naavik.launcher.errors import PlanError
 
 IDENTITY = PROFILE["profiles"]["cluster"]["env"]["site_python_identity"]
 
@@ -162,9 +162,9 @@ def config_home(tmp_path, monkeypatch):
 
 
 def validate(root):
-    from training_framework.cli import main as naavik
+    from naavik.cli import main as naavik_cli
 
-    return naavik(["validate", str(root / "batch.yaml")])
+    return naavik_cli(["validate", str(root / "batch.yaml")])
 
 
 def test_hosts_yaml_is_the_file_read(tmp_path, config_home, capsys):

@@ -9,7 +9,7 @@ from dataclasses import dataclass
 import pytest
 
 from tests.test_utils import build_session, component_named, component_names
-from training_framework.components import (
+from naavik.components import (
     ComponentDependencyError,
     ExtendableComponent,
     Resource,

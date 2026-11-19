@@ -1,10 +1,10 @@
 import pytest
 
-from training_framework.hpc.config.python_rules import (
+from naavik.hpc.config.python_rules import (
     interpreter_expectation,
     parse_requires_python,
 )
-from training_framework.hpc.config.schema import EnvSettings, PythonIdentity
+from naavik.hpc.config.schema import EnvSettings, PythonIdentity
 
 IDENTITY = PythonIdentity("cpython", "3.12.4", "/opt/bin/python3", "linux-x86_64")
 

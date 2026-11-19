@@ -8,13 +8,13 @@ from typing import Any
 
 import pytest
 
-from training_framework.engine import (
+from naavik.engine import (
     SessionProcessWrapper,
     TrainingEngine,
     load_session_for_worker,
 )
-from training_framework.engine import worker as worker_module
-from training_framework.session import TrainingSession
+from naavik.engine import worker as worker_module
+from naavik.session import TrainingSession
 from tests.test_utils import (
     COMPONENTS_PACKAGE,
     iteration_events,
@@ -428,11 +428,11 @@ def test_debug_mode_starts_and_joins_workers_without_monitoring(
             self.process.alive = False
 
     monkeypatch.setattr(
-        "training_framework.engine.core.SessionProcessWrapper",
+        "naavik.engine.core.SessionProcessWrapper",
         Wrapper,
     )
     monkeypatch.setattr(
-        "training_framework.engine.core.monitor_processes",
+        "naavik.engine.core.monitor_processes",
         lambda *args, **kwargs: monitor_calls.append(True),
     )
     engine_config = _EngineConfig(

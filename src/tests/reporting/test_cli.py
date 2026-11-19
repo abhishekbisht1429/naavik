@@ -1,4 +1,4 @@
-"""`python -m training_framework.reporting summarize`."""
+"""`python -m naavik.reporting summarize`."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ import json
 import subprocess
 import sys
 
-from training_framework.reporting import DEFAULT_IGNORED_KEYS
-from training_framework.reporting.__main__ import main
+from naavik.reporting import DEFAULT_IGNORED_KEYS
+from naavik.reporting.__main__ import main
 
 from .helpers import SESSION, config, losses, write_run
 
@@ -93,7 +93,7 @@ def test_runs_as_a_module(tmp_path):
     _runs(tmp_path)
 
     result = subprocess.run(
-        [sys.executable, "-m", "training_framework.reporting", "summarize", str(tmp_path),
+        [sys.executable, "-m", "naavik.reporting", "summarize", str(tmp_path),
          "--no-seed-groups", "--format", "csv"],
         capture_output=True, text=True, check=False,
     )

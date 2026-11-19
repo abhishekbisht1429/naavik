@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from training_framework.components.builtin.datasets.cifar10 import CIFAR10
-from training_framework.components.builtin.datasets.flowers102 import Flowers102
-from training_framework.components.builtin.datasets.imagenet import ImageNet
-from training_framework.components.builtin.datasets.inaturalist import INaturalist
-from training_framework.components.builtin.datasets.stanford_cars import StanfordCars
-from training_framework.data import DataError, ensure, requirement_key, requirements_of
+from naavik.components.builtin.datasets.cifar10 import CIFAR10
+from naavik.components.builtin.datasets.flowers102 import Flowers102
+from naavik.components.builtin.datasets.imagenet import ImageNet
+from naavik.components.builtin.datasets.inaturalist import INaturalist
+from naavik.components.builtin.datasets.stanford_cars import StanfordCars
+from naavik.data import DataError, ensure, requirement_key, requirements_of
 
 
 def declared(cls, split, root="/data/x"):

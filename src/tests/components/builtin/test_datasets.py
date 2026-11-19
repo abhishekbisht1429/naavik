@@ -26,7 +26,7 @@ from tests.test_utils import (
 )
 from torch import nn
 
-from training_framework.components import (
+from naavik.components import (
     StatefulResource,
     Step,
     reads,
@@ -34,14 +34,14 @@ from training_framework.components import (
     step,
     writes,
 )
-from training_framework.components.builtin.datasets import (
+from naavik.components.builtin.datasets import (
     CIFAR10,
     Flowers102,
     ImageNet,
     INaturalist,
     StanfordCars,
 )
-from training_framework.session import TrainingSession
+from naavik.session import TrainingSession
 
 
 def _write_image(path, shade: int, size=(40, 30)) -> None:
@@ -375,7 +375,7 @@ def test_a_training_session_loads_labelled_image_batches(tmp_path, monkeypatch):
     # The registry is reset around every test; reloading the module registers
     # `imagenet` again, as importing a components package does in a run.
     importlib.reload(
-        importlib.import_module("training_framework.components.builtin.datasets.imagenet")
+        importlib.import_module("naavik.components.builtin.datasets.imagenet")
     )
     seen = []
 
@@ -442,8 +442,8 @@ def test_a_training_session_loads_labelled_image_batches(tmp_path, monkeypatch):
 
 
 def test_the_optional_component_table_lists_exactly_these_datasets():
-    from training_framework.components.builtin import datasets
-    from training_framework.components.optional import (
+    from naavik.components.builtin import datasets
+    from naavik.components.optional import (
         OPTIONAL_COMPONENTS,
         VISION_DATASETS,
     )
@@ -517,7 +517,7 @@ def registered_datasets():
     every test, as importing a components package does in a run."""
     for module, _ in _DATASET_MODULES.values():
         importlib.reload(importlib.import_module(
-            f"training_framework.components.builtin.datasets.{module}"
+            f"naavik.components.builtin.datasets.{module}"
         ))
 
 
@@ -526,7 +526,7 @@ def _dataset_class(name):
     pickle finds by name."""
     module, class_name = _DATASET_MODULES[name]
     return getattr(importlib.import_module(
-        f"training_framework.components.builtin.datasets.{module}"
+        f"naavik.components.builtin.datasets.{module}"
     ), class_name)
 
 
@@ -562,7 +562,7 @@ def test_a_pickled_dataset_reads_the_same_samples(
 def test_a_checkpointed_session_restores_its_dataset_instance(
         tmp_path, monkeypatch, fake_sources, registered_datasets, name,
 ):
-    from training_framework.components.builtin import Checkpointer
+    from naavik.components.builtin import Checkpointer
 
     stub_process_group(monkeypatch)
 
@@ -656,7 +656,7 @@ class PixelSource(Step):
 def _normalizing_session(tmp_path, dataset_config):
     for module in ("imagenet", "normalization"):
         importlib.reload(importlib.import_module(
-            f"training_framework.components.builtin.datasets.{module}"
+            f"naavik.components.builtin.datasets.{module}"
         ))
     step("pixel_source")(PixelSource)
     return build_session(
@@ -773,7 +773,7 @@ def test_normalize_images_needs_two_different_keys(tmp_path):
     config = _noise_config(tmp_path, image_dtype="uint8")
     for module in ("imagenet", "normalization"):
         importlib.reload(importlib.import_module(
-            f"training_framework.components.builtin.datasets.{module}"
+            f"naavik.components.builtin.datasets.{module}"
         ))
 
     with pytest.raises(ValueError, match="must be different keys"):
@@ -793,7 +793,7 @@ def test_a_training_session_normalizes_uint8_batches_after_loading_them(
     stub_process_group(monkeypatch)
     for module in ("imagenet", "normalization"):
         importlib.reload(importlib.import_module(
-            f"training_framework.components.builtin.datasets.{module}"
+            f"naavik.components.builtin.datasets.{module}"
         ))
     seen = []
 
@@ -995,7 +995,7 @@ def test_a_pickled_normalize_images_normalizes_alike(tmp_path):
 
 
 def test_a_checkpointed_session_restores_normalize_images(tmp_path):
-    from training_framework.components.builtin import Checkpointer
+    from naavik.components.builtin import Checkpointer
 
     session = _normalizing_session(
         tmp_path, _noise_config(tmp_path, image_dtype="uint8"),

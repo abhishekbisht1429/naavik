@@ -1,0 +1,374 @@
+from __future__ import annotations
+
+from copy import deepcopy
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, ClassVar, override
+
+import torch
+from torch.utils.data import DataLoader, default_collate
+
+from naavik.components import (
+    EpochSource,
+    Resource,
+    StatefulResource,
+)
+from naavik.dataloader import (
+    DistributedInfiniteSampler,
+    epoch_size,
+    finite_batches,
+)
+from naavik.components import requires_resource, resource, role
+
+if TYPE_CHECKING:
+    from naavik.session import Session
+
+
+role(
+    "dataset",
+    Resource,
+    description=(
+        "the training dataset; a Resource yielding samples for "
+        "DataManager's DataLoader"
+    ),
+    session_type="training",
+)
+
+
+class _ManagedDataIterator:
+    """Track delivered batches and own the DataLoader iterator lifecycle."""
+
+    def __init__(self, data_manager: DataManager, dataloader: DataLoader):
+        self._data_manager = data_manager
+        self._iterator = iter(dataloader)
+        self._closed = False
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self._closed:
+            raise StopIteration
+
+        batch = next(self._iterator)
+        self._data_manager._record_batch_delivery()
+        return batch
+
+    def close(self) -> None:
+        if self._closed:
+            return
+
+        self._closed = True
+        self._iterator = None
+
+
+def _check_loader_settings(config) -> None:
+    """The settings both data managers share."""
+    batch_size = config.batch_size
+    if isinstance(batch_size, bool) or not isinstance(batch_size, int) or batch_size <= 0:
+        raise ValueError("DataManager batch_size must be a positive integer")
+    num_workers = config.num_workers
+    if isinstance(num_workers, bool) or not isinstance(num_workers, int) or num_workers < 0:
+        raise ValueError("DataManager num_workers must be a non-negative integer")
+    if not isinstance(config.pin_memory, bool):
+        raise TypeError("DataManager pin_memory must be a boolean")
+
+
+def world_size_problem(batch_size: int, world_size: int) -> str | None:
+    """Why `batch_size` (global) cannot be split over `world_size` ranks."""
+    if batch_size < world_size:
+        return ("DataManager batch_size must be at least the DDP world_size "
+                "so every rank receives a sample")
+    if batch_size % world_size != 0:
+        return "DataManager batch_size must be divisible by the DDP world_size"
+    return None
+
+
+@dataclass(frozen=True)
+class DataManagerConfig:
+    """The training `data_manager` config: `batch_size` is the global batch."""
+
+    batch_size: Any
+    num_workers: Any = 0
+    pin_memory: Any = False
+    #: Restoring a checkpoint from before this schema: keys the data manager
+    #: never read are dropped with a warning, so the checkpoint still resumes.
+    unknown_keys_dropped_on_restore: ClassVar[bool] = True
+
+    def __post_init__(self) -> None:
+        _check_loader_settings(self)
+
+
+@dataclass(frozen=True)
+class AnalysisDataManagerConfig:
+    """The analysis `data_manager` config."""
+
+    batch_size: Any
+    num_workers: Any = 0
+    pin_memory: Any = False
+    drop_last: Any = False
+    unknown_keys_dropped_on_restore: ClassVar[bool] = True
+
+    def __post_init__(self) -> None:
+        _check_loader_settings(self)
+        if not isinstance(self.drop_last, bool):
+            raise TypeError("DataManager drop_last must be a boolean")
+
+
+def _parsed(component_class, config):
+    from naavik.components.config_schema import parse_component_config
+
+    return parse_component_config(component_class, config)
+
+
+@requires_resource("ddp")
+@requires_resource("dataset")
+@resource("data_manager", session_type="training")
+class DataManager(StatefulResource, EpochSource):
+
+    config_schema = DataManagerConfig
+
+    def __init__(self, config):
+        settings = _parsed(type(self), config)
+        self._batch_size = settings.batch_size
+        self._num_workers = settings.num_workers
+        self._pin_memory = settings.pin_memory
+        self._data_iter: _ManagedDataIterator | None = None
+        self._sampler_state: dict[str, Any] | None = None
+        self._local_batch_size: int | None = None
+        self._epoch_size: int | None = None
+
+    @property
+    def batch_size(self):
+        return self._batch_size
+
+    @property
+    def data_iter(self):
+        return self._data_iter
+
+    def _validate_setup(self, dataset_size: int, world_size: int) -> None:
+        if dataset_size <= 0:
+            raise ValueError("DataManager requires a non-empty dataset")
+        if (
+                isinstance(world_size, bool)
+                or not isinstance(world_size, int)
+                or world_size <= 0
+        ):
+            raise ValueError(
+                "DataManager requires a positive integer world_size"
+            )
+        if (problem := world_size_problem(self.batch_size, world_size)) is not None:
+            raise ValueError(problem)
+
+    @override
+    def iterations_for_epochs(self, epochs: int) -> int:
+        """Iterations for `epochs` passes of the sampler, padding included.
+
+        An epoch is what the sampler counts as one: the dataset padded to a
+        multiple of the world size. The sampler never stops between epochs,
+        so a batch can straddle two; rounding up makes every sample seen at
+        least `epochs` times.
+        """
+        dataset_size = len(self.get_dependency("dataset"))
+        world_size = self.get_dependency("ddp").world_size
+        self._validate_setup(dataset_size, world_size)
+        samples = epochs * epoch_size(dataset_size, world_size)
+        return -(-samples // self.batch_size)
+
+    def _restore_sampler(
+            self,
+            sampler: DistributedInfiniteSampler,
+            dataset_size: int,
+    ) -> None:
+        if self._sampler_state is None:
+            return
+
+        restored_state = deepcopy(self._sampler_state)
+        if restored_state.get("num_samples") != dataset_size:
+            raise ValueError(
+                "Cannot restore DataManager state with a different dataset "
+                "size"
+            )
+
+        # The world size is deliberately not checked. The sampler rebases the
+        # saved position onto whatever topology this launch resolved, so a
+        # run trained on eight ranks resumes on four.
+        sampler.set_state(restored_state)
+
+    def _record_batch_delivery(self) -> None:
+        if (
+                self._sampler_state is None
+                or self._local_batch_size is None
+                or self._epoch_size is None
+        ):
+            raise RuntimeError("DataManager is not set up")
+
+        # Every rank delivers its slice of the same global batch, so the
+        # epoch advances by the global batch size on every rank alike. The
+        # position is tracked globally, which is the form it is saved in.
+        position = (
+            self._sampler_state["consumed_in_epoch"] + self.batch_size
+        )
+        completed_epochs, consumed = divmod(position, self._epoch_size)
+        self._sampler_state["epoch"] += completed_epochs
+        self._sampler_state["consumed_in_epoch"] = consumed
+
+    @override
+    def setup(self, session: Session):
+        ddp = self.get_dependency("ddp")
+        dataset = self.get_dependency("dataset")
+        dataset_size = len(dataset)
+        world_size = ddp.world_size
+        self._validate_setup(dataset_size, world_size)
+        collate_fn = getattr(dataset, "collate_fn", default_collate)
+        if not callable(collate_fn):
+            raise TypeError(
+                f"Dataset resource '{type(dataset).__name__}' collate_fn "
+                "must be callable"
+            )
+
+        # The shuffle follows the session's seed, so sessions that differ in
+        # rng_seed also see the data in a different order. A restored state
+        # keeps the seed it was saved with, so a resumed run continues the
+        # order it started.
+        sampler = DistributedInfiniteSampler(
+            num_samples=dataset_size,
+            rank=ddp.rank,
+            world_size=world_size,
+            seed=session.session_config.rng_seed,
+        )
+        self._restore_sampler(sampler, dataset_size)
+
+        self._local_batch_size = self.batch_size // world_size
+        self._epoch_size = sampler.total_size
+        self._sampler_state = sampler.get_state()
+
+        dataloader = DataLoader(
+            dataset,
+            batch_size=self._local_batch_size,
+            sampler=sampler,
+            collate_fn=collate_fn,
+            num_workers=self._num_workers,
+            pin_memory=self._pin_memory,
+        )
+        self._data_iter = _ManagedDataIterator(self, dataloader)
+
+    @override
+    def teardown(self, session: Session):
+        try:
+            if self._data_iter is not None:
+                self._data_iter.close()
+        finally:
+            self._data_iter = None
+            self._local_batch_size = None
+            self._epoch_size = None
+
+    @override
+    def get_state(self) -> dict[str, Any]:
+        return {
+            "batch_size": self.batch_size,
+            "sampler_state": deepcopy(self._sampler_state),
+        }
+
+    @override
+    def set_state(self, state: dict[str, Any]) -> None:
+        if state["batch_size"] != self.batch_size:
+            raise ValueError(
+                "Cannot restore DataManager state with a different batch_size"
+            )
+        self._sampler_state = deepcopy(state["sampler_state"])
+
+
+role(
+    "dataset",
+    Resource,
+    description=(
+        "the analysis dataset; a Resource yielding samples for the analysis "
+        "DataManager's DataLoader"
+    ),
+    session_type="analysis",
+)
+
+
+@requires_resource("dataset")
+@resource("data_manager", session_type="analysis")
+class AnalysisDataManager(Resource, EpochSource):
+    """Iterate a dataset once, in order, for analysis.
+
+    Unlike the training ``DataManager``, it needs no ``ddp`` resource, does
+    not shuffle or repeat, and keeps no resumable state. Exhausting
+    ``data_iter`` raises ``StopIteration`` from ``next()``, which ends the
+    analysis session.
+    """
+
+    config_schema = AnalysisDataManagerConfig
+
+    def __init__(self, config):
+        settings = _parsed(type(self), config)
+        self._batch_size = settings.batch_size
+        self._num_workers = settings.num_workers
+        self._pin_memory = settings.pin_memory
+        self._drop_last = settings.drop_last
+        self._dataloader: DataLoader | None = None
+        self._data_iter = None
+
+    @property
+    def batch_size(self):
+        return self._batch_size
+
+    @property
+    def dataloader(self):
+        return self._dataloader
+
+    @property
+    def data_iter(self):
+        return self._data_iter
+
+    def _validate_setup(self, dataset_size: int) -> None:
+        if dataset_size <= 0:
+            raise ValueError("DataManager requires a non-empty dataset")
+
+    @override
+    def iterations_for_epochs(self, epochs: int) -> int:
+        """The batches of the one in-order pass this manager makes."""
+        if epochs != 1:
+            raise ValueError(
+                "The analysis DataManager goes through its dataset once, "
+                f"without repeating, so it runs exactly 1 epoch, not {epochs}"
+            )
+        dataset_size = len(self.get_dependency("dataset"))
+        self._validate_setup(dataset_size)
+        batches = finite_batches(dataset_size, self.batch_size, self._drop_last)
+        if batches <= 0:
+            raise ValueError(
+                f"The analysis DataManager delivers no batch: drop_last drops "
+                f"all {dataset_size} samples, fewer than batch_size "
+                f"{self.batch_size}"
+            )
+        return batches
+
+    @override
+    def setup(self, session: Session):
+        dataset = self.get_dependency("dataset")
+        self._validate_setup(len(dataset))
+        collate_fn = getattr(dataset, "collate_fn", default_collate)
+        if not callable(collate_fn):
+            raise TypeError(
+                f"Dataset resource '{type(dataset).__name__}' collate_fn "
+                "must be callable"
+            )
+
+        self._dataloader = DataLoader(
+            dataset,
+            batch_size=self.batch_size,
+            shuffle=False,
+            drop_last=self._drop_last,
+            collate_fn=collate_fn,
+            num_workers=self._num_workers,
+            pin_memory=self._pin_memory,
+        )
+        self._data_iter = iter(self._dataloader)
+
+    @override
+    def teardown(self, session: Session):
+        self._data_iter = None
+        self._dataloader = None

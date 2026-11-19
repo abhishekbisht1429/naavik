@@ -17,19 +17,19 @@ import yaml
 from tests.hpc.services.test_resume import FS, PreflightExecutor, plan_json
 from tests.hpc.test_end_to_end import environment, session  # noqa: F401 (fixture)
 from tests.launcher.test_host_end_to_end import here, launch, record, repo, wait_for  # noqa: F401
-from training_framework.cli import main as naavik
-from training_framework.launcher.config.schema import Resources
-from training_framework.launcher.config.topology import check_topology
-from training_framework.launcher.errors import HpcError
-from training_framework.launcher.remote import host_runner
-from training_framework.launcher.services import resume as resuming
+from naavik.cli import main as naavik_cli
+from naavik.launcher.config.schema import Resources
+from naavik.launcher.config.topology import check_topology
+from naavik.launcher.errors import HpcError
+from naavik.launcher.remote import host_runner
+from naavik.launcher.services import resume as resuming
 
 SRC = Path(__file__).resolve().parents[2]
 
 
 def _status(name, capsys) -> dict[str, str]:
     """Task or step name -> its `status` line."""
-    assert naavik(["status", name]) == 0
+    assert naavik_cli(["status", name]) == 0
     lines = capsys.readouterr().out.splitlines()[2:]          # batch line, header
     return {line.split()[0]: line for line in lines if line.strip()}
 
@@ -57,26 +57,26 @@ def _two_tasks(tmp_path, here, capsys, lengths=(1_000_000, 3)):
 def test_logs_prints_a_tasks_log_and_names_what_exists(tmp_path, here, capsys):
     batch_dir, receipt = launch(repo(tmp_path, session(), [1]), here, capsys)
     wait_for(lambda: record(batch_dir, "cpu/seeds/000"), "the task's record")
-    assert naavik(["logs", batch_dir.name, "cpu/seeds/000"]) == 0
+    assert naavik_cli(["logs", batch_dir.name, "cpu/seeds/000"]) == 0
     output = capsys.readouterr().out
     assert "task cpu/seeds/000" in output and "finished: exit 0" in output
-    assert naavik(["logs", batch_dir.name, "cpu/seeds/000", "--attempt", "2"]) == 2
+    assert naavik_cli(["logs", batch_dir.name, "cpu/seeds/000", "--attempt", "2"]) == 2
     assert "has no attempt 2 (attempts: 1)" in capsys.readouterr().err
-    assert naavik(["logs", batch_dir.name, "cpu/seeds/999"]) == 2
+    assert naavik_cli(["logs", batch_dir.name, "cpu/seeds/999"]) == 2
     assert "not an experiment or step of this mission (have: cpu/seeds/000)" in capsys.readouterr().err
 
 
 def test_logs_follow_streams_until_interrupted(tmp_path, here, capsys):
     batch_dir, _ = _two_tasks(tmp_path, here, capsys)
     follower = subprocess.Popen(
-        [sys.executable, "-m", "training_framework.cli", "logs", batch_dir.name, "cpu/seeds/000",
+        [sys.executable, "-m", "naavik.cli", "logs", batch_dir.name, "cpu/seeds/000",
          "--follow"], env={**os.environ, "PYTHONPATH": str(SRC)},
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     first = follower.stdout.readline()
     assert "[hpc" in first
     follower.send_signal(signal.SIGINT)
     assert follower.wait(timeout=30) == 0
-    assert naavik(["cancel", batch_dir.name, "--yes"]) == 0
+    assert naavik_cli(["cancel", batch_dir.name, "--yes"]) == 0
 
 
 # cancel ------------------------------------------------------------------------------
@@ -84,7 +84,7 @@ def test_logs_follow_streams_until_interrupted(tmp_path, here, capsys):
 
 def test_cancelling_a_batch_stops_its_running_task_cooperatively(tmp_path, here, capsys):
     batch_dir, receipt = _two_tasks(tmp_path, here, capsys)
-    assert naavik(["cancel", batch_dir.name, "--yes"]) == 0
+    assert naavik_cli(["cancel", batch_dir.name, "--yes"]) == 0
     assert "cancelled group-cpu" in capsys.readouterr().out
     wait_for(lambda: record(batch_dir, "cpu/seeds/000"), "the stopped task's record")
     assert record(batch_dir, "cpu/seeds/000")["interrupted"] is True
@@ -99,7 +99,7 @@ def test_cancelling_a_batch_stops_its_running_task_cooperatively(tmp_path, here,
 
 def test_cancelling_one_task_leaves_the_others_and_shows_it_cancelled(tmp_path, here, capsys):
     batch_dir, receipt = _two_tasks(tmp_path, here, capsys)
-    assert naavik(["cancel", batch_dir.name, "--task", "cpu/seeds/001", "--yes"]) == 0
+    assert naavik_cli(["cancel", batch_dir.name, "--task", "cpu/seeds/001", "--yes"]) == 0
     capsys.readouterr()
     ref = receipt["nodes"]["group-cpu"]["job_ref"]
     # The runner applies a task's cancel at its next poll.
@@ -107,7 +107,7 @@ def test_cancelling_one_task_leaves_the_others_and_shows_it_cancelled(tmp_path, 
     wait_for(lambda: job()["elements"]["1"] == "cancelled", "the runner to drop task 001")
     states = _status(batch_dir.name, capsys)
     assert " running " in states["cpu/seeds/000"] and " cancelled" in states["cpu/seeds/001"]
-    assert naavik(["cancel", batch_dir.name, "--yes"]) == 0    # stop task 000 too
+    assert naavik_cli(["cancel", batch_dir.name, "--yes"]) == 0    # stop task 000 too
     wait_for(lambda: host_runner.read_job(host_runner.state_dir(), ref)["final"], "the job to end")
     assert record(batch_dir, "cpu/seeds/001") is None             # it never ran
 
@@ -117,10 +117,10 @@ def test_cancel_asks_unless_told_not_to_and_skips_what_ended(tmp_path, here, cap
     wait_for(lambda: record(batch_dir, "cpu/seeds/000"), "the task's record")
     ref = json.loads((batch_dir / "receipt.json").read_text())["nodes"]["group-cpu"]["job_ref"]
     wait_for(lambda: not host_runner.ref_alive(ref), "the runner to exit")
-    assert naavik(["cancel", batch_dir.name]) == 0
+    assert naavik_cli(["cancel", batch_dir.name]) == 0
     output = capsys.readouterr().out
     assert "already ended" in output and "nothing to cancel" in output
-    assert naavik(["cancel", batch_dir.name, "--task", "cpu/seeds/000"]) == 0
+    assert naavik_cli(["cancel", batch_dir.name, "--task", "cpu/seeds/000"]) == 0
     output = capsys.readouterr().out
     assert f"cpu/seeds/000: its job {ref}_0 already ended" in output and "nothing to cancel" in output
 
@@ -128,9 +128,9 @@ def test_cancel_asks_unless_told_not_to_and_skips_what_ended(tmp_path, here, cap
 def test_a_non_interactive_cancel_needs_yes(tmp_path, here, capsys, monkeypatch):
     batch_dir, _ = _two_tasks(tmp_path, here, capsys)
     monkeypatch.setattr("sys.stdin", open("/dev/null"))
-    assert naavik(["cancel", batch_dir.name]) == 1
+    assert naavik_cli(["cancel", batch_dir.name]) == 1
     assert "pass --yes" in capsys.readouterr().err
-    assert naavik(["cancel", batch_dir.name, "--yes"]) == 0
+    assert naavik_cli(["cancel", batch_dir.name, "--yes"]) == 0
 
 
 # resume --restart -------------------------------------------------------------------------
@@ -138,17 +138,17 @@ def test_a_non_interactive_cancel_needs_yes(tmp_path, here, capsys, monkeypatch)
 
 def test_a_task_that_never_ran_restarts_from_its_config(tmp_path, here, capsys):
     batch_dir, receipt = _two_tasks(tmp_path, here, capsys)
-    assert naavik(["cancel", batch_dir.name, "--task", "cpu/seeds/001", "--yes"]) == 0
-    assert naavik(["cancel", batch_dir.name, "--yes"]) == 0
+    assert naavik_cli(["cancel", batch_dir.name, "--task", "cpu/seeds/001", "--yes"]) == 0
+    assert naavik_cli(["cancel", batch_dir.name, "--yes"]) == 0
     ref = receipt["nodes"]["group-cpu"]["job_ref"]
     wait_for(lambda: not host_runner.ref_alive(ref), "the first attempt to end")
     capsys.readouterr()
 
-    assert naavik(["resume", batch_dir.name, "--task", "cpu/seeds/001", "--yes"]) == 2
+    assert naavik_cli(["resume", batch_dir.name, "--task", "cpu/seeds/001", "--yes"]) == 2
     captured = capsys.readouterr()
     assert "skip cpu/seeds/001" in captured.out and "--restart runs experiments" in captured.err
 
-    assert naavik(["resume", batch_dir.name, "--task", "cpu/seeds/001", "--restart", "--yes"]) == 0
+    assert naavik_cli(["resume", batch_dir.name, "--task", "cpu/seeds/001", "--restart", "--yes"]) == 0
     assert "restart from its config (no checkpoint)" in capsys.readouterr().out
     wait_for(lambda: record(batch_dir, "cpu/seeds/001"), "the restarted task's record")
     restarted = record(batch_dir, "cpu/seeds/001")
@@ -196,7 +196,7 @@ def test_the_device_must_be_one_the_task_will_see(device, gpus, problem):
 def test_a_task_that_asks_for_no_gpu_sees_none(tmp_path, here, capsys):
     batch_dir, _ = launch(repo(tmp_path, session(), [1]), here, capsys)
     wait_for(lambda: record(batch_dir, "cpu/seeds/000"), "the task's record")
-    assert naavik(["logs", batch_dir.name, "cpu/seeds/000"]) == 0
+    assert naavik_cli(["logs", batch_dir.name, "cpu/seeds/000"]) == 0
     # The task's log line ends with its CUDA_VISIBLE_DEVICES: empty, not unset.
     (line,) = [line for line in capsys.readouterr().out.splitlines() if "| GPUs" in line]
     assert line.endswith("| GPUs ")
@@ -204,7 +204,7 @@ def test_a_task_that_asks_for_no_gpu_sees_none(tmp_path, here, capsys):
 
 @pytest.mark.parametrize("attempt", [1, 2])
 def test_a_cancelled_task_shows_cancelled_while_its_job_runs_on(attempt):
-    from training_framework.launcher.services.status import BatchFiles, task_rows
+    from naavik.launcher.services.status import BatchFiles, task_rows
 
     nodes = {"group-g": {"status": "submitted", "job_ref": "5"}}
     if attempt == 2:

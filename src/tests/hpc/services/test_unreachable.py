@@ -7,8 +7,8 @@ import json
 import os
 from pathlib import Path
 
-from training_framework.hpc.__main__ import main
-from training_framework.hpc.ports.ssh import TransportError, ssh_reason
+from naavik.hpc.__main__ import main
+from naavik.hpc.ports.ssh import TransportError, ssh_reason
 from tests.hpc.fake_cluster import fake_cluster  # noqa: F401 (fixture)
 from tests.hpc.services.test_batches import submitted_batch
 

@@ -12,8 +12,8 @@ from tensorboard.backend.event_processing.event_accumulator import EventAccumula
 
 from tests.integration.integration_ssl_components import dino_config
 from tests.test_utils import component_named
-from training_framework.components import Step, reads, step, writes
-from training_framework.components.builtin import Checkpointer
+from naavik.components import Step, reads, step, writes
+from naavik.components.builtin import Checkpointer
 
 from .helpers import quiet_session, run
 
@@ -120,7 +120,7 @@ def test_a_value_that_is_not_a_scalar_is_refused_naming_its_tag(tmp_path):
 
 
 def test_the_summaries_hook_runs_on_rank_zero_only():
-    from training_framework.components.builtin import TensorboardSummaries
+    from naavik.components.builtin import TensorboardSummaries
 
     assert TensorboardSummaries.rank_zero_only is True
 
@@ -150,7 +150,7 @@ def test_without_metric_keys_the_dino_steps_write_only_what_they_did(tmp_path):
 
 
 def test_the_logger_prints_the_loss_backward_last_received(tmp_path):
-    from training_framework.session import TrainingSession
+    from naavik.session import TrainingSession
 
     config = dino_config(tmp_path, max_iterations=3)
     config["logger"] = {"log_every": 1, "log_file": str(tmp_path / "log.txt")}

@@ -11,10 +11,10 @@ import pytest
 import yaml
 
 from tests.hpc.batch_repo import TRAINING_CONFIG, compile_repo, make_repo
-from training_framework.launcher.compile.compiler import Selection
-from training_framework.launcher.compile.render import plan_files
-from training_framework.launcher.config.schema import parse_mission_file
-from training_framework.launcher.errors import PlanError
+from naavik.launcher.compile.compiler import Selection
+from naavik.launcher.compile.render import plan_files
+from naavik.launcher.config.schema import parse_mission_file
+from naavik.launcher.errors import PlanError
 
 #: A second structure: an attention pool where the base config has a frozen backbone.
 ATTNPOOL = copy.deepcopy(TRAINING_CONFIG)
@@ -38,9 +38,9 @@ def mission(**recipe):
 
 def compile_mission(tmp_path, manifest, other=ATTNPOOL, selection=None):
     from tests.hpc.batch_repo import CLOCK, PROFILE, FakeFacts
-    from training_framework.launcher.compile.compiler import compile_plan
-    from training_framework.launcher.config.schema import parse_profiles
-    from training_framework.launcher.ports.repository import GitRepository
+    from naavik.launcher.compile.compiler import compile_plan
+    from naavik.launcher.config.schema import parse_profiles
+    from naavik.launcher.ports.repository import GitRepository
 
     root = make_repo(tmp_path, manifest=manifest,
                      extra_files={"configs/attnpool.yaml": yaml.safe_dump(other)})
@@ -119,9 +119,9 @@ def test_with_from_mission_the_checkpoint_is_slowest_then_the_file(tmp_path):
     manifest["jobs"]["eval"]["recipes"][0]["from_mission"]["experiments"] = ["short/*"]
     manifest["jobs"]["eval"]["recipes"][0]["config_files"] = ["configs/analysis.yaml", "configs/val.yaml"]
     from tests.hpc.batch_repo import CLOCK, PROFILE, FakeFacts
-    from training_framework.launcher.compile.compiler import compile_plan
-    from training_framework.launcher.config.schema import parse_profiles
-    from training_framework.launcher.ports.repository import GitRepository
+    from naavik.launcher.compile.compiler import compile_plan
+    from naavik.launcher.config.schema import parse_profiles
+    from naavik.launcher.ports.repository import GitRepository
 
     root = make_repo(tmp_path, manifest=manifest, extra_files={
         "configs/analysis.yaml": yaml.safe_dump(ANALYSIS), "configs/val.yaml": yaml.safe_dump(other)})

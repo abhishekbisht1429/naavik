@@ -11,11 +11,11 @@ import pytest
 import yaml
 
 from tests.hpc.batch_repo import CLOCK, MANIFEST, PROFILE, TRAINING_CONFIG, FakeFacts, make_repo
-from training_framework.launcher.compile.compiler import Selection, compile_plan
-from training_framework.launcher.compile.render import plan_files
-from training_framework.launcher.config.schema import parse_profiles
-from training_framework.launcher.errors import PlanError
-from training_framework.launcher.ports.repository import GitRepository
+from naavik.launcher.compile.compiler import Selection, compile_plan
+from naavik.launcher.compile.render import plan_files
+from naavik.launcher.config.schema import parse_profiles
+from naavik.launcher.errors import PlanError
+from naavik.launcher.ports.repository import GitRepository
 
 
 def two_groups(tmp_path):
@@ -96,7 +96,7 @@ def test_an_unknown_name_is_refused(tmp_path, groups, experiments, message):
 
 from tests.hpc.test_end_to_end import environment, session  # noqa: E402,F401 (fixture)
 from tests.launcher.test_host_end_to_end import here, record, wait_for  # noqa: E402,F401
-from training_framework.cli import main as naavik  # noqa: E402
+from naavik.cli import main as naavik_cli  # noqa: E402
 
 
 def test_a_launched_part_is_followed_like_any_batch(tmp_path, here, capsys):
@@ -114,7 +114,7 @@ def test_a_launched_part_is_followed_like_any_batch(tmp_path, here, capsys):
     subprocess.run(["git", "add", "-A"], cwd=root, check=True)
     subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "two"],
                    cwd=root, check=True)
-    assert naavik(["launch", str(root / "batch.yaml"), "--targets", str(here), "--yes",
+    assert naavik_cli(["launch", str(root / "batch.yaml"), "--targets", str(here), "--yes",
                    "--recipe", "cpu/other"]) == 0
     output = capsys.readouterr().out
     batch_dir = Path(output.split("submitted: ")[1].splitlines()[0])
@@ -122,6 +122,6 @@ def test_a_launched_part_is_followed_like_any_batch(tmp_path, here, capsys):
     assert receipt["selection"] == {"recipes": ["cpu/other"]}
     wait_for(lambda: record(batch_dir, "cpu/other/000"), "the task's record")
     assert not (batch_dir / "tasks" / "cpu" / "c0").exists()
-    assert naavik(["status", receipt["batch_id"]]) == 0
+    assert naavik_cli(["status", receipt["batch_id"]]) == 0
     status = capsys.readouterr().out
     assert "cpu/other/000" in status and "cpu/c0/000" not in status

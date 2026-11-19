@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import subprocess
 
-from training_framework.hpc.ports import (
+from naavik.hpc.ports import (
     CancelResult,
     Owner,
     SubmissionFailed,

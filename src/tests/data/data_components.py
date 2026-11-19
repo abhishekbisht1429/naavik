@@ -3,8 +3,8 @@ tests)."""
 
 from __future__ import annotations
 
-from training_framework.components import Resource, resource
-from training_framework.data import DataRequirement
+from naavik.components import Resource, resource
+from naavik.data import DataRequirement
 from tests.data.fake_datasets import FakeConfig, Fetchable
 
 

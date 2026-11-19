@@ -8,14 +8,14 @@ its own state.
 import pytest
 
 from tests.test_utils import component_named, component_names, make_config
-from training_framework.components import (
+from naavik.components import (
     ComponentDependencyError,
     Resource,
     requires_resource,
     resource,
     singleton,
 )
-from training_framework.session import TrainingSession
+from naavik.session import TrainingSession
 
 
 def declare_dependency(name="multi_dep"):
@@ -245,7 +245,7 @@ def test_a_singleton_component_may_still_be_configured_once(tmp_path):
 
 
 def test_the_ddp_resource_is_a_singleton():
-    from training_framework.components.builtin import DDPResource
+    from naavik.components.builtin import DDPResource
 
     # init_process_group is process-wide, and the engine, worker and session
     # all fetch "ddp" expecting exactly one.

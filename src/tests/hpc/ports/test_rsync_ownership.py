@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import sys
 
-from training_framework.hpc.ports.ssh import RsyncTransfer
+from naavik.hpc.ports.ssh import RsyncTransfer
 
 RECORDING_RSYNC = r'''
 import os, sys

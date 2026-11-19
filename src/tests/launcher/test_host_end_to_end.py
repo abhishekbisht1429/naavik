@@ -19,10 +19,10 @@ import yaml
 from tests.hpc.batch_repo import PROFILE, make_repo
 from tests.hpc.fake_cluster import fake_cluster  # noqa: F401 (fixture)
 from tests.hpc.test_end_to_end import COMPONENTS, environment, session  # noqa: F401 (fixture)
-from training_framework.cli import main as naavik
-from training_framework.launcher.ports.local import LocalExecutor
-from training_framework.launcher.remote import host_runner
-from training_framework.launcher.scheduler.host_submitter import HostSubmitter
+from naavik.cli import main as naavik_cli
+from naavik.launcher.ports.local import LocalExecutor
+from naavik.launcher.remote import host_runner
+from naavik.launcher.scheduler.host_submitter import HostSubmitter
 
 pytestmark = pytest.mark.skipif(
     not torch.distributed.is_available() or not torch.distributed.is_gloo_available(),
@@ -72,7 +72,7 @@ def repo(tmp_path, config_session, seeds):
 
 
 def launch(root, targets, capsys) -> tuple[Path, dict]:
-    assert naavik(["launch", str(root / "batch.yaml"), "--targets", str(targets), "--yes"]) == 0
+    assert naavik_cli(["launch", str(root / "batch.yaml"), "--targets", str(targets), "--yes"]) == 0
     output = capsys.readouterr().out
     batch_dir = Path(output.split("submitted: ")[1].splitlines()[0])
     return batch_dir, json.loads((batch_dir / "receipt.json").read_text())
@@ -104,7 +104,7 @@ def test_a_local_host_batch_runs_its_tasks_to_the_end(tmp_path, here, capsys):
         "0": "completed", "1": "completed"}
     assert (batch_dir / "logs" / "cpu" / f"{ref}_0.out").exists()
     wait_for(lambda: not host_runner.ref_alive(ref), "the runner to exit")
-    assert naavik(["status", batch_dir.name]) == 0
+    assert naavik_cli(["status", batch_dir.name]) == 0
     rows = [line.split() for line in capsys.readouterr().out.splitlines()]
     assert [row[2] for row in rows if row and row[0] in tasks] == ["done", "done"]
 
@@ -126,7 +126,7 @@ def test_a_cancelled_task_is_interrupted_and_resumes_from_its_checkpoint(tmp_pat
     assert first["interrupted"] is True and first["exit_status"] == 75
 
     wait_for(lambda: not host_runner.ref_alive(ref), "the runner to exit")
-    assert naavik(["resume", batch_dir.name, "--yes"]) == 0
+    assert naavik_cli(["resume", batch_dir.name, "--yes"]) == 0
     capsys.readouterr()
     attempt = json.loads((batch_dir / "receipt.json").read_text())["attempts"][-1]
     assert attempt["attempt"] == 2
@@ -156,7 +156,7 @@ def test_a_host_batch_over_ssh_runs_on_the_machine_ssh_reaches(tmp_path, here, f
     wait_for(lambda: record(batch_dir, "cpu/seeds/000"), "the task's record")
     assert record(batch_dir, "cpu/seeds/000")["exit_status"] == 0
     assert set(log.read_text().split()) == {"box"}
-    assert naavik(["status", batch_dir.name]) == 0
+    assert naavik_cli(["status", batch_dir.name]) == 0
     assert f"box:{batch_dir}" in capsys.readouterr().out
 
 
@@ -171,14 +171,14 @@ def test_launch_stops_before_staging_when_the_target_lacks_a_pool_gpu(tmp_path, 
     targets["profiles"]["cluster"]["host"] = {"gpus": [0, 42]}
     here.write_text(yaml.safe_dump(targets))
     root = repo(tmp_path, session(), [1])
-    assert naavik(["launch", str(root / "batch.yaml"), "--targets", str(here), "--yes"]) == 2
+    assert naavik_cli(["launch", str(root / "batch.yaml"), "--targets", str(here), "--yes"]) == 2
     error = capsys.readouterr().err
     assert "the host cannot run this mission" in error and "[42]" in error
     assert not (tmp_path / "here" / "batches").exists()            # nothing staged
 
 
 def test_a_batch_tasks_run_record_names_its_batch_task_and_code(tmp_path, here, monkeypatch, capsys):
-    from training_framework.runs.registry import list_runs
+    from naavik.runs.registry import list_runs
 
     registry = tmp_path / "registry"
     monkeypatch.setenv("TRAINING_FRAMEWORK_RUNS", str(registry))
@@ -197,7 +197,7 @@ def test_a_batch_tasks_run_record_names_its_batch_task_and_code(tmp_path, here, 
 
 
 def test_a_cancelled_batch_task_is_recorded_as_interrupted(tmp_path, here, monkeypatch, capsys):
-    from training_framework.runs.registry import list_runs
+    from naavik.runs.registry import list_runs
 
     registry = tmp_path / "registry"
     monkeypatch.setenv("TRAINING_FRAMEWORK_RUNS", str(registry))

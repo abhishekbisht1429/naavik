@@ -10,7 +10,7 @@ import yaml
 
 from tests.hpc.batch_repo import make_repo
 from tests.launcher.test_hosts_file import CURRENT as HOSTS
-from training_framework.cli import main as naavik
+from naavik.cli import main as naavik
 
 
 def receipt(batch_id):

@@ -12,8 +12,8 @@ import sys
 import pytest
 
 from tests.hpc.test_end_to_end import session
-from training_framework.components.builtin.distributed import DDPResource
-from training_framework.session import TrainingSession, check_session_config
+from naavik.components.builtin.distributed import DDPResource
+from naavik.session import TrainingSession, check_session_config
 
 PACKAGE = "tests.integration.integration_training_components"
 

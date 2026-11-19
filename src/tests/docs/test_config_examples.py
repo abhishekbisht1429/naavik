@@ -18,7 +18,7 @@ import pytest
 import yaml
 from torch import nn
 
-from training_framework.components import (
+from naavik.components import (
     Hook,
     ModuleResource,
     Resource,
@@ -28,7 +28,7 @@ from training_framework.components import (
     resource,
     step,
 )
-from training_framework.session import TrainingSession
+from naavik.session import TrainingSession
 
 DOCS = Path(__file__).resolve().parents[3] / "docs"
 GUIDES = ["guide/04-configuration.md"]
@@ -119,7 +119,7 @@ def test_a_documented_session_builds(tmp_path, session):
         "sessions_dir": str(tmp_path),
         "max_iterations": 1,
         "device": "cpu",
-        "components_package": "training_framework.components.builtin",
+        "components_package": "naavik.components.builtin",
         "show_execution_graph": False,
     }
 

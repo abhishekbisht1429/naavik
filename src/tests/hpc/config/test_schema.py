@@ -2,8 +2,8 @@ import copy
 
 import pytest
 
-from training_framework.hpc.errors import PlanError
-from training_framework.hpc.config.schema import parse_manifest, parse_profiles
+from naavik.hpc.errors import PlanError
+from naavik.hpc.config.schema import parse_manifest, parse_profiles
 from tests.hpc.batch_repo import MANIFEST, PROFILE
 
 

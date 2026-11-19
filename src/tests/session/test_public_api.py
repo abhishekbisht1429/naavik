@@ -1,4 +1,4 @@
-import training_framework.session as session
+import naavik.session as session
 
 
 def test_session_package_exports_pluggable_session_type_api():

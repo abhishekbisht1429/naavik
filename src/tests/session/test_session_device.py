@@ -5,15 +5,15 @@ import torch
 from torch import nn
 
 from tests.test_utils import make_config, resource_named
-from training_framework.components import (
+from naavik.components import (
     ModuleResource,
     requires_resource,
     resource,
 )
-from training_framework.components.builtin import Checkpointer
-from training_framework.launcher.config.schema import Resources
-from training_framework.launcher.config.topology import check_topology
-from training_framework.session import (
+from naavik.components.builtin import Checkpointer
+from naavik.launcher.config.schema import Resources
+from naavik.launcher.config.topology import check_topology
+from naavik.session import (
     AnalysisSession,
     TrainingSession,
     check_session_config,

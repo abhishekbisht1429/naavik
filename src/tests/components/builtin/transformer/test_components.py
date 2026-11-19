@@ -6,7 +6,7 @@ import pytest
 import torch
 from torch import nn
 
-from training_framework.components import (
+from naavik.components import (
     ModuleResource,
     Step,
     component_registry,
@@ -15,8 +15,8 @@ from training_framework.components import (
     step,
     topological_sort_of_components,
 )
-from training_framework.components.builtin import TrainedModel
-from training_framework.components.builtin.transformer import (
+from naavik.components.builtin import TrainedModel
+from naavik.components.builtin.transformer import (
     AttentionPooledEncoder,
     AttentionPooling,
     ClassToken,
@@ -30,7 +30,7 @@ from training_framework.components.builtin.transformer import (
     TokenReduction,
     TorchTransformerEncoder,
 )
-from training_framework.session import AnalysisSession, TrainingSession
+from naavik.session import AnalysisSession, TrainingSession
 from tests.test_utils import resource_named
 
 
@@ -125,7 +125,7 @@ def _session_config(root, *, max_iterations=1):
         "sessions_dir": str(root),
         "max_iterations": max_iterations,
         "device": "cpu",
-        "components_package": "training_framework.components.builtin",
+        "components_package": "naavik.components.builtin",
         "show_execution_graph": False,
     }
 
@@ -468,7 +468,7 @@ def test_conditioned_query_accepts_a_block_component_as_an_encoder():
         "inputs": {
             "obj_patch": {
                 "module": (
-                    "training_framework.components.builtin.transformer."
+                    "naavik.components.builtin.transformer."
                     "ConvPatchEmbedding"
                 ),
                 "in_channels": 3,
@@ -556,7 +556,7 @@ def test_conditioned_query_rejects_encoders_with_the_wrong_output_size():
         ({"x": {"module": "torch.optim.SGD"}}, TypeError, "does not resolve to an nn.Module"),
         (
             {"x": {"module": (
-                "training_framework.components.builtin.transformer."
+                "naavik.components.builtin.transformer."
                 "PooledPatchTransformer"
             )}},
             TypeError,
@@ -761,7 +761,7 @@ def test_a_pooling_query_that_disagrees_with_the_chain_is_rejected(tmp_path):
 
 
 def test_a_block_without_an_embed_dim_is_rejected(tmp_path):
-    from training_framework.components import resource
+    from naavik.components import resource
 
     @resource("widthless_encoder")
     class Widthless(ModuleResource):

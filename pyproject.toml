@@ -30,18 +30,18 @@ dependencies = [
 [project.scripts]
 # One command for launching experiments and reading their results;
 # `navik` is the same command under its other common spelling.
-naavik = "training_framework.cli:main"
-navik = "training_framework.cli:main"
+naavik = "naavik.cli:main"
+navik = "naavik.cli:main"
 
 [project.optional-dependencies]
-# Image datasets (training_framework.components.builtin.datasets); scipy
+# Image datasets (naavik.components.builtin.datasets); scipy
 # reads the Flowers102 and Stanford Cars annotations.
 vision = [
     "torchvision==0.28.0",
     "scipy",
 ]
-# Launching batches (training_framework.launcher; Slurm in
-# training_framework.hpc); packaging
+# Launching missions (naavik.launcher; Slurm in
+# naavik.hpc); packaging
 # evaluates pinned requirements and requires-python. 22.0 removed the
 # legacy (non-PEP 440) versions and specifiers the strict checks rely on.
 hpc = [

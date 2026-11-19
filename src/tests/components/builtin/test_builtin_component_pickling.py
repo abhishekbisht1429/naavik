@@ -7,8 +7,8 @@ import pytest
 import torch
 from torch import nn
 
-from training_framework.components import StatefulResource, resource
-from training_framework.components.builtin import (
+from naavik.components import StatefulResource, resource
+from naavik.components.builtin import (
     AnalysisLogger,
     Checkpointer,
     LayerInspector,
@@ -16,8 +16,8 @@ from training_framework.components.builtin import (
     Tensorboard,
     TrainedModel,
 )
-from training_framework.components.builtin import observability
-from training_framework.session import TrainingSession
+from naavik.components.builtin import observability
+from naavik.session import TrainingSession
 from tests.test_utils import inject_dependencies
 
 
@@ -51,7 +51,7 @@ def _session_config(tmp_path):
         "sessions_dir": str(tmp_path),
         "max_iterations": 1,
         "device": "cpu",
-        "components_package": "training_framework.components.builtin",
+        "components_package": "naavik.components.builtin",
         "show_execution_graph": False,
     }
 
@@ -321,7 +321,7 @@ def _model_diagram_hook(session):
 
 def test_a_worker_restored_from_state_draws_every_model_diagram(tmp_path):
     from tests.components.builtin.test_model_diagram import model_config, run, written
-    from training_framework.engine import load_session_for_worker
+    from naavik.engine import load_session_for_worker
 
     parent = TrainingSession(model_config(tmp_path, diagram={"depth": 4}))
     # A spawned worker gets the parent's session as pickled state.

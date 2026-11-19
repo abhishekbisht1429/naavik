@@ -13,8 +13,8 @@ from tests.test_utils import (
     register_test_components,
     session_config,
 )
-from training_framework.engine import load_session_for_worker
-from training_framework.session import TrainingSession
+from naavik.engine import load_session_for_worker
+from naavik.session import TrainingSession
 
 
 def profiled_config(tmp_path, *, max_iterations, **profiler):

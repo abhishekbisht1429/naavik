@@ -12,14 +12,14 @@ from pathlib import Path
 import pytest
 import yaml
 
-import training_framework
+import naavik
 from tests.hpc.batch_repo import PROFILE, make_repo
 from tests.hpc.test_end_to_end import COMPONENTS, environment, session  # noqa: F401 (fixture)
 from tests.launcher.test_host_end_to_end import here, launch, record, wait_for  # noqa: F401
-from training_framework.cli import main as naavik
-from training_framework.launcher.ports.source_tree import source_tree
+from naavik.cli import main as naavik_cli
+from naavik.launcher.ports.source_tree import source_tree
 
-SRC = Path(training_framework.__file__).resolve().parents[1]
+SRC = Path(naavik.__file__).resolve().parents[1]
 
 
 @pytest.fixture(autouse=True)
@@ -59,7 +59,7 @@ def project(tmp_path, *configs, requirements=None, code=None, extra=None):
 
 
 def validate(root, targets):
-    return naavik(["validate", str(root / "batch.yaml"), "--targets", str(targets)])
+    return naavik_cli(["validate", str(root / "batch.yaml"), "--targets", str(targets)])
 
 
 # What it finds ---------------------------------------------------------------------------------
@@ -90,10 +90,10 @@ def test_render_and_launch_refuse_before_anything_is_staged(tmp_path, here, caps
     config = session()
     config["integration_resultz"] = {}
     root = project(tmp_path, config)
-    assert naavik(["render", str(root / "batch.yaml"), "--targets", str(here),
+    assert naavik_cli(["render", str(root / "batch.yaml"), "--targets", str(here),
                    "--output", str(tmp_path / "preview")]) == 2
     assert not (tmp_path / "preview").exists()
-    assert naavik(["launch", str(root / "batch.yaml"), "--targets", str(here), "--yes"]) == 2
+    assert naavik_cli(["launch", str(root / "batch.yaml"), "--targets", str(here), "--yes"]) == 2
     assert not (tmp_path / "here" / "batches").exists()
 
 
@@ -168,14 +168,14 @@ def test_a_version_pin_accepts_a_checkout_of_that_version_with_a_note(tmp_path, 
 
 
 def test_checkout_mode_checks_with_the_framework_in_the_tree(tmp_path, here, capsys):
-    framework = {f"src/training_framework/{path.relative_to(SRC / 'training_framework')}": path.read_text()
-                 for path in (SRC / "training_framework").rglob("*.py")}
+    framework = {f"src/naavik/{path.relative_to(SRC / 'naavik')}": path.read_text()
+                 for path in (SRC / "naavik").rglob("*.py")}
     config = session()
     root = project(tmp_path, config, code={"framework": "checkout", "paths": ["src", "."]},
                    extra=framework)
     assert validate(root, here) == 0, capsys.readouterr().err
     tree = source_tree(root, git(root, "rev-parse", "HEAD"))
-    assert (tree / "src" / "training_framework" / "launcher" / "evaluate.py").exists()
+    assert (tree / "src" / "naavik" / "launcher" / "evaluate.py").exists()
 
 
 def test_checkout_mode_without_the_framework_in_its_paths_is_refused(tmp_path, here, capsys):
@@ -195,7 +195,7 @@ def test_a_skipped_check_is_warned_about_and_recorded(tmp_path, here, monkeypatc
     config["integration_resultz"] = {}                 # would be refused
     batch_dir, receipt = launch(project(tmp_path, session()), here, capsys)
     assert receipt["code_check"] == "skipped"
-    assert naavik(["validate", str(project(tmp_path / "x", config) / "batch.yaml"),
+    assert naavik_cli(["validate", str(project(tmp_path / "x", config) / "batch.yaml"),
                    "--targets", str(here)]) == 0
     assert "warning: the experiment configs were not checked (TRAINING_FRAMEWORK_CODE_CHECK=0)" in \
         capsys.readouterr().err

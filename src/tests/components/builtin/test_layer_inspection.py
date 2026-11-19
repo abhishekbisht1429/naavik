@@ -6,15 +6,15 @@ import pytest
 import torch
 from torch import nn
 
-from training_framework.components import (
+from naavik.components import (
     StatefulResource,
     Step,
     requires_resource,
     resource,
     step,
 )
-from training_framework.components.builtin import LayerInspector
-from training_framework.session import AnalysisSession, TrainingSession
+from naavik.components.builtin import LayerInspector
+from naavik.session import AnalysisSession, TrainingSession
 from tests.test_utils import inject_dependencies
 
 
@@ -102,7 +102,7 @@ def _session_config(root, *, max_iterations=2):
         "sessions_dir": str(root),
         "max_iterations": max_iterations,
         "device": "cpu",
-        "components_package": "training_framework.components.builtin",
+        "components_package": "naavik.components.builtin",
         "show_execution_graph": False,
     }
 

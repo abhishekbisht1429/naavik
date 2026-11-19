@@ -10,8 +10,8 @@ import warnings
 
 import pytest
 
-import training_framework.components as components
-from training_framework.components import (
+import naavik.components as components
+from naavik.components import (
     ComponentAliases,
     Resource,
     RoleBindings,
@@ -22,7 +22,7 @@ from training_framework.components import (
     step,
     topological_sort_of_components,
 )
-from training_framework.session import SessionComponents, TrainingSession
+from naavik.session import SessionComponents, TrainingSession
 
 
 def _config(tmp_path, entries):
@@ -32,7 +32,7 @@ def _config(tmp_path, entries):
             "sessions_dir": str(tmp_path),
             "max_iterations": 1,
             "device": "cpu",
-            "components_package": "training_framework.components.builtin",
+            "components_package": "naavik.components.builtin",
             "show_execution_graph": False,
         },
         **entries,

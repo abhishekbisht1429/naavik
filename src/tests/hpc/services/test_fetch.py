@@ -11,15 +11,15 @@ from pathlib import Path
 
 import pytest
 
-from training_framework.hpc.__main__ import main
-from training_framework.hpc.errors import HpcError
-from training_framework.hpc.ports import FetchSummary
-from training_framework.hpc.ports.local import LocalExecutor, LocalFileTransfer, LocalFilesystem, LocalSourceStager
-from training_framework.hpc.ports.ssh import RsyncTransfer
-from training_framework.hpc.services import fetch as fetching
-from training_framework.hpc.services.resume import task_index
-from training_framework.hpc.services.status import Row, fetch_batches, task_rows
-from training_framework.hpc.services.submit import submit
+from naavik.hpc.__main__ import main
+from naavik.hpc.errors import HpcError
+from naavik.hpc.ports import FetchSummary
+from naavik.hpc.ports.local import LocalExecutor, LocalFileTransfer, LocalFilesystem, LocalSourceStager
+from naavik.hpc.ports.ssh import RsyncTransfer
+from naavik.hpc.services import fetch as fetching
+from naavik.hpc.services.resume import task_index
+from naavik.hpc.services.status import Row, fetch_batches, task_rows
+from naavik.hpc.services.submit import submit
 from tests.hpc.fake_cluster import fake_cluster  # noqa: F401 (fixture)
 from tests.hpc.fakes import LocalScheduler
 from tests.hpc.test_logs_and_status import _batch
@@ -226,7 +226,7 @@ def test_rsync_fetch_uses_one_files_from_list(tmp_path, monkeypatch):
 
 def test_a_fetched_checkpoint_loads(tmp_path, tmp_path_factory, monkeypatch):
     pytest.importorskip("torch")
-    from training_framework.components.builtin.checkpointing import Checkpointer
+    from naavik.components.builtin.checkpointing import Checkpointer
     from tests.hpc import test_end_to_end as e2e
 
     environment = e2e.environment.__wrapped__(tmp_path_factory)

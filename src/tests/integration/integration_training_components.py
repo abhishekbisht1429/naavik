@@ -11,7 +11,7 @@ from typing import override
 import torch
 from torch import nn
 from torch.utils.data import Dataset
-from training_framework.components import (
+from naavik.components import (
     LifecycleHook,
     ModuleResource,
     Resource,
@@ -26,7 +26,7 @@ from training_framework.components import (
     step,
     writes,
 )
-from training_framework.session import TrainingSession
+from naavik.session import TrainingSession
 
 
 @resource("integration_ddp_model")

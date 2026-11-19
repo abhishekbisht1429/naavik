@@ -17,9 +17,9 @@ import torch
 from torch import nn
 
 from tests.test_utils import make_config
-from training_framework.components import Resource, requires_resource, resource
-from training_framework.components.builtin import TrainedModel
-from training_framework.session import TrainingSession
+from naavik.components import Resource, requires_resource, resource
+from naavik.components.builtin import TrainedModel
+from naavik.session import TrainingSession
 
 
 def declare_components():

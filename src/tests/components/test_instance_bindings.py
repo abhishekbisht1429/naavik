@@ -9,7 +9,7 @@ import re
 
 import pytest
 
-from training_framework.components import (
+from naavik.components import (
     ComponentBindings,
     Resource,
     requires_resource,

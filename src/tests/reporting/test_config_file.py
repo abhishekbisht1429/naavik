@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 
-from training_framework.reporting import discover_runs, summarize_runs
+from naavik.reporting import discover_runs, summarize_runs
 
 from .helpers import config, losses, write_run
 

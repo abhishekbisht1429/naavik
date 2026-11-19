@@ -10,8 +10,8 @@ import sys
 
 import yaml
 
-from training_framework.engine import Configurator, TrainingEngine
-from training_framework.reporting import discover_runs, render_markdown, summarize_runs
+from naavik.engine import Configurator, TrainingEngine
+from naavik.reporting import discover_runs, render_markdown, summarize_runs
 
 SSL_COMPONENTS = "tests.integration.integration_ssl_components"
 LR_PATH = "optimizer.optimizer.kwargs.lr"

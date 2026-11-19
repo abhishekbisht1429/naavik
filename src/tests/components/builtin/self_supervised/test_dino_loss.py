@@ -8,9 +8,9 @@ from torch import distributed
 
 from tests.integration.integration_ssl_components import OUT_DIM, dino_config
 from tests.test_utils import component_named
-from training_framework.components import Step, reads, step
-from training_framework.components.builtin import Checkpointer
-from training_framework.components.builtin.self_supervised import (
+from naavik.components import Step, reads, step
+from naavik.components.builtin import Checkpointer
+from naavik.components.builtin.self_supervised import (
     dino_cross_entropy,
 )
 

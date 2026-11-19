@@ -16,7 +16,7 @@ from typing import Any
 import torch
 from torch.utils.data import Dataset
 
-from training_framework.components import (
+from naavik.components import (
     Resource,
     SessionHook,
     hook,
@@ -28,7 +28,7 @@ EMBED_DIM = 16
 OUT_DIM = 32
 GLOBAL_SIZE = 32
 LOCAL_SIZE = 16
-LOSSES = "training_framework.components.builtin.self_supervised.losses"
+LOSSES = "naavik.components.builtin.self_supervised.losses"
 
 
 @resource("issl_views")

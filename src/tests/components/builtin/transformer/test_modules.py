@@ -12,7 +12,7 @@ import pytest
 import torch
 from torch import nn
 
-from training_framework.components.builtin.transformer import (
+from naavik.components.builtin.transformer import (
     ClassToken,
     ConvPatchEmbedding,
     TokenReduction,

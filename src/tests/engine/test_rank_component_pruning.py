@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from training_framework.components import (
+from naavik.components import (
     Resource,
     Step,
     rank_zero_only,
@@ -21,8 +21,8 @@ from training_framework.components import (
     resource,
     step,
 )
-from training_framework.engine import TrainingEngine, load_session_for_worker
-from training_framework.session import TRAINING_SESSION_TYPE, TrainingSession
+from naavik.engine import TrainingEngine, load_session_for_worker
+from naavik.session import TRAINING_SESSION_TYPE, TrainingSession
 from tests.test_utils import (
     COMPONENTS_PACKAGE,
     component_names,

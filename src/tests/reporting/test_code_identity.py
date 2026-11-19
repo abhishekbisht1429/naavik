@@ -8,9 +8,9 @@ import json
 
 import pytest
 
-from training_framework.reporting import DEFAULT_IGNORED_KEYS, discover_runs, summarize_runs
-from training_framework.runs.ids import new_run_id
-from training_framework.runs.registry import RunWriter
+from naavik.reporting import DEFAULT_IGNORED_KEYS, discover_runs, summarize_runs
+from naavik.runs.ids import new_run_id
+from naavik.runs.registry import RunWriter
 
 from .helpers import config, losses, write_run
 
@@ -131,7 +131,7 @@ def test_a_damaged_task_record_is_a_problem(tmp_path):
 
 
 def test_the_report_says_what_code_is_only_when_it_shows_it(tmp_path):
-    from training_framework.reporting.render import render_markdown
+    from naavik.reporting.render import render_markdown
 
     task(tmp_path / "known", 0, seed=1, sha=A)
     task(tmp_path / "older", 0, seed=1)

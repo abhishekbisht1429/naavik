@@ -11,17 +11,17 @@ from pathlib import Path
 
 import pytest
 
-from training_framework.hpc.__main__ import main
-from training_framework.hpc.config.schema import SlurmSettings, parse_profiles
-from training_framework.hpc.errors import HpcError
-from training_framework.hpc.ports import ExecResult
-from training_framework.hpc.ports.local import LocalExecutor, LocalFilesystem, LocalSourceStager
-from training_framework.hpc.remote.task import _previous_attempts
-from training_framework.hpc.scheduler.slurm import SlurmDialect
-from training_framework.hpc.services import resume as resuming
-from training_framework.hpc.services.receipt import Receipt
-from training_framework.hpc.services.status import fetch_batches, task_rows
-from training_framework.hpc.services.submit import submit
+from naavik.hpc.__main__ import main
+from naavik.hpc.config.schema import SlurmSettings, parse_profiles
+from naavik.hpc.errors import HpcError
+from naavik.hpc.ports import ExecResult
+from naavik.hpc.ports.local import LocalExecutor, LocalFilesystem, LocalSourceStager
+from naavik.hpc.remote.task import _previous_attempts
+from naavik.hpc.scheduler.slurm import SlurmDialect
+from naavik.hpc.services import resume as resuming
+from naavik.hpc.services.receipt import Receipt
+from naavik.hpc.services.status import fetch_batches, task_rows
+from naavik.hpc.services.submit import submit
 from tests.hpc.batch_repo import PROFILE
 from tests.hpc.fake_cluster import fake_cluster, submitted_jobs  # noqa: F401 (fixture)
 from tests.hpc.fakes import FakeSubmitter, LocalScheduler
@@ -239,7 +239,7 @@ def test_the_resume_table_feeds_the_wrapper_its_checkpoint(tmp_path):
                                      resuming.ResourceChanges())
     (group,) = attempt.groups
     Path(group.table_path).write_text(group.table)
-    from training_framework.hpc.scheduler.slurm import _task_body
+    from naavik.hpc.scheduler.slurm import _task_body
 
     body = _task_body(str(batch_dir), "g", [sys.executable, "-c",
                                             "import sys; print('ARGS', sys.argv[1:])",
@@ -264,7 +264,7 @@ class PreflightExecutor:
     def run(self, argv, context=None, timeout=None):
         facts = {"protocol_versions": [1], "capabilities": self.capabilities,
                  "interpreter": {}, "components": {}, "cluster_paths": {},
-                 "framework": {"file": "/env/lib/training_framework/__init__.py",
+                 "framework": {"file": "/env/lib/naavik/__init__.py",
                                "distribution": "0.5.0"}}
         return ExecResult(0, json.dumps(facts) + "\n", "")
 

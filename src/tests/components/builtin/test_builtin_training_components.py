@@ -7,9 +7,9 @@ import pytest
 import torch
 from torch import nn
 
-from training_framework.components.builtin import OptimizerResource, Timer
-from training_framework.components.builtin import distributed, observability
-from training_framework.components import (
+from naavik.components.builtin import OptimizerResource, Timer
+from naavik.components.builtin import distributed, observability
+from naavik.components import (
     Resource,
     StatefulResource,
     Step,
@@ -18,7 +18,7 @@ from training_framework.components import (
     step,
     writes,
 )
-from training_framework.session import TrainingSession
+from naavik.session import TrainingSession
 from tests.test_utils import has_resource_named, inject_dependencies, resource_named
 
 
@@ -38,7 +38,7 @@ def _session_config(tmp_path, *, max_iterations=3):
         "sessions_dir": str(tmp_path),
         "max_iterations": max_iterations,
         "device": "cpu",
-        "components_package": "training_framework.components.builtin",
+        "components_package": "naavik.components.builtin",
         "show_execution_graph": False,
     }
 

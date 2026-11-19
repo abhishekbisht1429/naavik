@@ -9,12 +9,12 @@ import sys
 import pytest
 
 from tests.session import check_components
-from training_framework.session import (
+from naavik.session import (
     SessionComponents,
     TrainingSession,
     check_session_config,
 )
-from training_framework.session.components import read_session_config
+from naavik.session.components import read_session_config
 
 PACKAGE = "tests.session.check_components"
 
@@ -108,7 +108,7 @@ def test_a_fresh_process_imports_the_components_package_to_check(tmp_path):
     from pathlib import Path
 
     src = Path(__file__).resolve().parents[2]
-    program = ("import json, sys; from training_framework.session import check_session_config; "
+    program = ("import json, sys; from naavik.session import check_session_config; "
                "print(json.dumps(check_session_config(json.loads(sys.argv[1])).problems))")
     for data, expected in ((config(tmp_path, counted={"size": 2}), []),
                            (config(tmp_path, counted={"size": 0}), 1)):

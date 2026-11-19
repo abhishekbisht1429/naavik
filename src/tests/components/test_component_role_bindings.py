@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from training_framework.components import (
+from naavik.components import (
     ComponentDependencyError,
     ExtendableComponent,
     Resource,
@@ -19,8 +19,8 @@ from training_framework.components import (
     resource,
     step,
 )
-from training_framework.components.builtin import Checkpointer
-from training_framework.session import TrainingSession
+from naavik.components.builtin import Checkpointer
+from naavik.session import TrainingSession
 
 
 def _config(tmp_path, entries):
@@ -30,7 +30,7 @@ def _config(tmp_path, entries):
             "sessions_dir": str(tmp_path),
             "max_iterations": 1,
             "device": "cpu",
-            "components_package": "training_framework.components.builtin",
+            "components_package": "naavik.components.builtin",
             "show_execution_graph": False,
         },
         **entries,

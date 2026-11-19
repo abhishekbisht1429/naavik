@@ -10,9 +10,9 @@ registry fixture clears the global registries before each test.
 """
 
 from tests.test_utils import make_config, resource_named
-from training_framework.components import Resource, requires_resource, resource
-from training_framework.components.base import ComponentMeta
-from training_framework.session import TrainingSession
+from naavik.components import Resource, requires_resource, resource
+from naavik.components.base import ComponentMeta
+from naavik.session import TrainingSession
 
 
 def declare_dependency():

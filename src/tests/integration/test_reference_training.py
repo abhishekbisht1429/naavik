@@ -30,7 +30,7 @@ from tests.test_utils import (
     resource_named,
     stub_process_group,
 )
-from training_framework.components import (
+from naavik.components import (
     StatefulResource,
     Step,
     reads,
@@ -40,9 +40,9 @@ from training_framework.components import (
     step,
     writes,
 )
-from training_framework.components.builtin import Checkpointer
-from training_framework.engine import Configurator, TrainingEngine
-from training_framework.session import TrainingSession
+from naavik.components.builtin import Checkpointer
+from naavik.engine import Configurator, TrainingEngine
+from naavik.session import TrainingSession
 
 _COMPONENTS = "tests.integration.integration_reference_components"
 
@@ -314,7 +314,7 @@ def _register_dino(*, pinned: bool):
     """The DINO pieces a user writes. `pinned` places the center update after
     the loss and the EMA after the optimizer step, as the docs say to; without
     it they declare only what they read."""
-    from training_framework.components import Resource
+    from naavik.components import Resource
 
     views = _two_views()
 

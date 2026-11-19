@@ -18,9 +18,9 @@ import pytest
 import torch
 import yaml
 
-import training_framework
-from training_framework.hpc.ports.local import LocalExecutor, LocalFilesystem, LocalSourceStager
-from training_framework.hpc.services.submit import submit
+import naavik
+from naavik.hpc.ports.local import LocalExecutor, LocalFilesystem, LocalSourceStager
+from naavik.hpc.services.submit import submit
 from tests.hpc.batch_repo import PROFILE, compile_repo, make_repo
 from tests.hpc.fakes import LocalScheduler
 
@@ -30,7 +30,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 COMPONENTS = Path(__file__).parents[1] / "integration" / "integration_training_components.py"
-FRAMEWORK_SRC = Path(training_framework.__file__).resolve().parents[1]
+FRAMEWORK_SRC = Path(naavik.__file__).resolve().parents[1]
 
 
 @pytest.fixture(scope="module")

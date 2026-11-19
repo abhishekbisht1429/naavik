@@ -18,11 +18,11 @@ import yaml
 from tests.hpc.batch_repo import MANIFEST, PROFILE, make_repo
 from tests.hpc.fake_cluster import fake_cluster, submitted_jobs  # noqa: F401 (fixture)
 from tests.hpc.stub_framework import FILES, build_wheel, pinned_line
-from training_framework.cli import main as naavik
-from training_framework.launcher.config.schema import parse_profiles
-from training_framework.launcher.errors import HpcError, PlanError
-from training_framework.launcher.ports.local import LocalExecutor, LocalFilesystem, LocalFileTransfer
-from training_framework.launcher.ports.targets import (
+from naavik.cli import main as naavik_cli
+from naavik.launcher.config.schema import parse_profiles
+from naavik.launcher.errors import HpcError, PlanError
+from naavik.launcher.ports.local import LocalExecutor, LocalFilesystem, LocalFileTransfer
+from naavik.launcher.ports.targets import (
     Target,
     ports_for,
     target_of_profile,
@@ -128,12 +128,12 @@ def launched(fake_cluster, tmp_path, monkeypatch, capsys):
     )
     targets = tmp_path / "targets.yaml"
     targets.write_text(yaml.safe_dump(data))
-    assert naavik(["probe-python", "--targets", str(targets)]) == 0
+    assert naavik_cli(["probe-python", "--targets", str(targets)]) == 0
     identity = yaml.safe_load(capsys.readouterr().out)["env"]["site_python_identity"]
     data["profiles"]["cluster"]["env"]["site_python_identity"] = identity
     targets.write_text(yaml.safe_dump(data))
 
-    assert naavik(["launch", str(root / "batch.yaml"), "--targets", str(targets), "--yes"]) == 0
+    assert naavik_cli(["launch", str(root / "batch.yaml"), "--targets", str(targets), "--yes"]) == 0
     output = capsys.readouterr().out
     batch_dir = Path(output.split("submitted: ")[1].splitlines()[0])
     return batch_dir, targets, ssh_log, fake_cluster
@@ -160,7 +160,7 @@ def test_a_local_receipt_records_this_machine_and_no_ssh_host(launched, tmp_path
 
 def test_status_follows_a_local_batch_here(launched, capsys):
     batch_dir, _, ssh_log, _ = launched
-    assert naavik(["status", batch_dir.name]) == 0
+    assert naavik_cli(["status", batch_dir.name]) == 0
     output = capsys.readouterr().out
     assert f"{socket.gethostname()}:{batch_dir}" in output
     # Every task listed (the fake squeue reports no array elements, so their
@@ -174,14 +174,14 @@ def test_the_listing_of_a_local_target_reads_its_receipts_here(launched, capsys)
     receipts = Path(str(batch_dir).split("/here/")[0]) / "state" / "training-framework" / "submissions"
     for item in receipts.iterdir():
         item.unlink()                                   # as if launched from elsewhere
-    assert naavik(["batches", "--remote", "--targets", str(targets)]) == 0
+    assert naavik_cli(["batches", "--remote", "--targets", str(targets)]) == 0
     assert batch_dir.name in capsys.readouterr().out
     assert not ssh_log.exists()
 
 
 def test_fetching_a_local_batch_says_where_it_already_is(launched, capsys):
     batch_dir, *_ = launched
-    assert naavik(["fetch", batch_dir.name]) == 0
+    assert naavik_cli(["fetch", batch_dir.name]) == 0
     output = capsys.readouterr().out
     assert "ran on this machine" in output and str(batch_dir) in output
 
@@ -196,7 +196,7 @@ def test_fetching_a_local_batch_elsewhere_copies_without_rsync(launched, tmp_pat
     (bin_dir / "squeue").chmod(0o755)
     monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
     dest = tmp_path / "copy"
-    assert naavik(["fetch", batch_dir.name, "--dest", str(dest), "--state", "all", "--yes"]) == 0
+    assert naavik_cli(["fetch", batch_dir.name, "--dest", str(dest), "--state", "all", "--yes"]) == 0
     assert (dest / batch_dir.name / "plan.json").exists()
     assert (dest / batch_dir.name / "tasks" / "probes" / "frozen" / "000" / "config.yaml").exists()
     assert not ssh_log.exists()

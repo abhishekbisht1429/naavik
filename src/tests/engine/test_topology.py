@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 import torch
 
-from training_framework.engine import (
+from naavik.engine import (
     Configurator,
     LaunchTopology,
     TrainingEngine,
@@ -17,8 +17,8 @@ from training_framework.engine import (
     load_session_for_worker,
     resolve_launch_topology,
 )
-from training_framework.engine.topology import pin_process_device
-from training_framework.session import TrainingSession
+from naavik.engine.topology import pin_process_device
+from naavik.session import TrainingSession
 from tests.test_utils import (
     COMPONENTS_PACKAGE,
     register_test_components,

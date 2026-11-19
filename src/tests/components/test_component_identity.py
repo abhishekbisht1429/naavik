@@ -9,12 +9,12 @@ stays `logger`.
 import pytest
 
 from tests.test_utils import component_named, make_config
-from training_framework.components import (
+from naavik.components import (
     Resource,
     requires_resource,
     resource,
 )
-from training_framework.session import TrainingSession
+from naavik.session import TrainingSession
 
 
 # -- identity on a constructed component ----------------------------------

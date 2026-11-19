@@ -1,7 +1,7 @@
 import pytest
 
-from training_framework.hpc.config.schema import Resources
-from training_framework.hpc.config.topology import check_topology, parse_engine_options
+from naavik.hpc.config.schema import Resources
+from naavik.hpc.config.topology import check_topology, parse_engine_options
 
 
 def resources(gpus=0, cpus=8):

@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from training_framework.runs.ids import LENGTH, is_run_id, new_run_id, run_id_time
+from naavik.runs.ids import LENGTH, is_run_id, new_run_id, run_id_time
 
 
 def test_an_id_is_26_crockford_characters_that_say_when_it_started():

@@ -6,8 +6,8 @@ from contextlib import closing
 
 import pytest
 
-from training_framework.hpc.__main__ import HashProgress
-from training_framework.hpc.compile.content import HashCache, content_summary
+from naavik.hpc.__main__ import HashProgress
+from naavik.hpc.compile.content import HashCache, content_summary
 
 
 @pytest.fixture
@@ -186,7 +186,7 @@ def test_hash_progress_rewrites_one_line_on_a_terminal():
 def test_a_second_run_reports_checking_not_hashing(tmp_path):
     from pathlib import Path
 
-    from training_framework.hpc.__main__ import WorkstationFacts
+    from naavik.hpc.__main__ import WorkstationFacts
 
     root = make_files(tmp_path / "data", 3)
     outputs = []

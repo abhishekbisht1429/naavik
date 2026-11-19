@@ -5,8 +5,8 @@ import pickle
 import pytest
 
 from tests.test_utils import COMPONENTS_PACKAGE, has_resource_named, register_test_components, resource_named
-from training_framework.engine import load_session_for_worker
-from training_framework.components import (
+from naavik.engine import load_session_for_worker
+from naavik.components import (
     ComponentAliases,
     ComponentBindings,
     Hook,
@@ -21,10 +21,10 @@ from training_framework.components import (
     step,
     topological_sort_of_components,
 )
-from training_framework.session import TrainingSession
+from naavik.session import TrainingSession
 
 
-def _session_config(tmp_path, *, components_package="training_framework.components.builtin"):
+def _session_config(tmp_path, *, components_package="naavik.components.builtin"):
     return {
         "rng_seed": 17,
         "sessions_dir": str(tmp_path),

@@ -8,10 +8,10 @@ import pytest
 import torch
 from torch import nn
 
-from training_framework.components import StatefulResource, resource
-from training_framework.components.builtin import Checkpointer
-from training_framework.session import AnalysisSession, Session, TrainingSession
-from training_framework.session.state import (
+from naavik.components import StatefulResource, resource
+from naavik.components.builtin import Checkpointer
+from naavik.session import AnalysisSession, Session, TrainingSession
+from naavik.session.state import (
     CHECKPOINT_VERSION,
     capture_rng_state,
     restore_rng_state,
@@ -248,7 +248,7 @@ def _session_config(root) -> dict[str, Any]:
         "sessions_dir": str(root),
         "max_iterations": 2,
         "device": "cpu",
-        "components_package": "training_framework.components.builtin",
+        "components_package": "naavik.components.builtin",
         "show_execution_graph": False,
     }
 
