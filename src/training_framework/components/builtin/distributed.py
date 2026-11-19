@@ -3,8 +3,9 @@ from __future__ import annotations
 import warnings
 from collections.abc import Iterable, Mapping
 from copy import deepcopy
+from dataclasses import dataclass
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any, override
+from typing import TYPE_CHECKING, Any, ClassVar, override
 
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -75,15 +76,62 @@ def _component_name_list(config: Mapping, key: str) -> list[str] | None:
     return names
 
 
+#: The process-group backends torch knows.
+BACKENDS = ("gloo", "nccl", "mpi", "ucc")
+DEFAULT_MASTER_ADDR = "127.0.0.1"
+
+
+@dataclass(frozen=True)
+class DDPConfig:
+    """The `ddp` config. `world_size` is required; the engine decides
+    `master_addr` and `master_port` for each launch and writes them in
+    (an absent port is bound by the launch), so they are optional here,
+    as `backend` is (default gloo)."""
+
+    world_size: Any
+    backend: Any = "gloo"
+    master_addr: Any = DEFAULT_MASTER_ADDR
+    master_port: Any = None
+    parallel_components: Any = None
+    rank_zero_components: Any = None
+    #: Restoring a checkpoint from before this schema: keys ddp never read
+    #: are dropped with a warning, so the checkpoint still resumes.
+    unknown_keys_dropped_on_restore: ClassVar[bool] = True
+
+    def __post_init__(self) -> None:
+        world_size = self.world_size
+        if isinstance(world_size, bool) or not isinstance(world_size, int) or world_size < 1:
+            raise ValueError(f"ddp.world_size must be a positive integer; got {world_size!r}")
+        if self.backend not in BACKENDS:
+            raise ValueError(f"ddp.backend must be one of {', '.join(BACKENDS)}; got {self.backend!r}")
+        if not isinstance(self.master_addr, str) or not self.master_addr:
+            raise ValueError(f"ddp.master_addr must be a host name or address; got {self.master_addr!r}")
+        port = self.master_port
+        if port is not None and (
+                isinstance(port, bool)
+                or not (isinstance(port, int) or (isinstance(port, str) and port.isdigit()))
+                or not 0 < int(port) < 65536):
+            raise ValueError(f"ddp.master_port must be a port number (1-65535); got {port!r}")
+        for key in ("parallel_components", "rank_zero_components"):
+            _component_name_list({key: getattr(self, key)}, key)
+
+
 @singleton
 @requires_resource("model")
 @resource("ddp", session_type="training")
 class DDPResource(Resource):
 
+    config_schema = DDPConfig
+
     def __init__(self, config: dict, rank: int = -1, local_rank: int | None = None):
+        from training_framework.components.config_schema import parse_component_config
+
+        # The config as given: the engine reads it back (`config`) to
+        # decide a resumed launch's topology.
         self._config = config
-        self._world_size = config["world_size"]
-        self._backend = config["backend"]
+        settings = parse_component_config(type(self), config)
+        self._world_size = settings.world_size
+        self._backend = settings.backend
         self._rank = rank
         # The CUDA ordinal this rank runs on. It is the rank itself on a
         # single-node launch, and the engine settles it from the launch
@@ -105,8 +153,8 @@ class DDPResource(Resource):
                 FutureWarning,
                 stacklevel=2,
             )
-        self._master_addr = config["master_addr"]
-        self._master_port = config["master_port"]
+        self._master_addr = settings.master_addr
+        self._master_port = settings.master_port
         self._ddp_wrapped_model = None
         # Set by the launcher's worker, never by configuration, and never
         # saved; see `join_hosted_store`.
@@ -199,6 +247,11 @@ class DDPResource(Resource):
                 )
             session.set_device(rank_device)
 
+        if self._master_port is None:
+            raise ValueError(
+                "ddp.master_port is not set: a launch by the engine (or naavik) "
+                "chooses one; a session set up by hand must give ddp.master_port"
+            )
         if self._joins_hosted_store:
             self._store = torch.distributed.TCPStore(
                 self._master_addr,

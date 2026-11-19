@@ -82,10 +82,11 @@ def test_the_check_splits_the_global_batch_over_the_ranks(tmp_path, batch_size, 
     assert problem.startswith("data_manager: ") and message in problem
 
 
-def test_a_world_size_the_config_does_not_fix_is_left_to_setup(tmp_path):
+def test_an_invalid_world_size_is_reported_once_by_ddp(tmp_path):
     data = training(tmp_path, batch_size=3)
-    data["ddp"]["world_size"] = "${oc.env:WORLD_SIZE,2}"     # not a number in the config
-    assert not [p for p in check_session_config(data).problems if "world_size" in p]
+    data["ddp"]["world_size"] = "2"                           # not a number in the config
+    (problem,) = check_session_config(data).problems
+    assert problem.startswith("ddp: Invalid ddp config: ddp.world_size must be a positive integer")
     data["ddp"]["world_size"] = 3
     assert check_session_config(data).problems == []
 
