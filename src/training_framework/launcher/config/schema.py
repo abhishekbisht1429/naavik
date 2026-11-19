@@ -525,6 +525,9 @@ class Experiment:
     config: str | None = None
     #: `from_mission`; None: the recipe's experiments come from the file only.
     from_mission: FromMission | None = None
+    #: `config_files`: several session configs, one axis (each file with
+    #: every `vary` combination); () otherwise (then `config`, or the base).
+    configs: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -822,9 +825,14 @@ def _parse_group(name, raw, where, problems) -> Group | None:
 
 def _parse_experiment(raw, where, problems) -> Experiment | None:
     """One recipe (inside: an experiment) of a job."""
-    reader = _Reader(raw, where, problems, {"name", "overrides", "vary", "config_file", "from_mission"})
+    reader = _Reader(raw, where, problems,
+                     {"name", "overrides", "vary", "config_file", "config_files", "from_mission"})
     name = reader.get("name", required=True)
     config = reader.string("config_file")
+    configs = _config_files(reader.get("config_files"), f"{where}.config_files", problems)
+    if config is not None and reader.get("config_files") is not None:
+        problems.add(f"{where}: config_file and config_files cannot both be given (config_file "
+                     "names one session config, config_files several)")
     from_mission = None
     if reader.get("from_mission") is not None:
         from_mission = _parse_from_mission(reader.get("from_mission"), f"{where}.from_mission", problems)
@@ -860,7 +868,23 @@ def _parse_experiment(raw, where, problems) -> Experiment | None:
                 )
     if name is None or not isinstance(overrides, list) or not isinstance(matrix, list):
         return None
-    return Experiment(name, tuple(overrides), tuple(matrix), config, from_mission)
+    return Experiment(name, tuple(overrides), tuple(matrix), config, from_mission, configs)
+
+
+def _config_files(raw, where, problems) -> tuple[str, ...]:
+    """A recipe's `config_files`: two or more distinct repository paths."""
+    if raw is None:
+        return ()
+    if (not isinstance(raw, list) or len(raw) < 2
+            or not all(isinstance(path, str) and path for path in raw)):
+        problems.add(f"{where} must be a list of two or more session config paths "
+                     "(for one, use config_file)")
+        return ()
+    if len(set(raw)) != len(raw):
+        twice = sorted({path for path in raw if raw.count(path) > 1})
+        problems.add(f"{where} names {', '.join(twice)} more than once")
+        return ()
+    return tuple(raw)
 
 
 def _parse_from_mission(raw, where, problems) -> FromMission | None:

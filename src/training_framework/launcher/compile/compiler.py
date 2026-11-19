@@ -300,20 +300,27 @@ def compile_plan(
     for problem in dialect.check_profile():
         problems.add(problem)
 
-    # Each training config once: `training.config`, and every experiment's own.
+    # Each session config once: `base.config_file`, and every recipe's own
+    # (`config_file`, or each of its `config_files`).
     configs = {manifest.training_config: _training_config(
         manifest, manifest.training_config, repository, sha, problems)}
     for group in manifest.groups:
         for experiment in group.experiments:
-            if experiment.config is not None and experiment.config not in configs:
-                configs[experiment.config] = _training_config(
-                    manifest, experiment.config, repository, sha, problems,
-                    where=f"jobs.{group.name}.recipes[{experiment.name}].config_file")
-    several_configs = any(experiment.config is not None
+            recipe = f"jobs.{group.name}.recipes[{experiment.name}]"
+            named = ([(experiment.config, f"{recipe}.config_file")] if experiment.config is not None
+                     else [(path, f"{recipe}.config_files[{index}]")
+                           for index, path in enumerate(experiment.configs)])
+            for path, where in named:
+                if path not in configs:
+                    configs[path] = _training_config(manifest, path, repository, sha, problems,
+                                                     where=where)
+    several_configs = any(experiment.config is not None or experiment.configs
                           for group in manifest.groups for experiment in group.experiments)
 
-    def config_of(experiment) -> str:
-        return experiment.config or manifest.training_config
+    def files_of(experiment) -> tuple[str, ...]:
+        """A recipe's session config files: its `config_files`, its
+        `config_file`, or `base.config_file`."""
+        return experiment.configs or (experiment.config or manifest.training_config,)
 
     # Only now: what is recorded (config files) is the whole manifest's, so
     # the parts of one manifest launched apart compare as one batch.
@@ -365,23 +372,23 @@ def compile_plan(
     # Tasks ------------------------------------------------------------------
     chosen = _choose_checkpoints(manifest, checkpoint_facts, problems, notes)
     problems.raise_if_any()
-    tasks_raw = _expand(manifest, lambda experiment: configs[config_of(experiment)][1],
-                        dialect, problems, chosen)
+    tasks_raw = _expand(manifest, lambda path: configs[path][1], dialect, problems, chosen,
+                        files_of)
     problems.raise_if_any()
 
     facts_found = None
     if code_facts is not None:
         facts_found = code_facts(sha, manifest, bool(environment["managed"]), [
-            (name, {**configs[config_of(experiment)][0], "sessions": [
+            (name, {**configs[path][0], "sessions": [
                 _with_sessions_dir(session, f"{batch_dir}/tasks/{name}/sessions")]})
-            for name, experiment, session in (
-                (f"{group.name}/{experiment.name}/{number:03d}", experiment, session)
-                for group, experiment, number, _, session, _, _ in tasks_raw)])
+            for name, path, session in (
+                (f"{group.name}/{experiment.name}/{number:03d}", path, session)
+                for group, experiment, number, _, session, _, _, path in tasks_raw)])
         for problem in facts_found.problems:
             problems.add(problem)
         problems.raise_if_any()
 
-    sessions = [session for _, _, _, _, session, _, _ in tasks_raw]
+    sessions = [session for _, _, _, _, session, *_ in tasks_raw]
     sources = data_module.parse_sources(manifest.data_sources, problems, profile)
     problems.raise_if_any()
 
@@ -413,7 +420,7 @@ def compile_plan(
 
     tasks: list[Task] = []
     seen_hashes: dict[str, str] = {}
-    for index, (group, experiment, number, array_index, session, variant, source) in enumerate(tasks_raw):
+    for index, (group, experiment, number, array_index, session, variant, source, config_file) in enumerate(tasks_raw):
         for target, path in data.rewrites.get(index, {}).items():
             session = addresses.write(session, target, path)
         name = f"{group.name}/{experiment.name}/{number:03d}"
@@ -424,11 +431,11 @@ def compile_plan(
             )
         seen_hashes[identity_hash] = name
         session = _with_sessions_dir(session, f"{batch_dir}/tasks/{name}/sessions")
-        config = {**configs[config_of(experiment)][0], "sessions": [session]}
+        config = {**configs[config_file][0], "sessions": [session]}
         tasks.append(Task(
             group.name, experiment.name, number, array_index, tuple(variant),
             config, hash_value(config),
-            config_of(experiment) if several_configs else None,
+            config_file if several_configs else None,
             source,
         ))
     problems.raise_if_any()
@@ -730,7 +737,7 @@ def _data_requirements(tasks_raw, sessions, sources, profile, facts, code_facts,
     """Declared data (step 4): managed when the target's profile has `data_modes`;
     said once (a note) when it does not."""
     names = [f"{group.name}/{experiment.name}/{number:03d}"
-             for group, experiment, number, _, _, _, _ in tasks_raw]
+             for group, experiment, number, *_ in tasks_raw]
     if code_facts is None:
         if profile.data is not None:
             problems.add(f"host '{profile.name}' manages data (dataset_delivery), which "
@@ -859,15 +866,17 @@ def _overlaps(a, b) -> bool:
     return a.path[:shorter] == b.path[:shorter]
 
 
-def _expand(manifest, session_of, dialect, problems, chosen=None):
-    """(group, experiment, number, array index, session, variant, source)
-    per task; `session_of(experiment)`: the selected session of its
-    training config. `chosen`: the checkpoints of recipes with
-    `from_mission` (`_choose_checkpoints`): one more axis, the slowest; a
-    task's source is then {mission, experiment, checkpoint, iteration,
-    into, variant}
-    (None otherwise)."""
+def _expand(manifest, session_of, dialect, problems, chosen=None, files_of=None):
+    """(group, experiment, number, array index, session, variant, source,
+    config file) per task. `files_of(experiment)`: its session config
+    files (several with `config_files`); `session_of(path)`: the selected
+    session of one. `chosen`: the checkpoints of recipes with
+    `from_mission` (`_choose_checkpoints`). Axes, slowest first: the
+    checkpoint, the config file, then `vary` (its last entry fastest). A
+    task's source is {mission, experiment, checkpoint, iteration, into,
+    variant} for a checkpoint, None otherwise."""
     chosen = chosen or {}
+    files_of = files_of or (lambda experiment: (manifest.training_config,))
     tasks = []
     for group in manifest.groups:
         where = f"jobs.{group.name}"
@@ -876,21 +885,34 @@ def _expand(manifest, session_of, dialect, problems, chosen=None):
         array_index = 0
         for experiment in group.experiments:
             e_where = f"{where}.recipes[{experiment.name}]"
-            base_session = session_of(experiment)
-            overrides = _parse_entries(experiment.overrides, "value", f"{e_where}.overrides", base_session, problems)
-            matrix = _parse_entries(experiment.matrix, "values", f"{e_where}.matrix", base_session, problems)
-            session = base_session
-            for target, value in overrides:
-                try:
-                    session = addresses.write(session, target, value)
-                except ValueError as error:
-                    problems.add(f"{e_where}: {error}")
             origin = experiment.from_mission
+            paths = files_of(experiment)
+            # Each file's session, with the recipe's overrides, and its own
+            # reading of the addresses: they are checked against every file.
+            per_file = []
+            for path in paths:
+                found = Problems() if len(paths) > 1 else problems
+                base_session = session_of(path)
+                overrides = _parse_entries(experiment.overrides, "value", f"{e_where}.overrides",
+                                           base_session, found)
+                matrix = _parse_entries(experiment.matrix, "values", f"{e_where}.vary", base_session, found)
+                session = base_session
+                for target, value in overrides:
+                    try:
+                        session = addresses.write(session, target, value)
+                    except ValueError as error:
+                        found.add(f"{e_where}: {error}")
+                into = None
+                if origin is not None:
+                    into = _check_into(experiment, origin, base_session, overrides, matrix,
+                                       e_where, found)
+                if found is not problems:
+                    for problem in found._items:
+                        problems.add(f"{problem} (in {path})")
+                per_file.append((path, session, matrix, into))
             sources: list = [None]
-            into = None
             if origin is not None:
-                into = _check_into(experiment, origin, base_session, overrides, matrix,
-                                   e_where, problems)
+                into = per_file[0][3]
                 # `into` and the source's own varied values: what summaries
                 # compare in place of the checkpoint's path.
                 sources = [{"mission": origin.id, "experiment": name, "checkpoint": checkpoint.path,
@@ -898,32 +920,37 @@ def _expand(manifest, session_of, dialect, problems, chosen=None):
                             "into": into.as_json() if into is not None else None,
                             "variant": [dict(item) for item in variant]}
                            for name, checkpoint, variant in chosen.get((group.name, experiment.name), [])]
-                if into is None:
+                if any(item[3] is None for item in per_file):
                     sources = []
-            combinations = list(itertools.product(*(values for _, values in matrix))) if matrix else [()]
-            for number, (source, combination) in enumerate(itertools.product(sources, combinations)):
-                task_session = session
-                if source is not None:
-                    try:
-                        task_session = addresses.write(task_session, into, source["checkpoint"])
-                    except ValueError as error:
-                        problems.add(f"{e_where}.from_mission.into: {error}")
-                variant = []
-                for (target, _), value in zip(matrix, combination):
-                    try:
-                        task_session = addresses.write(task_session, target, value)
-                    except ValueError as error:
-                        problems.add(f"{e_where}: {error}")
-                    variant.append({"address": target.as_json(), "value": value})
-                try:
-                    # Overrides and matrix values can bring one in too.
-                    check_no_interpolation(task_session, f"{group.name}/{experiment.name}/{number:03d}")
-                except ConfigFileError as error:
-                    problems.add(str(error))
-                for problem in check_topology(task_session, group.resources):
-                    problems.add(f"{group.name}/{experiment.name}/{number:03d}: {problem}")
-                tasks.append((group, experiment, number, array_index, task_session, variant, source))
-                array_index += 1
+            number = -1
+            for source in sources:
+                for path, session, matrix, into in per_file:
+                    combinations = list(itertools.product(*(values for _, values in matrix))) if matrix else [()]
+                    for combination in combinations:
+                        number += 1
+                        task_session = session
+                        if source is not None:
+                            try:
+                                task_session = addresses.write(task_session, into, source["checkpoint"])
+                            except ValueError as error:
+                                problems.add(f"{e_where}.from_mission.into: {error}")
+                        variant = []
+                        for (target, _), value in zip(matrix, combination):
+                            try:
+                                task_session = addresses.write(task_session, target, value)
+                            except ValueError as error:
+                                problems.add(f"{e_where}: {error}")
+                            variant.append({"address": target.as_json(), "value": value})
+                        try:
+                            # Overrides and matrix values can bring one in too.
+                            check_no_interpolation(task_session, f"{group.name}/{experiment.name}/{number:03d}")
+                        except ConfigFileError as error:
+                            problems.add(str(error))
+                        for problem in check_topology(task_session, group.resources):
+                            problems.add(f"{group.name}/{experiment.name}/{number:03d}: {problem}")
+                        tasks.append((group, experiment, number, array_index, task_session, variant,
+                                      source, path))
+                        array_index += 1
         if array_index > dialect.max_task_set_size:
             problems.add(
                 f"job '{group.name}' has {array_index} experiments, more than the "
