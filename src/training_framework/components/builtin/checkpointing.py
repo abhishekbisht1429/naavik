@@ -5,7 +5,8 @@ import warnings
 from collections.abc import Collection, Iterable, Mapping
 from contextlib import ExitStack
 from copy import deepcopy
-from typing import TYPE_CHECKING, Any, override
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, ClassVar, override
 
 import torch
 from torch import nn
@@ -17,6 +18,10 @@ from training_framework.components import (
 )
 from training_framework.components import hook, rank_zero_only
 from training_framework.components.base import ComponentDependencyError
+from training_framework.components.config_schema import (
+    parse_component_config,
+    positive_every,
+)
 from training_framework.session.checkpoint_format import (
     is_checkpoint_directory,
     read_checkpoint,
@@ -44,14 +49,40 @@ if TYPE_CHECKING:
     from training_framework.session import Session
 
 
+@dataclass(frozen=True)
+class CheckpointerConfig:
+    """The `checkpointer` config (`checkpoint_every` comes from the training
+    session's defaults when the entry leaves it out)."""
+
+    checkpoint_every: Any
+    checkpoints_dir: Any = None
+    checkpoint_first: Any = False
+    #: Restoring a checkpoint from before this schema: keys the checkpointer
+    #: never read are dropped with a warning, so the checkpoint still resumes.
+    unknown_keys_dropped_on_restore: ClassVar[bool] = True
+
+    def __post_init__(self) -> None:
+        positive_every(self.checkpoint_every, "checkpointer.checkpoint_every")
+        if self.checkpoints_dir is not None and (
+                not isinstance(self.checkpoints_dir, str) or not self.checkpoints_dir):
+            raise ValueError("checkpointer.checkpoints_dir must be a directory path; "
+                             f"got {self.checkpoints_dir!r}")
+        if not isinstance(self.checkpoint_first, bool):
+            raise TypeError("checkpointer.checkpoint_first must be a boolean; "
+                            f"got {self.checkpoint_first!r}")
+
+
 @rank_zero_only
 @hook("checkpointer")
 class Checkpointer(LifecycleHook, Stateful, ExtendableComponent):
 
+    config_schema = CheckpointerConfig
+
     def __init__(self, config: dict):
+        settings = parse_component_config(type(self), config)
         self._config = config
         self._checkpoints_dir = None
-        self.call_every = config["checkpoint_every"]
+        self.call_every = settings.checkpoint_every
 
     @override
     def pre_session(self, session: Session) -> Any:
@@ -116,8 +147,9 @@ class Checkpointer(LifecycleHook, Stateful, ExtendableComponent):
                 "Checkpointer session extension does not allow changes to: "
                 + names
             )
+        settings = parse_component_config(type(self), config)
         self._config = deepcopy(dict(config))
-        self.call_every = self._config["checkpoint_every"]
+        self.call_every = settings.checkpoint_every
 
     @staticmethod
     def save_checkpoint(session: Session, path) -> str:

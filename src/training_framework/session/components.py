@@ -180,27 +180,15 @@ class CheckpointMismatchError(ValueError):
 
 
 
-def _without_unread_keys(component_class, name: str, args: tuple) -> tuple:
-    """`args` for rebuilding `name` from a checkpoint. A component whose
-    `config_schema` sets `unknown_keys_dropped_on_restore` once ignored keys
-    it now refuses; a checkpoint written then still has them, so they are
-    dropped, with a warning naming them (they never changed anything)."""
-    from training_framework.components.config_schema import field_names
 
-    schema = getattr(component_class, "config_schema", None)
-    if (not getattr(schema, "unknown_keys_dropped_on_restore", False) or not args
-            or not isinstance(args[0], Mapping)):
+def _without_unread_keys(component_class, name: str, args: tuple) -> tuple:
+    """`args` for rebuilding `name` from a checkpoint: its config without
+    the keys its schema drops on restore (`drop_unread_keys`)."""
+    from training_framework.components.config_schema import drop_unread_keys
+
+    if not args:
         return tuple(args)
-    accepted = set(field_names(schema))
-    unread = sorted((key for key in args[0] if key not in accepted), key=str)
-    if not unread:
-        return tuple(args)
-    warnings.warn(
-        f"{name}: the checkpoint's config has {', '.join(map(str, unread))}, which "
-        f"{name} never read; dropped (a new config with them is refused)",
-        stacklevel=3,
-    )
-    return ({key: value for key, value in args[0].items() if key in accepted}, *args[1:])
+    return (drop_unread_keys(component_class, name, args[0]), *args[1:])
 
 class SessionComponents:
     def __init__(

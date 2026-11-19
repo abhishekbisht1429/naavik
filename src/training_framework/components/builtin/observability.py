@@ -7,7 +7,7 @@ import time
 from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, override
+from typing import TYPE_CHECKING, Any, ClassVar, override
 
 import torch
 
@@ -23,6 +23,11 @@ from training_framework.components import (
     resource,
 )
 from training_framework.util import format_execution_time
+from training_framework.components.config_schema import (
+    drop_unread_keys,
+    parse_component_config,
+    positive_every,
+)
 
 if TYPE_CHECKING:
     from training_framework.session import Session, TrainingSession
@@ -47,16 +52,93 @@ def reported(session: Session, attribute: str) -> Any:
     return None
 
 
+@dataclass(frozen=True)
+class LoggerConfig:
+    """The `logger` config (`log_every` comes from the session's defaults
+    when the entry leaves it out)."""
+
+    log_every: Any
+    log_file: Any = None
+    #: Restoring a checkpoint from before this schema: keys the logger never
+    #: read are dropped with a warning, so the checkpoint still resumes.
+    unknown_keys_dropped_on_restore: ClassVar[bool] = True
+
+    def __post_init__(self) -> None:
+        positive_every(self.log_every, "logger.log_every")
+        if self.log_file is not None and (not isinstance(self.log_file, str) or not self.log_file):
+            raise ValueError(f"logger.log_file must be a file path; got {self.log_file!r}")
+
+
+@dataclass(frozen=True)
+class TimerConfig:
+    """The `timer` config."""
+
+    call_every: Any
+    unknown_keys_dropped_on_restore: ClassVar[bool] = True
+
+    def __post_init__(self) -> None:
+        positive_every(self.call_every, "timer.call_every")
+
+
+def _port_problem(port) -> bool:
+    return (isinstance(port, bool)
+            or not (isinstance(port, int) or (isinstance(port, str) and port.isdigit()))
+            or not 0 < int(port) < 65536)
+
+
+@dataclass(frozen=True)
+class TensorboardConfig:
+    """The `tensorboard` config: the writer always; with `serve` (default),
+    also a TensorBoard server on `host`:`port`, which it then needs."""
+
+    serve: Any = True
+    host: Any = None
+    port: Any = None
+    logdir: Any = None
+    unknown_keys_dropped_on_restore: ClassVar[bool] = True
+
+    #: Keys that only configure the server.
+    SERVER_KEYS: ClassVar[tuple[str, ...]] = ("host", "port", "logdir")
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.serve, bool):
+            raise ValueError(f"serve must be a boolean; got {self.serve!r}")
+        given = [key for key in self.SERVER_KEYS if getattr(self, key) is not None]
+        if not self.serve:
+            if given:
+                raise ValueError(
+                    "tensorboard starts no server with serve: false, so "
+                    f"{', '.join(given)} would have no effect; remove "
+                    f"{'it' if len(given) == 1 else 'them'}"
+                )
+            return
+        missing = [key for key in ("host", "port") if getattr(self, key) is None]
+        if missing:
+            raise ValueError(
+                f"tensorboard serves on host:port, so it needs {' and '.join(missing)} "
+                "(or serve: false to write events only)"
+            )
+        if not isinstance(self.host, str) or not self.host:
+            raise ValueError(f"tensorboard.host must be a host name or address; got {self.host!r}")
+        if _port_problem(self.port):
+            raise ValueError(f"tensorboard.port must be a port number (1-65535); got {self.port!r}")
+        if self.logdir is not None and (not isinstance(self.logdir, str) or not self.logdir):
+            raise ValueError(f"tensorboard.logdir must be a directory path; got {self.logdir!r}")
+
+
 @rank_zero_only
 @hook("logger")
 class Logger(LifecycleHook, ExtendableComponent):
 
+    config_schema = LoggerConfig
+
     def __init__(self, config: dict):
+        settings = parse_component_config(type(self), config)
         self._config = config
-        self.call_every = config["log_every"]
+        self.call_every = settings.log_every
         # The configured path (None: stdout), and the stream written to,
         # which is stdout whenever no file is open.
-        self._log_path = config.get("log_file")
+        self._log_path = settings.log_file
         self._log_file = sys.stdout
 
     def pre_session(self, session: Session) -> Any:
@@ -109,7 +191,9 @@ class Logger(LifecycleHook, ExtendableComponent):
         return {"config": self._config}
 
     def __setstate__(self, state: Any) -> None:
-        self.__init__(state["config"])
+        # An unpickled session (a single-file checkpoint) may hold keys the
+        # logger once ignored.
+        self.__init__(drop_unread_keys(type(self), "logger", state["config"]))
 
     def apply_extension_config(
             self,
@@ -122,29 +206,19 @@ class Logger(LifecycleHook, ExtendableComponent):
             raise ValueError(
                 "Logger session extension does not allow changes to: " + names
             )
+        settings = parse_component_config(type(self), config)
         self._config = deepcopy(dict(config))
-        self.call_every = self._config["log_every"]
+        self.call_every = settings.log_every
 
 
 @rank_zero_only
 @resource("tensorboard")
 class Tensorboard(Resource):
-    # Keys that only configure the server; with `serve: false` there is no
-    # server for them to configure.
-    _SERVER_KEYS = ("host", "port", "logdir")
+
+    config_schema = TensorboardConfig
 
     def __init__(self, config: dict):
-        serve = config.get("serve", True)
-        if not isinstance(serve, bool):
-            raise ValueError(f"serve must be a boolean; got {serve!r}")
-        if not serve:
-            given = [key for key in self._SERVER_KEYS if key in config]
-            if given:
-                raise ValueError(
-                    "tensorboard starts no server with serve: false, so "
-                    f"{', '.join(given)} would have no effect; remove "
-                    f"{'it' if len(given) == 1 else 'them'}"
-                )
+        parse_component_config(type(self), config)
         self._config = config
         self._tb_process: subprocess.Popen | None = None
         self._tb_summary_writer = None
@@ -347,8 +421,10 @@ class TensorboardSummaries(LifecycleHook):
 @hook("timer", session_type="training")
 class Timer(LifecycleHook):
 
+    config_schema = TimerConfig
+
     def __init__(self, config) -> None:
-        self.call_every = config["call_every"]
+        self.call_every = parse_component_config(type(self), config).call_every
         self._session_start = None
         self._iter_start = None
 

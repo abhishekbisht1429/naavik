@@ -160,3 +160,35 @@ def has_all_defaults(schema: type | None) -> bool:
         or field.default_factory is not MISSING  # type: ignore[misc]
         for field in fields(schema)
     )
+
+
+def drop_unread_keys(component_class: type, name: str, config: Any) -> Any:
+    """`config` for rebuilding `name` from a checkpoint (or an unpickled
+    session). A component whose `config_schema` sets
+    `unknown_keys_dropped_on_restore` once ignored keys it now refuses; a
+    checkpoint written then still has them, so they are dropped, with a
+    warning naming them (they never changed anything). Anything else is
+    returned as it is."""
+    import warnings
+
+    schema = getattr(component_class, "config_schema", None)
+    if (not getattr(schema, "unknown_keys_dropped_on_restore", False)
+            or not isinstance(config, Mapping)):
+        return config
+    accepted = set(field_names(schema))
+    unread = sorted((key for key in config if key not in accepted), key=str)
+    if not unread:
+        return config
+    warnings.warn(
+        f"{name}: the checkpoint's config has {', '.join(map(str, unread))}, which "
+        f"{name} never read; dropped (a new config with them is refused)",
+        stacklevel=3,
+    )
+    return {key: value for key, value in config.items() if key in accepted}
+
+
+def positive_every(value: Any, key: str) -> None:
+    """Refuse an interval that is not a positive integer: hooks run when
+    the iteration is a multiple of it."""
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise ValueError(f"{key} must be a positive integer; got {value!r}")
