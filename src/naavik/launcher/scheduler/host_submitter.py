@@ -138,4 +138,5 @@ def extra_files(plan) -> dict[str, str]:
 
 def reconcile_hint(job_name: str) -> str:
     return (f"look for a host job named {job_name}: grep -l '\"{job_name}\"' "
+            "~/.local/state/naavik/host/$(hostname)/jobs/*.json "
             "~/.local/state/training-framework/host/$(hostname)/jobs/*.json")

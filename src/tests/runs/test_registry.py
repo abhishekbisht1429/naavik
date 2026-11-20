@@ -46,7 +46,7 @@ def record(run_id=None, **changes):
 def test_the_registry_lives_in_the_data_home_unless_named_or_off(tmp_path, monkeypatch):
     monkeypatch.delenv("TRAINING_FRAMEWORK_RUNS", raising=False)
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
-    assert registry_dir() == tmp_path / "data" / "training-framework" / "runs"
+    assert registry_dir() == tmp_path / "data" / "naavik" / "runs"
     monkeypatch.setenv("TRAINING_FRAMEWORK_RUNS", str(tmp_path / "elsewhere"))
     assert registry_dir() == tmp_path / "elsewhere"
     monkeypatch.setenv("TRAINING_FRAMEWORK_RUNS", "off")

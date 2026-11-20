@@ -32,8 +32,9 @@ TARGETS_FILE, LEGACY_TARGETS_FILE = EARLIER_HOSTS_FILES
 
 
 def _config_dir() -> Path:
-    base = os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
-    return Path(base) / "training-framework"
+    from naavik.paths import app_dir
+
+    return app_dir("config")
 
 
 def default_profiles_path() -> Path:
@@ -149,11 +150,11 @@ def _parser(prog: str = "python -m naavik.hpc") -> argparse.ArgumentParser:
                              help="the host (default: the hosts file's default_host); "
                                   "--target and --profile are earlier names")
         command.add_argument("--hosts-file", "--targets", "--profiles", dest="profiles", type=Path,
-                             help="the hosts file (default: $XDG_CONFIG_HOME/training-framework/"
+                             help="the hosts file (default: $XDG_CONFIG_HOME/naavik/"
                                   "hosts.yaml); --targets and --profiles are earlier names")
 
     def receipts(command):
-        command.add_argument("--receipts", type=Path, help="receipt directory (default: $XDG_STATE_HOME/training-framework/submissions)")
+        command.add_argument("--receipts", type=Path, help="receipt directory (default: $XDG_STATE_HOME/naavik/submissions)")
 
     for name, help_text in (
             ("validate", "compile the mission file and report every offline problem"),
@@ -346,10 +347,10 @@ def _code_facts(repository, profile, fetch_here=False):
     batch's own code before anything is staged; None (with a warning) when
     the check is turned off. `fetch_here` (launch, run): data the target's
     profile uploads is first fetched on this machine when it is missing."""
-    from naavik.launcher.services.evaluation import ENV_SWITCH, enabled, evaluate_batch
+    from naavik.launcher.services.evaluation import enabled, evaluate_batch, switch_name
 
     if not enabled():
-        print(f"warning: the experiment configs were not checked ({ENV_SWITCH}=0)", file=sys.stderr)
+        print(f"warning: the experiment configs were not checked ({switch_name()}=0)", file=sys.stderr)
         return None
 
     def port(sha, manifest, managed, tasks):

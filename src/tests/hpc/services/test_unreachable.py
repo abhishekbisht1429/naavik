@@ -45,7 +45,7 @@ def test_every_command_says_why_the_cluster_cannot_be_reached(fake_cluster, tmp_
 
 def test_an_empty_live_listing_still_checks_the_cluster(fake_cluster, tmp_path, monkeypatch, capsys):
     batch_dir, profiles = submitted_batch(fake_cluster, tmp_path, monkeypatch, capsys)
-    receipts = Path(os.environ["XDG_STATE_HOME"]) / "training-framework" / "submissions"
+    receipts = Path(os.environ["XDG_STATE_HOME"]) / "naavik" / "submissions"
     for item in receipts.iterdir():
         item.unlink()                          # e.g. every submit failed before its receipt
     assert main(["batches", "--profiles", str(profiles)]) == 0

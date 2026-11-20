@@ -23,14 +23,24 @@ from pathlib import Path
 from naavik.launcher.errors import HpcError
 
 _FULL_SHA = re.compile(r"@([0-9a-f]{40})\b")
-#: `TRAINING_FRAMEWORK_CODE_CHECK=0` skips the check (for tests of the batch
-#: layer, whose configs are placeholders); a skip is warned about and
-#: recorded in the receipt, never silent.
-ENV_SWITCH = "TRAINING_FRAMEWORK_CODE_CHECK"
+#: `NAAVIK_CODE_CHECK=0` (earlier: `TRAINING_FRAMEWORK_CODE_CHECK=0`) skips
+#: the check (for tests of the batch layer, whose configs are placeholders);
+#: a skip is warned about and recorded in the receipt, never silent.
+ENV_NAME = "CODE_CHECK"
+ENV_SWITCH = "NAAVIK_CODE_CHECK"
 
 
 def enabled() -> bool:
-    return os.environ.get(ENV_SWITCH, "1") != "0"
+    from naavik.paths import env
+
+    return (env(ENV_NAME) or "1") != "0"
+
+
+def switch_name() -> str:
+    """The variable a message names: the one set, current or earlier."""
+    from naavik.paths import variable_name
+
+    return variable_name(ENV_NAME)
 
 
 def _checkout_version(location: str | None) -> str | None:
@@ -99,7 +109,7 @@ def framework_mismatch(manifest, sha, managed, repository, framework: dict, tree
     if pin.version is not None and mine.get("version") != pin.version:
         if mine.get("version") is None and _checkout_version(mine.get("location")) == pin.version:
             return None                    # a checkout of the pinned release (noted by the caller)
-        return (f"the host runs training-framework {pin.version}, but the framework here is "
+        return (f"the host runs {pin.name} {pin.version}, but the framework here is "
                 f"{mine.get('version') or 'not an installed release'} ({mine.get('location')}); "
                 "install the pinned framework here (guide 10, step 5)")
     return None

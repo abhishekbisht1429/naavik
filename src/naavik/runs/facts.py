@@ -12,9 +12,10 @@ import platform
 import socket
 from pathlib import Path
 
-#: `TRAINING_FRAMEWORK_RUNS_SNAPSHOT=0`: never make snapshot commits for
+#: `NAAVIK_RUNS_SNAPSHOT=0` (earlier: `TRAINING_FRAMEWORK_RUNS_SNAPSHOT=0`):
+#: never make snapshot commits for
 #: runs of a dirty working tree (the record then says the tree was dirty).
-ENV_SNAPSHOT = "TRAINING_FRAMEWORK_RUNS_SNAPSHOT"
+ENV_SNAPSHOT = "NAAVIK_RUNS_SNAPSHOT"
 #: Where a run's snapshot commit is kept in the repository.
 RUN_REFS = "refs/naavik/runs"
 DEFAULT_SNAPSHOT_LIMIT = 50 * 1024 ** 2
@@ -102,10 +103,15 @@ def code_identity(start: Path, run_id: str, *, snapshot: bool | None = None,
     if repository.is_clean():
         return identity
     if snapshot is None:
-        snapshot = os.environ.get(ENV_SNAPSHOT, "1") != "0"
+        from naavik.paths import env
+
+        snapshot = (env("RUNS_SNAPSHOT") or "1") != "0"
     if not snapshot:
+        from naavik.paths import variable_name
+
         return {**identity, "dirty": True,
-                "error": f"the working tree has changes; {ENV_SNAPSHOT}=0 keeps no snapshot"}
+                "error": f"the working tree has changes; {variable_name('RUNS_SNAPSHOT')}=0 "
+                         "keeps no snapshot"}
     try:
         taken = repository.snapshot(limit)
         ref = repository.keep_ref(f"{RUN_REFS}/{run_id}", taken.sha)

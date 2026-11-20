@@ -743,6 +743,12 @@ def _context(phase, environment, source_dir, manifest, profile) -> ExecutionCont
     )
 
 
+def _code_check_switch() -> str:
+    from naavik.launcher.services.evaluation import switch_name
+
+    return switch_name()
+
+
 def _data_requirements(tasks_raw, sessions, sources, profile, facts, code_facts, problems,
                        data) -> None:
     """Declared data (step 4): managed when the target's profile has `data_modes`;
@@ -753,7 +759,7 @@ def _data_requirements(tasks_raw, sessions, sources, profile, facts, code_facts,
         if profile.data is not None:
             problems.add(f"host '{profile.name}' manages data (dataset_delivery), which "
                          "needs the data requirements the code check finds; the code check "
-                         "is off (TRAINING_FRAMEWORK_CODE_CHECK=0)")
+                         f"is off ({_code_check_switch()}=0)")
         return
     per_task = [code_facts.requirements.get(name, ()) for name in names]
     if profile.data is None:

@@ -25,10 +25,9 @@ _CHUNK = 1 << 20
 
 
 def default_cache_path() -> Path:
-    base = os.environ.get("XDG_CACHE_HOME") or os.path.join(
-        os.path.expanduser("~"), ".cache",
-    )
-    return Path(base) / "training-framework" / "hashes.sqlite3"
+    from naavik.paths import app_dir
+
+    return app_dir("cache") / "hashes.sqlite3"
 
 
 @dataclass(frozen=True)

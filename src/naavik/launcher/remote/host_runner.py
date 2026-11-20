@@ -20,7 +20,9 @@ at the walltime. The job's state is a JSON file, rewritten on every change:
     <state dir>/jobs/<ref>.json
 
 where the state directory is per user and per host (like the scheduler's own
-queue): `$XDG_STATE_HOME/training-framework/host/<hostname>`. The job's
+queue): `$XDG_STATE_HOME/naavik/host/<hostname>` (or, where only that exists,
+`training-framework/host/...`, its earlier name: jobs started before the
+rename are read in either). The job's
 reference is `h<pid>.<start time>` of the runner, checkable on this host.
 
 `python3 host_runner.py states [REF ...]` prints the live states (JSON), and
@@ -47,10 +49,34 @@ COMPLETED, FAILED, TIMEOUT, CANCELLED = "completed", "failed", "timeout", "cance
 FINAL = (COMPLETED, FAILED, TIMEOUT, CANCELLED)
 
 
-def state_dir():
+#: The state directory's name, then its earlier one (standard library only:
+#: this runs on the host, without naavik; `naavik.paths` keeps the same rule).
+STATE_NAMES = ("naavik", "training-framework")
+
+
+def state_dirs():
+    """Every place a runner's state may be, current name first."""
     base = os.environ.get("XDG_STATE_HOME") or os.path.join(
         os.path.expanduser("~"), ".local", "state")
-    return os.path.join(base, "training-framework", "host", socket.gethostname())
+    return [os.path.join(base, name, "host", socket.gethostname()) for name in STATE_NAMES]
+
+
+def state_dir():
+    """Where a new runner keeps its state: under `naavik`, or under the
+    earlier name when only that one exists on this host."""
+    current, earlier = (os.path.dirname(os.path.dirname(path)) for path in state_dirs())
+    if os.path.isdir(earlier) and not os.path.exists(current):
+        return state_dirs()[1]
+    return state_dirs()[0]
+
+
+def job_dir(ref):
+    """The state directory holding runner `ref`'s job file (where its
+    runner reads a cancel request), else where a new runner writes."""
+    for directory in state_dirs():
+        if os.path.exists(_job_file(directory, ref)):
+            return directory
+    return state_dir()
 
 
 def job_ref(pid):
@@ -361,20 +387,20 @@ class Runner:
 def live_states(refs=None):
     """{ref: state, ref_index: state} of the non-final elements of live
     runners (all of them, or `refs`): what is still queued or running."""
-    directory = os.path.join(state_dir(), "jobs")
-    try:
-        names = sorted(os.listdir(directory))
-    except FileNotFoundError:
-        return {}
+    found = {}
+    for state in reversed(state_dirs()):         # the current name wins a clash
+        try:
+            for name in os.listdir(os.path.join(state, "jobs")):
+                if name.endswith(".json"):
+                    found[name[:-len(".json")]] = state
+        except FileNotFoundError:
+            continue
     wanted = None if refs is None else set(refs)
     states = {}
-    for name in names:
-        if not name.endswith(".json"):
-            continue
-        ref = name[:-len(".json")]
+    for ref in sorted(found):
         if wanted is not None and ref not in wanted:
             continue
-        data = read_job(state_dir(), ref)
+        data = read_job(found[ref], ref)
         if not data or data.get("final") or not ref_alive(ref):
             continue
         values = [value for value in data["elements"].values() if value not in FINAL]
@@ -392,7 +418,7 @@ def request_cancel(ref, indices):
     if not ref_alive(ref):
         return "not running"
     if indices:
-        path = _job_file(state_dir(), ref) + ".cancel"
+        path = _job_file(job_dir(ref), ref) + ".cancel"
         existing = StdlibFilesystem().read(path)
         known = existing.decode().split() if existing else []
         StdlibFilesystem().write(path, " ".join(known + [str(i) for i in indices]).encode())

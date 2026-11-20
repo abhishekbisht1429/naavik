@@ -17,8 +17,10 @@ import yaml
 
 from naavik.runs.ids import is_run_id
 
-ENV_DIRECTORY = "TRAINING_FRAMEWORK_RUNS"
-#: `TRAINING_FRAMEWORK_RUNS=off` turns the registry off.
+#: The variable naming the registry (`naavik.paths.env`: `NAAVIK_RUNS`,
+#: or its earlier name `TRAINING_FRAMEWORK_RUNS`); `off` turns it off.
+ENV_NAME = "RUNS"
+ENV_DIRECTORY = "NAAVIK_RUNS"
 OFF = "off"
 RUN_FILE = "run.json"
 EVENTS_FILE = "events.jsonl"
@@ -33,13 +35,14 @@ _FINISHED_STATES = {"ok": DONE, "failed": FAILED, "interrupted": INTERRUPTED}
 
 def registry_dir() -> Path | None:
     """The registry of this machine, or None when it is turned off."""
-    configured = os.environ.get(ENV_DIRECTORY)
+    from naavik.paths import app_dir, env
+
+    configured = env(ENV_NAME)
     if configured == OFF:
         return None
     if configured:
         return Path(configured)
-    base = os.environ.get("XDG_DATA_HOME") or os.path.join(os.path.expanduser("~"), ".local", "share")
-    return Path(base) / "training-framework" / "runs"
+    return app_dir("data") / "runs"
 
 
 def now() -> str:

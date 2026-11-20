@@ -24,7 +24,8 @@ from naavik.runs.registry import RunWriter, now, registry_dir
 #: Set by the remote task entry point for a batch task (JSON object).
 ENV_CONTEXT = "NAAVIK_RUN_CONTEXT"
 #: A worker's run directory, in its environment from the moment it is spawned.
-ENV_RUN_DIRECTORY = "TRAINING_FRAMEWORK_RUN_DIRECTORY"
+#: (A hand-off from a launch to its own workers, so it has no earlier name.)
+ENV_RUN_DIRECTORY = "NAAVIK_RUN_DIRECTORY"
 _OPERATIONS = {"new": "config", "resume": "resume", "extend": "extend"}
 
 

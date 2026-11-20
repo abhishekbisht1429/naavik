@@ -17,14 +17,18 @@ import yaml
 #: target's `python3` (standard library only).
 _REMOTE_REGISTRY = r"""
 import os
-configured = os.environ.get("TRAINING_FRAMEWORK_RUNS")
+configured = os.environ.get("NAAVIK_RUNS")
+if configured is None:
+    configured = os.environ.get("TRAINING_FRAMEWORK_RUNS")   # the earlier name
 if configured == "off":
     print("")
 elif configured:
     print(configured)
 else:
     base = os.environ.get("XDG_DATA_HOME") or os.path.join(os.path.expanduser("~"), ".local", "share")
-    print(os.path.join(base, "training-framework", "runs"))
+    current, earlier = os.path.join(base, "naavik"), os.path.join(base, "training-framework")
+    used = earlier if os.path.isdir(earlier) and not os.path.exists(current) else current
+    print(os.path.join(used, "runs"))
 """
 
 

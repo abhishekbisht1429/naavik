@@ -27,8 +27,8 @@ def _parser(prog: str) -> argparse.ArgumentParser:
 
     def registry_option(command):
         command.add_argument("--registry", type=Path,
-                             help="the registry to read (default: $TRAINING_FRAMEWORK_RUNS, "
-                                  "else $XDG_DATA_HOME/training-framework/runs)")
+                             help="the registry to read (default: $NAAVIK_RUNS, "
+                                  "else $XDG_DATA_HOME/naavik/runs)")
 
     listing = commands.add_parser("list", allow_abbrev=False, help="the recorded runs, newest first")
     listing.add_argument("--since", metavar="AGE", help="only runs started within AGE: 30m, 12h, 7d, 2w")
@@ -65,7 +65,7 @@ def _parser(prog: str) -> argparse.ArgumentParser:
     which.add_argument("--all-hosts", dest="all_targets", action="store_true",
                        help="every host of the hosts file")
     sync.add_argument("--hosts-file", "--targets", "--profiles", dest="profiles", type=Path,
-                      help="the hosts file (default: $XDG_CONFIG_HOME/training-framework/hosts.yaml)")
+                      help="the hosts file (default: $XDG_CONFIG_HOME/naavik/hosts.yaml)")
     registry_option(sync)
     return parser
 
@@ -73,7 +73,9 @@ def _parser(prog: str) -> argparse.ArgumentParser:
 def _root(args) -> Path:
     root = args.registry or registry_dir()
     if root is None:
-        raise RunsError("the run registry is turned off (TRAINING_FRAMEWORK_RUNS=off); "
+        from naavik.paths import variable_name
+
+        raise RunsError(f"the run registry is turned off ({variable_name('RUNS')}=off); "
                         "pass --registry")
     return root
 

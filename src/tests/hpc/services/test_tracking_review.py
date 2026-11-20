@@ -60,7 +60,7 @@ def test_a_batch_that_never_reached_the_cluster_still_summarizes(tmp_path):
 def test_status_uses_the_receipts_cluster_and_refuses_a_conflicting_profile(
         fake_cluster, tmp_path, monkeypatch, capsys):
     batch_dir, profiles = submitted_batch(fake_cluster, tmp_path, monkeypatch, capsys)
-    receipt_file = (Path(os.environ["XDG_STATE_HOME"]) / "training-framework" / "submissions"
+    receipt_file = (Path(os.environ["XDG_STATE_HOME"]) / "naavik" / "submissions"
                     / f"{batch_dir.name}.json")
     data = json.loads(receipt_file.read_text())
     data["ssh_host"] = "other-cluster"

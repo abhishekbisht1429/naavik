@@ -151,7 +151,7 @@ def test_a_local_batch_runs_the_whole_protocol_without_ssh(launched):
 
 def test_a_local_receipt_records_this_machine_and_no_ssh_host(launched, tmp_path):
     batch_dir, *_ = launched
-    receipt = json.loads((tmp_path / "state" / "training-framework" / "submissions"
+    receipt = json.loads((tmp_path / "state" / "naavik" / "submissions"
                           / f"{batch_dir.name}.json").read_text())
     assert receipt["target"] == {"transport": "local", "host": socket.gethostname()}
     assert "ssh_host" not in receipt
@@ -171,7 +171,7 @@ def test_status_follows_a_local_batch_here(launched, capsys):
 
 def test_the_listing_of_a_local_target_reads_its_receipts_here(launched, capsys):
     batch_dir, targets, ssh_log, _ = launched
-    receipts = Path(str(batch_dir).split("/here/")[0]) / "state" / "training-framework" / "submissions"
+    receipts = Path(str(batch_dir).split("/here/")[0]) / "state" / "naavik" / "submissions"
     for item in receipts.iterdir():
         item.unlink()                                   # as if launched from elsewhere
     assert naavik_cli(["batches", "--remote", "--targets", str(targets)]) == 0

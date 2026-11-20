@@ -24,10 +24,9 @@ FINAL_STATUSES = (SUBMITTED, FAILED, NEEDS_RECONCILIATION, STAGED)
 
 
 def default_receipts_dir() -> str:
-    base = os.environ.get("XDG_STATE_HOME") or os.path.join(
-        os.path.expanduser("~"), ".local", "state",
-    )
-    return os.path.join(base, "training-framework", "submissions")
+    from naavik.paths import app_dir
+
+    return str(app_dir("state") / "submissions")
 
 
 def _now() -> str:

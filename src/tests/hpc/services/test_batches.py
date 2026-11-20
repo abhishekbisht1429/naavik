@@ -170,7 +170,7 @@ def submitted_batch(fake_cluster, tmp_path, monkeypatch, capsys):
 
 def test_batches_lists_live_states_and_tasks_after_a_submit(fake_cluster, tmp_path, monkeypatch, capsys):
     batch_dir, profiles = submitted_batch(fake_cluster, tmp_path, monkeypatch, capsys)
-    receipt_file = Path(os.environ["XDG_STATE_HOME"]) / "training-framework" / "submissions" / \
+    receipt_file = Path(os.environ["XDG_STATE_HOME"]) / "naavik" / "submissions" / \
         f"{batch_dir.name}.json"
     saved = json.loads(receipt_file.read_text())
     assert saved["profile"] == "cluster" and saved["task_count"] == 4
@@ -193,7 +193,7 @@ def test_batches_lists_live_states_and_tasks_after_a_submit(fake_cluster, tmp_pa
 
 def test_batches_remote_finds_batches_submitted_elsewhere(fake_cluster, tmp_path, monkeypatch, capsys):
     batch_dir, profiles = submitted_batch(fake_cluster, tmp_path, monkeypatch, capsys)
-    receipts = Path(os.environ["XDG_STATE_HOME"]) / "training-framework" / "submissions"
+    receipts = Path(os.environ["XDG_STATE_HOME"]) / "naavik" / "submissions"
     for item in receipts.iterdir():
         item.unlink()                                   # as if submitted from another machine
     assert main(["batches", "--profiles", str(profiles)]) == 0

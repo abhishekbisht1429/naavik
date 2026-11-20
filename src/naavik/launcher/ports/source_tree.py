@@ -1,7 +1,7 @@
 """A batch's exact tree, exported once per commit for checks that run its
 code on this machine (never the working tree, which may differ).
 
-`$XDG_CACHE_HOME/training-framework/trees/<sha>`: written into a temporary
+`$XDG_CACHE_HOME/naavik/trees/<sha>`: written into a temporary
 directory and renamed into place, so a check running at the same time never
 sees a half-written tree, and a commit is exported at most once.
 """
@@ -17,8 +17,9 @@ from naavik.launcher.ports.local import LocalSourceStager
 
 
 def trees_directory() -> Path:
-    base = os.environ.get("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache")
-    return Path(base) / "training-framework" / "trees"
+    from naavik.paths import app_dir
+
+    return app_dir("cache") / "trees"
 
 
 def source_tree(repository_root: Path, sha: str) -> Path:
