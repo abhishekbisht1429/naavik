@@ -1,4 +1,5 @@
-"""The remote entry point: `python -m training_framework.hpc.task`.
+"""The remote entry point: `python -m naavik.launcher.task` (protocol 2;
+`training_framework.hpc.task` for plans of protocol 1).
 
 - `--config CFG --record REC --plan PLAN [engine options]`: run one task
   (the README entry point), then write its record.
@@ -29,7 +30,10 @@ from naavik.launcher import EXECUTION_PROTOCOL_VERSION
 from naavik.launcher.remote.runtime import interpreter_identity
 from naavik.runs.facts import environment_hash
 
-SUPPORTED_PROTOCOL_VERSIONS = (EXECUTION_PROTOCOL_VERSION,)
+#: Plans this framework runs: its own version, and version 1 (the same
+#: contract, run as training_framework): an environment updated to this
+#: framework still runs missions launched before the rename.
+SUPPORTED_PROTOCOL_VERSIONS = (1, EXECUTION_PROTOCOL_VERSION)
 INTERRUPTED_EXIT = 75
 #: What this remote side can do beyond the protocol; `resume` checks for it.
 CAPABILITIES = ("resume", "restart")
@@ -229,7 +233,7 @@ def run_task(config_path: str, record_path: str, plan_path: str,
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="python -m training_framework.hpc.task")
+    parser = argparse.ArgumentParser(prog="python -m naavik.launcher.task")
     parser.add_argument("--preflight", metavar="PLAN")
     parser.add_argument("--prepare", metavar="NODE")
     parser.add_argument("--config")

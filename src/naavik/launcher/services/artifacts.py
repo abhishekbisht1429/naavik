@@ -16,6 +16,7 @@ import inspect
 import json
 import socket
 
+from naavik.launcher import task_module
 from naavik.launcher.compile.plan import Artifact, ExecutionPlan
 from naavik.launcher.errors import HpcError
 from naavik.launcher.ports import Owner
@@ -189,7 +190,7 @@ class DataPreparer:
     def run_on_login(self, node) -> None:
         context = node.context
         result = self.executor.run(
-            [context.interpreter, "-m", "training_framework.hpc.task", "--prepare", node.id,
+            [context.interpreter, "-m", task_module(self.plan.protocol_version), "--prepare", node.id,
              "--plan", f"{self.plan.batch_dir}/plan.json"], context)
         if result.status != 0:
             record = self.filesystem.read(f"{self.plan.batch_dir}/nodes/{node.id}/record.json")

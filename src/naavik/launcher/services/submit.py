@@ -16,6 +16,7 @@ from typing import Callable
 
 from packaging.specifiers import SpecifierSet
 
+from naavik.launcher import task_module
 from naavik.launcher.compile.plan import ExecutionPlan
 from naavik.launcher.compile.render import plan_files
 from naavik.launcher.errors import HpcError
@@ -59,13 +60,13 @@ def run_preflight(plan: ExecutionPlan, executor: RemoteExecutor) -> dict:
     """Facts from the environment, compared with the plan's expectations."""
     context = next(node for node in plan.nodes if node.kind == "task_set").context
     result = executor.run(
-        [context.interpreter, "-m", "training_framework.hpc.task",
+        [context.interpreter, "-m", task_module(plan.protocol_version),
          "--preflight", f"{plan.batch_dir}/plan.json"],
         context,
     )
     if result.status != 0:
         raise PreflightFailed([
-            "the environment cannot run training_framework.hpc.task "
+            f"the environment cannot run {task_module(plan.protocol_version)} "
             f"(exit {result.status}): {result.stderr.strip()[-2000:]}"
         ])
     try:

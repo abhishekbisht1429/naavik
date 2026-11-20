@@ -454,7 +454,9 @@ def fetch_command(class_path: str, entry: Mapping, requirement: str) -> list[str
     holds the lease on the location, so the command takes none)."""
     import json
 
-    return ["python", "-m", "training_framework.data", "fetch", "--component", class_path,
+    from naavik.launcher import DATA_MODULES, EXECUTION_PROTOCOL_VERSION
+
+    return ["python", "-m", DATA_MODULES[EXECUTION_PROTOCOL_VERSION], "fetch", "--component", class_path,
             "--config", _literal(json.dumps(entry, sort_keys=True, default=str)),
             "--requirement", requirement, "--under-lease"]
 

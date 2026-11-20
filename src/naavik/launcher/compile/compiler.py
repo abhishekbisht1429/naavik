@@ -25,7 +25,7 @@ from naavik.config_files import (
     check_no_interpolation,
     load_config,
 )
-from naavik.launcher import EXECUTION_PROTOCOL_VERSION
+from naavik.launcher import EXECUTION_PROTOCOL_VERSION, task_module
 from naavik.launcher.config import address as addresses
 from naavik.launcher.compile import data as data_module
 from naavik.launcher.compile.data import LocalFacts
@@ -484,7 +484,7 @@ def compile_plan(
     for node in nodes:
         if node.kind == "task_set":
             command = [
-                node.context.interpreter, "-m", "training_framework.hpc.task",
+                node.context.interpreter, "-m", task_module(EXECUTION_PROTOCOL_VERSION),
                 "--config", "{config}", "--record", "{record}",
                 "--plan", plan_file, *manifest.engine_options,
             ]
@@ -497,7 +497,7 @@ def compile_plan(
                 )
         elif node.kind == "prepare":
             command = [
-                node.context.interpreter, "-m", "training_framework.hpc.task",
+                node.context.interpreter, "-m", task_module(EXECUTION_PROTOCOL_VERSION),
                 "--prepare", node.id, "--plan", plan_file,
             ]
             lead = None

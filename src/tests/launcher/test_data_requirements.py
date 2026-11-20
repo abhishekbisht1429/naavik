@@ -110,7 +110,7 @@ def test_fetch_is_one_prepare_step_before_the_tasks(tmp_path):
     assert artifact.location == "/scratch/me/datasets/flowers"
     assert set(roots(plan).values()) == {"/scratch/me/datasets/flowers"}
     command = expand_command(artifact.details["command"], artifact.location)
-    assert command[:5] == ["python", "-m", "training_framework.data", "fetch", "--component"]
+    assert command[:5] == ["python", "-m", "naavik.data", "fetch", "--component"]
     assert command[-1] == "--under-lease"
     entry = json.loads(command[command.index("--config") + 1])     # its braces survive
     assert entry["root"] == "/scratch/me/datasets/flowers" and entry["split"] == "train"

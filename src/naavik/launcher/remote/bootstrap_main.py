@@ -65,7 +65,9 @@ def build_environment(environment, source_dir):
 def run_preflight(plan, plan_path, python, source_dir):
     log("running preflight in the new environment")
     script = plan["environment"]["preflight_script"]
-    result = _run(["bash", "-c", script, "bash", python, "-m", "training_framework.hpc.task",
+    # The entry point the plan's protocol version names (`naavik.launcher.TASK_MODULES`).
+    module = {1: "training_framework.hpc.task", 2: "naavik.launcher.task"}[plan["protocol_version"]]
+    result = _run(["bash", "-c", script, "bash", python, "-m", module,
                    "--preflight", plan_path], "preflight", capture=True)
     facts = json.loads(result.stdout.strip().splitlines()[-1])
     problems = compare(facts, plan["preflight"], source_dir)

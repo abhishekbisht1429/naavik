@@ -119,15 +119,17 @@ def test_the_command_line_runs_under_both_names(package):
     assert "validate" in result.stdout and "submit" in result.stdout
 
 
-def test_the_remote_task_entry_point_keeps_its_protocol_name():
-    """Rendered job scripts and environments built from older framework
-    commits know only `training_framework.hpc.task`, so it is the one entry
-    point, whatever package implements it."""
-    from naavik.hpc import task
+def test_both_protocols_entry_points_run_the_same_task():
+    """Plans of protocol 2 run `naavik.launcher.task`; plans of protocol 1
+    (missions launched before the rename, environments built from older
+    framework commits) run `training_framework.hpc.task`. Both are the one
+    implementation."""
+    from naavik.hpc import task as protocol_1
+    from naavik.launcher import task as protocol_2
     from naavik.launcher.remote import task as implementation
 
-    assert task.main is implementation.main
-    assert importlib.util.find_spec("naavik.launcher.task") is None
-    result = _run("-m", "training_framework.hpc.task", "--help")
-    assert result.returncode == 0, result.stderr
-    assert "--config" in result.stdout
+    assert protocol_1.main is implementation.main and protocol_2.main is implementation.main
+    for module in ("naavik.launcher.task", "training_framework.hpc.task"):
+        result = _run("-m", module, "--help")
+        assert result.returncode == 0, result.stderr
+        assert "--config" in result.stdout

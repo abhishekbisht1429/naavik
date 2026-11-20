@@ -193,8 +193,10 @@ def plan_json(batch_dir: str, with_resources=True) -> dict:
     if with_resources:
         node["resources"] = {"walltime": "01:00:00", "walltime_seconds": 3600, "gpus": 1,
                              "cpus": 8, "memory": "64G", "scheduler_options": {}}
+    # Protocol 1: a mission launched before the rename (its environment runs
+    # training_framework.hpc.task).
     return {"batch_id": "b", "batch_dir": batch_dir, "engine_options": ["--heartbeat-timeout", "600"],
-            "nodes": [node]}
+            "nodes": [node], "protocol_version": 1}
 
 
 def chosen_tasks():

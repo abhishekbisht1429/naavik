@@ -21,6 +21,7 @@ import posixpath
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
+from naavik.launcher import task_module
 from naavik.launcher.compile.plan import ExecutionContext, JobNode
 from naavik.launcher.config.schema import Resources, parse_size, parse_walltime
 from naavik.launcher.config.topology import parse_engine_options
@@ -284,12 +285,12 @@ def check_cluster(plan: dict, filesystem, executor, *, restart: bool = False) ->
                               "ready (deleted or purged); launch a new mission")
     group = next(node for node in plan["nodes"] if node["kind"] == "task_set")
     context = context_from_json(group["context"])
-    result = executor.run([context.interpreter, "-m", "training_framework.hpc.task",
+    result = executor.run([context.interpreter, "-m", task_module(plan["protocol_version"]),
                            "--preflight", f"{batch_dir}/plan.json"], context)
     try:
         facts = json.loads(result.stdout.strip().splitlines()[-1])
     except (ValueError, IndexError):
-        raise ResumeError("the environment cannot run training_framework.hpc.task "
+        raise ResumeError(f"the environment cannot run {task_module(plan['protocol_version'])} "
                           f"(exit {result.status}): {result.stderr.strip()[-2000:]}") from None
     problems = preflight.compare(facts, plan["preflight"], f"{batch_dir}/source")
     capabilities = facts.get("capabilities") or []
@@ -370,7 +371,7 @@ def build_attempt(plan: dict, receipt: dict, chosen: list[Candidate], dialect,
             f"{task.index}\t{task.task}\t{task.checkpoint}\t{task.iteration}" for task in tasks
         ]) + "\n"
         command = [
-            node.context.interpreter, "-m", "training_framework.hpc.task",
+            node.context.interpreter, "-m", task_module(plan["protocol_version"]),
             "--config", "{config}", "--record", "{record}", "--plan", f"{batch_dir}/plan.json",
             "--resume", "{checkpoint}", "--attempt", str(attempt), *plan["engine_options"],
         ]

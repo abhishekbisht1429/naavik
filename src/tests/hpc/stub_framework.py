@@ -26,7 +26,10 @@ def interpreter():
 
 if __name__ == "__main__":
     plan = json.load(open(sys.argv[sys.argv.index("--preflight") + 1]))
-    import training_framework
+    try:                                        # protocol 2 runs it as naavik
+        import naavik as training_framework
+    except ImportError:
+        import training_framework
     distribution = None
     for name in ("naavik", "training-framework"):      # as the real one: either name
         try:
@@ -42,7 +45,7 @@ if __name__ == "__main__":
         except Exception as error:
             components[package] = repr(error)
     print(json.dumps({
-        "protocol_versions": json.loads(os.environ.get("STUB_PROTOCOLS", "[1]")),
+        "protocol_versions": json.loads(os.environ.get("STUB_PROTOCOLS", "[1, 2]")),
         "capabilities": json.loads(os.environ.get("STUB_CAPABILITIES", "[]")),
         "interpreter": interpreter(),
         "framework": {"file": os.path.realpath(training_framework.__file__),
@@ -55,7 +58,10 @@ if __name__ == "__main__":
 FILES = {
     "training_framework/__init__.py": "",
     "training_framework/hpc/__init__.py": "",
-    "training_framework/hpc/task.py": STUB_TASK,
+    "training_framework/hpc/task.py": STUB_TASK,         # what protocol 1 runs
+    "naavik/__init__.py": "",
+    "naavik/launcher/__init__.py": "",
+    "naavik/launcher/task.py": STUB_TASK,                # what protocol 2 runs
 }
 
 

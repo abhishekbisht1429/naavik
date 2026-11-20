@@ -37,7 +37,7 @@ class ScriptedExecutor:
             return ExecResult(0, json.dumps(self.identity) + "\n", "")
         if "--preflight" in argv:
             facts = {
-                "protocol_versions": [1], "interpreter": IDENTITY,
+                "protocol_versions": [1, 2], "interpreter": IDENTITY,
                 "framework": {"file": "/env/naavik/__init__.py", "distribution": "0.5.0"},
                 "components": {p: None for p in self.plan.preflight["components_packages"]},
                 "cluster_paths": {p: True for p in self.plan.preflight["cluster_paths"]},
