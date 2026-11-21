@@ -18,7 +18,7 @@ get one, and the stages below use both:
 ## 0. On your workstation
 
 ```bash
-pip install "naavik[hpc] @ git+ssh://git@github.com/abhishekbisht1429/training-framework.git@dev"
+pip install "naavik[hpc] @ git+ssh://git@github.com/abhishekbisht1429/naavik.git@dev"
 # or, from a clone: pip install -e '.[hpc]'
 naavik --help         # validate, render, launch, status, show-site-interpreter
 ```
@@ -260,7 +260,7 @@ requirement. Anything else is reported with its line number by `validate`.
   depends on the git URL:
 
   ```
-  naavik @ git+https://github.com/abhishekbisht1429/training-framework.git@<40-character sha>
+  naavik @ git+https://github.com/abhishekbisht1429/naavik.git@<40-character sha>
   ```
 
   `git rev-parse dev` prints the full SHA. A private repository needs its

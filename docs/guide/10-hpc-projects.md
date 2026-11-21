@@ -67,7 +67,7 @@ The examples below use 3.12; use what the host reports. With
 ## `this_repository`: naavik itself
 
 ```bash
-cd training-framework
+cd naavik
 mkdir -p requirements
 uv pip compile pyproject.toml --extra vision \
     --python-version 3.12 \
@@ -93,7 +93,7 @@ python_packages:
 The host installs the framework from Git, so the commit must be pushed:
 
 ```bash
-cd training-framework
+cd naavik
 git push origin <branch>
 git rev-parse <branch>               # the full 40-character SHA
 ```
@@ -123,7 +123,7 @@ name = "my-project"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
-  "naavik[vision] @ git+https://github.com/abhishekbisht1429/training-framework.git@<40-character sha>",
+  "naavik[vision] @ git+https://github.com/abhishekbisht1429/naavik.git@<40-character sha>",
   # your own dependencies
 ]
 ```
@@ -139,7 +139,7 @@ uv pip compile pyproject.toml \
     --python-platform linux \
     -o requirements/hpc.txt
 grep -i '^naavik' requirements/hpc.txt
-# naavik @ git+https://github.com/abhishekbisht1429/training-framework.git@<the same sha>
+# naavik @ git+https://github.com/abhishekbisht1429/naavik.git@<the same sha>
 ```
 
 The framework must appear exactly once, at the full SHA; torch,
@@ -150,7 +150,7 @@ torchvision, and the rest are pinned with it.
 The CLI runs locally, from the same commit, with the `hpc` extra:
 
 ```bash
-pip install "naavik[hpc] @ git+https://github.com/abhishekbisht1429/training-framework.git@<the same sha>"
+pip install "naavik[hpc] @ git+https://github.com/abhishekbisht1429/naavik.git@<the same sha>"
 ```
 
 ### 6. The project file and a mission file
