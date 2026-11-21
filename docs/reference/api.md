@@ -9,16 +9,16 @@ it where one exists.
 The supported public imports are grouped by responsibility:
 
 ```python
-from training_framework.components import (
+from naavik.components import (
     ModuleResource,
     Resource,
     Step,
     resource,
     step,
 )
-from training_framework.components.builtin import Checkpointer, TrainedModel
-from training_framework.engine import Configurator, TrainingEngine
-from training_framework.session import (
+from naavik.components.builtin import Checkpointer, TrainedModel
+from naavik.engine import Configurator, TrainingEngine
+from naavik.session import (
     AnalysisSession,
     TrainingSession,
     register_session_type,
@@ -33,26 +33,26 @@ remain valid without implementing them. A component should override its
 rollback method only when failed initialization can leave partial effects to
 release.
 
-`training_framework.components.EpochSource` is the interface a resource bound
+`naavik.components.EpochSource` is the interface a resource bound
 as `data_manager` implements to support `session_config.epochs`.
 `iterations_for_epochs(epochs)` is called once, before `setup`, and returns
 the iterations those epochs take; both built-in data managers implement it
 (see [run length in epochs](../guide/04-configuration.md#run-length-in-epochs)).
 
-`training_framework.dataloader` remains the public home of the infinite
+`naavik.dataloader` remains the public home of the infinite
 samplers. `DistributedInfiniteSampler.get_state()` records how far an epoch
 got across all ranks, and `set_state()` rebases a saved position onto the rank
 and world size the sampler was built with, so a saved position can be restored
 under a different topology.
 
-`training_framework.engine` exports `LaunchTopology` and
+`naavik.engine` exports `LaunchTopology` and
 `resolve_launch_topology`, which settle a run's process topology from the
 command line, the environment and the configuration, and `host_rendezvous`,
 which binds the topology's rendezvous port (a free one when none is set) and
 holds it in a `HostedRendezvous` until `close()`; the engine calls it for
 every multi-process launch.
 
-`training_framework.components.builtin` also exports the classes of the
+`naavik.components.builtin` also exports the classes of the
 [generic steps](generic-steps.md) (`LoadBatch`, `Forward`, `AnalysisForward`,
 `Compute`) and of the [optimization chain](optimization.md)
 (`OptimizerResource`, `ForwardContext`, `Backward`, `FreezeGradients`,
@@ -61,7 +61,7 @@ every multi-process launch.
 `FineTunedModel`). They are configured by name in YAML; only
 `GradientProcessor` is meant to be subclassed.
 
-`training_framework.config_files` loads a configuration file the way
+`naavik.config_files` loads a configuration file the way
 `--config` does: `load_config(path, *, reader=None)` returns a
 `LoadedConfig` (`config`, with every session's `includes` merged, and
 `sources`: per session, the `ConfigSource`s `path`, `sha256`,
@@ -70,7 +70,7 @@ readers; problems raise `ConfigFileError`. `check_no_interpolation` and
 `unescape` are the `${` rules; see
 [Sharing configuration between files](../guide/04-configuration.md#sharing-configuration-between-files).
 
-`training_framework.reporting` compares finished runs (see
+`naavik.reporting` compares finished runs (see
 [Comparing runs](../guide/12-comparing-runs.md)): `discover_runs(*roots,
 include=(), exclude=())` returns a `Discovery` (`roots`, `runs`: `RunRecord`s,
 `problems`); `summarize_runs(discovery, metrics=(), *, tags=(), last_n=None,
@@ -82,11 +82,11 @@ ignored_keys=DEFAULT_IGNORED_KEYS, sort=None)` returns a `Summary`
 `render_json` write it. A metric is a `Metric(tag, direction=None)` or the
 text `"tag[:min|:max]"`. Options that cannot be met raise `ReportError`.
 
-`training_framework.functions` holds the small functions `compute` finds by
+`naavik.functions` holds the small functions `compute` finds by
 name: `weighted_sum(*, weights=None, **terms)`; see
-[`training_framework.functions`](generic-steps.md#training_frameworkfunctions).
+[`naavik.functions`](generic-steps.md#naavikfunctions).
 
-`training_framework.components.naming` holds the instance-name syntax:
+`naavik.components.naming` holds the instance-name syntax:
 `INSTANCE_SEPARATOR`, `parse_instance_name(name)` (returning the component
 name and the suffix), `format_instance_name`, `is_instance_name` and
 `implementation_of`. It is the only module that parses the separator; see
@@ -180,7 +180,7 @@ The engine monitors workers while leaving the context.
 | `parse_component_config(cls, config)` | Parse a mapping against a `config_schema` directly |
 | `ExtendableComponent.apply_extension_config(config, changed_paths)` | Opt into configuration changes during `--extend-session` |
 | `Stateful.get_state()` / `set_state(state)` | Capture and restore a component's own state |
-| `GradientProcessor.process(session, named_parameters)` | Base class (`training_framework.components.builtin`) for a step that edits gradients between `backward` and `optimizer_step`; see [custom gradient stages](optimization.md#custom-gradient-stages) |
+| `GradientProcessor.process(session, named_parameters)` | Base class (`naavik.components.builtin`) for a step that edits gradients between `backward` and `optimizer_step`; see [custom gradient stages](optimization.md#custom-gradient-stages) |
 | `Checkpointer.save_checkpoint(session, path)` | Write `session` as a checkpoint directory of plain data |
 | `Checkpointer.load_checkpoint(path, map_location="cpu", restore_rng=True, *, on_mismatch="raise")` | Load a checkpointed session; `on_mismatch` (`"raise"`, `"reinit"` or instance names) decides what happens to a component whose saved state this version cannot take |
 | `Checkpointer.load_component(path, name, *, with_dependencies=True, session_type=None, device=None)` | Rebuild one resource and the instances it was wired to, resolved through the checkpoint's own bindings, without adopting its RNG; `device` moves every rebuilt module there |
@@ -197,7 +197,7 @@ The engine monitors workers while leaving the context.
 takes its prerequisites with `get_dependency` (see
 [the component model](../concepts/component-model.md#there-is-no-session-wide-lookup)).
 `ComponentView`, `constructing_component` and `active_component_view` are no
-longer exported from `training_framework.components`. Prerequisites are handed to a component
+longer exported from `naavik.components`. Prerequisites are handed to a component
 directly rather than through a bound view, so there is nothing left for them to
 do. A test that built a component against a stub view can construct it and
 then register it into a session, which gives it its prerequisites.

@@ -167,7 +167,7 @@ class ComponentDependencyError(RuntimeError):
 
 
 class Component(ABC, metaclass=ComponentMeta):
-    """Common base for every executable training-framework component."""
+    """Common base for every executable naavik component."""
 
     name: str
     id: str

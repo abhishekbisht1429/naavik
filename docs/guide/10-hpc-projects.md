@@ -9,8 +9,8 @@ managed environment is built from. Every key used here is described in the
 
 | `code.framework_from` | When | The framework comes from | The requirements file |
 |---|---|---|---|
-| `this_repository` | the repository *is* training-framework | the staged commit (`code.python_paths: ["src"]`) | must **not** contain `training-framework` |
-| `installed` | your project uses training-framework as a dependency | the environment on the host | must pin `training-framework` exactly once |
+| `this_repository` | the repository *is* naavik | the staged commit (`code.python_paths: ["src"]`) | must **not** contain `naavik` |
+| `installed` | your project uses naavik as a dependency | the environment on the host | must pin `naavik` exactly once |
 
 Either way your own code is never pip-installed: `code.python_paths` puts it
 on `PYTHONPATH` from the staged commit, so code changes do not rebuild the
@@ -64,7 +64,7 @@ The examples below use 3.12; use what the host reports. With
 `interpreter_from: site` it must match the host's `site_interpreter`; with
 `uv` or `conda` it is `python_packages.python_version`.
 
-## `this_repository`: training-framework itself
+## `this_repository`: naavik itself
 
 ```bash
 cd training-framework
@@ -73,7 +73,7 @@ uv pip compile pyproject.toml --extra vision \
     --python-version 3.12 \
     --python-platform linux \
     -o requirements/hpc.txt
-grep -i '^training-framework' requirements/hpc.txt    # must print nothing
+grep -i '^naavik' requirements/hpc.txt    # must print nothing
 ```
 
 `uv pip compile pyproject.toml` writes the dependencies only, not the
@@ -86,7 +86,7 @@ python_packages:
   requirements_file: requirements/hpc.txt
 ```
 
-## `installed`: a project that uses training-framework
+## `installed`: a project that uses naavik
 
 ### 1. Make the framework commit fetchable
 
@@ -123,7 +123,7 @@ name = "my-project"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
-  "training-framework[vision] @ git+https://github.com/abhishekbisht1429/training-framework.git@<40-character sha>",
+  "naavik[vision] @ git+https://github.com/abhishekbisht1429/training-framework.git@<40-character sha>",
   # your own dependencies
 ]
 ```
@@ -138,8 +138,8 @@ uv pip compile pyproject.toml \
     --python-version 3.12 \
     --python-platform linux \
     -o requirements/hpc.txt
-grep -i '^training-framework' requirements/hpc.txt
-# training-framework @ git+https://github.com/abhishekbisht1429/training-framework.git@<the same sha>
+grep -i '^naavik' requirements/hpc.txt
+# naavik @ git+https://github.com/abhishekbisht1429/training-framework.git@<the same sha>
 ```
 
 The framework must appear exactly once, at the full SHA; torch,
@@ -150,7 +150,7 @@ torchvision, and the rest are pinned with it.
 The CLI runs locally, from the same commit, with the `hpc` extra:
 
 ```bash
-pip install "training-framework[hpc] @ git+https://github.com/abhishekbisht1429/training-framework.git@<the same sha>"
+pip install "naavik[hpc] @ git+https://github.com/abhishekbisht1429/training-framework.git@<the same sha>"
 ```
 
 ### 6. The project file and a mission file
@@ -228,7 +228,7 @@ naavik status <mission-id>
 
 `validate` checks that the framework is pinned exactly once and everything
 else is pinned; the environment build's preflight checks that
-`training_framework` imports from the environment.
+`naavik` imports from the environment.
 
 ### A private framework repository
 
@@ -238,7 +238,7 @@ else is pinned; the environment build's preflight checks that
   host; or
 - a wheel: build it (`python -m build` in the framework repository), copy it
   where the host can read it, and pin it with its archive hash:
-  `training-framework @ file:///N/.../training_framework-0.5.0-py3-none-any.whl#sha256=<hash>`
+  `naavik @ file:///N/.../naavik-0.5.0-py3-none-any.whl#sha256=<hash>`
   (`sha256sum` prints the hash).
 
 ## CUDA builds of torch
@@ -271,7 +271,7 @@ the host (and `validate` refuses). Then edit the file:
 
 - remove conda tooling (`conda`, `conda-package-handling`, `mkl-service`,
   ...), whose versions may not exist on PyPI;
-- `framework_from: this_repository`: remove `training-framework`;
+- `framework_from: this_repository`: remove `naavik`;
   `installed`: replace it with the `git+...@<sha>` line;
 - a `torch==X.Y.Z+cuXXX` line needs `--extra-index-url
   https://download.pytorch.org/whl/cuXXX` at the top.

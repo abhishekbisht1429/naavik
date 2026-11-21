@@ -24,7 +24,7 @@ they become directory and job names.
 
 ## The hosts file
 
-`~/.config/training-framework/hosts.yaml` (or `$XDG_CONFIG_HOME/...`, or
+`~/.config/naavik/hosts.yaml` (or `$XDG_CONFIG_HOME/...`, or
 `--hosts-file PATH`).
 
 ```yaml
@@ -85,7 +85,7 @@ no value can add an extra `#SBATCH` line.
 
 The builtin scheduler takes no `scheduler_options`. It runs a runner with the
 host's `python3` (3.8 or newer, checked by `launch`), keeps its job state
-under `$XDG_STATE_HOME/training-framework/host/<hostname>/` on the host,
+under `$XDG_STATE_HOME/naavik/host/<hostname>/` on the host,
 and does not limit an experiment's CPUs or memory.
 
 #### shell_commands_before
@@ -106,7 +106,7 @@ changing them gives a new environment or prepared dataset.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `use_existing` | | Absolute path of an environment you manage yourself on the host. Experiments use `<use_existing>/bin/python`; nothing is built and the other keys below (except `activate_with_conda_run`) do not apply. With `framework_from: installed` it must contain `training-framework`. With `connection: local`, `current` means the environment of the interpreter running `naavik` (e.g. your IDE's project interpreter), resolved into the plan. |
+| `use_existing` | | Absolute path of an environment you manage yourself on the host. Experiments use `<use_existing>/bin/python`; nothing is built and the other keys below (except `activate_with_conda_run`) do not apply. With `framework_from: installed` it must contain `naavik`. With `connection: local`, `current` means the environment of the interpreter running `naavik` (e.g. your IDE's project interpreter), resolved into the plan. |
 | `interpreter_from` | `site` | Where a managed environment's interpreter comes from: `site` (`python3` after the shell commands, e.g. a module), `uv` (`uv python install <python_version>`), or `conda` (conda's base Python). `uv` and `conda` need `python_packages.python_version` in the mission or project file. |
 | `site_interpreter` | | Required with `interpreter_from: site`: the site interpreter's `{implementation, version, executable, platform}`, printed by `naavik show-site-interpreter`. `launch` checks it against the host and stops with the new block if the site changed it. |
 | `kind` | `venv` | Kind of managed environment: `venv` (from the interpreter above) or `conda` (`conda create -p <env> -c conda-forge python=<python_version>`). A `conda` environment installs its own Python, so it needs `interpreter_from: conda` (or `uv`) and `python_version`; with `site` it is refused. |
@@ -181,7 +181,7 @@ unless the host has `run_code_from: working_tree`.
 
 | Key | Required | Meaning |
 |---|---|---|
-| `framework_from` | yes | `this_repository`: this repository *is* training-framework; it runs from the staged commit and the requirements must not contain it. `installed`: training-framework is installed in the environment: with a managed environment the requirements must pin it exactly once; with `python_environment.use_existing` the environment must already contain it (no requirements file is needed). |
+| `framework_from` | yes | `this_repository`: this repository *is* naavik; it runs from the staged commit and the requirements must not contain it. `installed`: naavik is installed in the environment: with a managed environment the requirements must pin it exactly once; with `python_environment.use_existing` the environment must already contain it (no requirements file is needed). |
 | `python_paths` | yes | Relative directories of the repository put on `PYTHONPATH` for experiments (e.g. `["."]`, `["src"]`). Your code is never pip-installed. |
 
 ### python_packages
@@ -394,3 +394,17 @@ current one is an error.
 | `groups {G: {resources, max_parallel, stop_grace, experiments}}` | `jobs {J: {per_experiment, max_parallel_experiments, stop_grace_period, recipes}}` |
 | experiment `config`, `matrix` | recipe `config_file`, `vary` |
 | `run_defaults {resources, max_parallel, target}` | `quick_run_defaults {per_experiment, max_parallel_experiments, host}` |
+
+### The framework's own names
+
+The framework was called `training-framework` (imported as
+`training_framework`). Everything under the earlier name still works, with
+one `FutureWarning`:
+
+| Earlier | Current | What still works |
+|---|---|---|
+| package `training_framework` | `naavik` | imports, `components_package` strings, legacy single-file checkpoints, and `python -m training_framework...` commands recorded in earlier missions' job scripts (no warning there) |
+| distribution `training-framework` | `naavik` | requirements may pin either name, once; an installed `training-framework` is found |
+| `TRAINING_FRAMEWORK_CODE_CHECK`, `_RUNS`, `_RUNS_SNAPSHOT` | `NAAVIK_CODE_CHECK`, `NAAVIK_RUNS`, `NAAVIK_RUNS_SNAPSHOT` | read when the new one is not set; both set differently is an error |
+| directories `~/.config/training-framework`, `~/.local/state/...`, `~/.local/share/...`, `~/.cache/...` | `.../naavik` | an earlier one is used where it is when no `naavik` one exists (nothing is moved); jobs of the `builtin` scheduler are found under either |
+| job scripts running `training_framework.hpc.task` (execution protocol 1) | `naavik.launcher.task` (protocol 2) | a mission keeps the commands its plan recorded, so missions launched before the rename resume |

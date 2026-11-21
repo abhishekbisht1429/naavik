@@ -49,13 +49,13 @@ order; [the whole file](#the-whole-configuration) is at the end.
 Install the vision extra, which the datasets need:
 
 ```bash
-pip install "training-framework[vision]"
+pip install "naavik[vision]"
 ```
 
 Write the entry point, `train.py`, as for every run:
 
 ```python
-from training_framework.engine import Configurator, TrainingEngine
+from naavik.engine import Configurator, TrainingEngine
 
 
 def main() -> None:
@@ -70,7 +70,7 @@ if __name__ == "__main__":
 The datasets are optional components, so the session must import them. With
 no components of your own, name their package as the `components_package`;
 with a package of your own, import
-`training_framework.components.builtin.datasets` from it instead:
+`naavik.components.builtin.datasets` from it instead:
 
 ```yaml
 sessions:
@@ -79,7 +79,7 @@ sessions:
       sessions_dir: ./runs/dino
       max_iterations: 125100      # 100 epochs of 1251 steps at batch 1024
       device: cuda
-      components_package: training_framework.components.builtin.datasets
+      components_package: naavik.components.builtin.datasets
     ddp:
       world_size: 8
       backend: nccl
@@ -502,7 +502,7 @@ sessions:
       sessions_dir: ./runs/dino
       max_iterations: 125100
       device: cuda
-      components_package: training_framework.components.builtin.datasets
+      components_package: naavik.components.builtin.datasets
     ddp:
       world_size: 8
       backend: nccl

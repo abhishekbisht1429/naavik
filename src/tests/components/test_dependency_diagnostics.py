@@ -310,7 +310,7 @@ def test_binding_to_an_optional_dataset_that_was_not_imported(tmp_path):
         f"{_DATASETS} is imported"
     ) in message
     assert f"Add 'import {_DATASETS}'" in message
-    assert "pip install training-framework[vision]" in message
+    assert "pip install naavik[vision]" in message
     assert "@resource('imagenet')" not in message
 
 

@@ -17,7 +17,7 @@ lifecycle as training sessions. Their effective registry combines shared
 components with components registered using `session_type="analysis"`:
 
 ```python
-from training_framework.components import Step, requires_resource, step
+from naavik.components import Step, requires_resource, step
 
 
 @step("report", session_type="analysis")
@@ -86,7 +86,7 @@ iterations as the analysis `data_manager` has batches
 For direct execution, construct the concrete analysis subclass:
 
 ```python
-from training_framework.session import AnalysisSession
+from naavik.session import AnalysisSession
 
 
 session = AnalysisSession(analysis_config)

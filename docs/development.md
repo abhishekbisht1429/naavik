@@ -37,7 +37,7 @@ The current tests cover areas including:
 ## Project layout
 
 ```text
-training-framework/
+naavik/
 ├── docs/                 # Detailed Markdown documentation
 │   ├── README.md         # Documentation index
 │   ├── guide/            # Task-ordered learning path
@@ -47,7 +47,7 @@ training-framework/
 │   └── workflows/
 │       └── python-tests.yaml
 ├── src/
-│   ├── training_framework/
+│   ├── naavik/
 │   │   ├── __init__.py
 │   │   ├── components/
 │   │   │   ├── __init__.py

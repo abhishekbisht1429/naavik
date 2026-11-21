@@ -262,7 +262,7 @@ def explain_missing_component(
                     f"Fix: Add 'import {optional.module}' to a module of "
                     "your session_config.components_package (or set "
                     f"components_package to {optional.module}). It needs "
-                    f"`pip install training-framework[{optional.extra}]`."
+                    f"`pip install naavik[{optional.extra}]`."
                 )
                 return "\n".join(f"  {line}" for line in lines)
             scoped_hint = (

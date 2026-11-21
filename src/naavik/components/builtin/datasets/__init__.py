@@ -1,6 +1,6 @@
 """Image datasets from torchvision, as resources for the ``dataset`` role.
 
-Optional: needs ``pip install training-framework[vision]``, and is not
+Optional: needs ``pip install naavik[vision]``, and is not
 imported with the other built-ins. Import it from a module of your
 ``components_package`` so that every process registers it::
 
@@ -12,7 +12,7 @@ try:
 except ImportError as error:
     raise ImportError(
         "naavik.components.builtin.datasets needs torchvision; "
-        "install it with `pip install training-framework[vision]`"
+        "install it with `pip install naavik[vision]`"
     ) from error
 
 from naavik.components.builtin.datasets.base import (

@@ -7,9 +7,9 @@ configuration keys it accepts, and which are enabled by default. Look here for
 a key you need to set; for how components are activated and bound in the first
 place, see [Wiring components together](../guide/02-wiring-components.md).
 
-Importing `training_framework` initializes `training_framework.components`,
+Importing `naavik` initializes `naavik.components`,
 which registers all built-ins. Their classes are also importable from
-`training_framework.components.builtin`.
+`naavik.components.builtin`.
 
 ## Training built-ins
 
@@ -171,7 +171,7 @@ declared `dataset` role's name):
 ```python
 from torch.utils.data import Dataset
 
-from training_framework.components import Resource, resource
+from naavik.components import Resource, resource
 
 
 @resource("dataset")

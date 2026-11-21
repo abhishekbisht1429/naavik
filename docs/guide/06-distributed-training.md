@@ -251,12 +251,12 @@ reference is cleared and the process group is destroyed.
 ## When a worker fails
 
 When a worker fails, the engine stops the others and raises
-`training_framework.engine.WorkerFailedError` (a `RuntimeError`) from the
+`naavik.engine.WorkerFailedError` (a `RuntimeError`) from the
 `TrainingEngine` block. Its message is one line naming the worker and what
 it raised:
 
 ```
-training_framework.engine.failures.WorkerFailedError: Worker pid=3191272 (rank 0) failed: RuntimeError: failure raised inside spawned worker
+naavik.engine.failures.WorkerFailedError: Worker pid=3191272 (rank 0) failed: RuntimeError: failure raised inside spawned worker
 ```
 
 The worker's traceback is the error's cause, so Python prints it first, in

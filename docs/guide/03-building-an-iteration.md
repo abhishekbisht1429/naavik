@@ -54,7 +54,7 @@ dataset returns one sample per index; the model is an `nn.Module`
 import torch
 from torch import nn
 
-from training_framework.components import ModuleResource, Resource, resource
+from naavik.components import ModuleResource, Resource, resource
 
 
 @resource("toy_dataset")

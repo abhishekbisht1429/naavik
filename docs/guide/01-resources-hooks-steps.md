@@ -13,8 +13,8 @@ run that example once.
 A resource owns an object or service whose lifecycle follows the session context.
 
 ```python
-from training_framework.components import Resource, resource
-from training_framework.session import TrainingSession
+from naavik.components import Resource, resource
+from naavik.session import TrainingSession
 
 
 @resource("dataset")
@@ -87,8 +87,8 @@ post-session cleanup.
 A step performs one unit of work during every iteration:
 
 ```python
-from training_framework.components import Step, step
-from training_framework.session import TrainingSession
+from naavik.components import Step, step
+from naavik.session import TrainingSession
 
 
 @step("train")
@@ -110,7 +110,7 @@ writes are what `run` returns:
 ```python
 import torch
 
-from training_framework.components import Step, reads, step, writes
+from naavik.components import Step, reads, step, writes
 
 
 @reads("logits", "targets")

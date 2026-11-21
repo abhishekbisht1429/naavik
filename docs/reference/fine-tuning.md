@@ -61,7 +61,7 @@ The head declares what it needs itself -- here the class count, from
 ```python
 from torch import nn
 
-from training_framework.components import (
+from naavik.components import (
     ModuleResource, requires_resource, resource,
 )
 

@@ -57,7 +57,7 @@ def compare(facts: Dict, expected: Dict, source_dir: str) -> List[str]:
             )
         if distribution is not None:
             problems.append(
-                "a training-framework distribution ({}) is installed in the "
+                "a naavik (or training-framework) distribution ({}) is installed in the "
                 "environment; in checkout mode it would be recorded as the "
                 "framework version".format(distribution)
             )
@@ -70,7 +70,7 @@ def compare(facts: Dict, expected: Dict, source_dir: str) -> List[str]:
         wanted = expected_framework.get("distribution")
         if wanted is not None and distribution != wanted:
             problems.append(
-                "the environment has training-framework {} but the "
+                "the environment has naavik {} but the "
                 "requirements pin {}".format(distribution, wanted)
             )
 

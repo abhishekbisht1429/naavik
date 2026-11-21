@@ -210,13 +210,13 @@ again is refused: resume from the last checkpoint.
 
 ## Custom gradient stages
 
-Subclass `GradientProcessor` (from `training_framework.components.builtin`),
+Subclass `GradientProcessor` (from `naavik.components.builtin`),
 implement `process(session, named_parameters)`, require the stage it follows,
 and bind `optimizer_step` to it so it runs before the step:
 
 ```python
-from training_framework.components import requires_step, step
-from training_framework.components.builtin import GradientProcessor
+from naavik.components import requires_step, step
+from naavik.components.builtin import GradientProcessor
 
 
 @requires_step("clip_gradients")

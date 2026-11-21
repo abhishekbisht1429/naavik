@@ -277,7 +277,7 @@ forward#teacher:
   no_grad: true
   outputs: teacher
 compute#loss:
-  function: training_framework.components.builtin.self_supervised.losses.byol_loss
+  function: naavik.components.builtin.self_supervised.losses.byol_loss
   args: [student, teacher]
   constants: {num_views: 2}
   outputs: loss
@@ -390,7 +390,7 @@ are uniform.
 
 ## `byol_loss`
 
-`training_framework.components.builtin.self_supervised.losses.byol_loss(online,
+`naavik.components.builtin.self_supervised.losses.byol_loss(online,
 target, *, num_views=2)`: `2 - 2 cos(p, z)` between the online prediction of
 each view and the target projection of each other view, averaged over the
 batch and summed over the pairs (both directions, as BYOL symmetrizes it).

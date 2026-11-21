@@ -107,7 +107,7 @@ driven without `TrainingEngine`. A training session can be run directly as:
 
 ```python
 import yaml
-from training_framework.session import TrainingSession
+from naavik.session import TrainingSession
 
 
 with open("my_project/config.yaml") as config_file:

@@ -95,7 +95,7 @@ still read it in 0.5.0, with a `FutureWarning`; the next release does not.
 Convert one by loading and saving it:
 
 ```python
-from training_framework.components.builtin import Checkpointer
+from naavik.components.builtin import Checkpointer
 
 Checkpointer.save_checkpoint(
     Checkpointer.load_checkpoint("old-checkpoint.pt"),

@@ -18,7 +18,7 @@ get one, and the stages below use both:
 ## 0. On your workstation
 
 ```bash
-pip install "training-framework[hpc] @ git+ssh://git@github.com/abhishekbisht1429/training-framework.git@dev"
+pip install "naavik[hpc] @ git+ssh://git@github.com/abhishekbisht1429/training-framework.git@dev"
 # or, from a clone: pip install -e '.[hpc]'
 naavik --help         # validate, render, launch, status, show-site-interpreter
 ```
@@ -92,7 +92,7 @@ environment that is still marked ready.
 
 ## 2. The host
 
-`~/.config/training-framework/hosts.yaml` (every key is described in the
+`~/.config/naavik/hosts.yaml` (every key is described in the
 [configuration reference](../reference/hpc-configuration.md)). Everything
 except `python_environment` is the same for both kinds of environment:
 
@@ -232,7 +232,7 @@ match it.
 ### Write the pinned requirements file
 
 Step by step, including installing uv and a project that depends on
-training-framework: [Setting up a project](10-hpc-projects.md).
+naavik: [Setting up a project](10-hpc-projects.md).
 
 The mission file (or the project file) names a fully pinned file:
 
@@ -248,19 +248,19 @@ commit SHA (or an archive hash); the only option lines allowed are
 requirement. Anything else is reported with its line number by `validate`.
 
 - **`framework_from: this_repository`** (this repository): the file must
-  *not* contain `training-framework`; it comes from the staged commit.
+  *not* contain `naavik`; it comes from the staged commit.
 
   ```bash
   uv pip compile pyproject.toml --extra vision -o requirements/hpc.txt
   ```
 
 - **`framework_from: installed`** (your project): the file must pin
-  `training-framework` exactly once. From git, that is a direct reference
+  `naavik` exactly once. From git, that is a direct reference
   to a full commit SHA, which `uv pip compile` writes when your project
   depends on the git URL:
 
   ```
-  training-framework @ git+https://github.com/abhishekbisht1429/training-framework.git@<40-character sha>
+  naavik @ git+https://github.com/abhishekbisht1429/training-framework.git@<40-character sha>
   ```
 
   `git rev-parse dev` prints the full SHA. A private repository needs its
@@ -317,7 +317,7 @@ and are cancelled if it fails. Its log is `<mission-dir>/logs/setup/<job>.out`:
 [hpc setup ...] installing the pinned requirements from requirements/hpc.txt (this can take several minutes)
 [hpc setup ...] checking installed dependencies (pip check)
 [hpc setup ...] running preflight in the new environment
-[hpc setup ...] preflight ok: Python 3.12.x | training_framework ...
+[hpc setup ...] preflight ok: Python 3.12.x | naavik ...
 [hpc setup ...] environment ready
 ```
 
@@ -336,7 +336,7 @@ environment meanwhile`.
   control connection if it expired (`ssh bigred200 true`), and keep the key
   private (`chmod 600 ~/.ssh/id_*`).
 - `launch` prints the mission directory and the receipt path on failure;
-  the receipt is `~/.local/state/training-framework/submissions/<mission-id>.json`.
+  the receipt is `~/.local/state/naavik/submissions/<mission-id>.json`.
 - `sbatch` refusing with `Invalid account or account/partition combination
   specified`: the host's account is missing, wrong, or not allowed on that
   partition; see [Finding your Slurm account](#finding-your-slurm-account).

@@ -25,7 +25,7 @@ to `[-1, 1]`) unless its config sets `mean` and `std`.
 They need torchvision (and scipy, for Flowers-102 and Stanford Cars):
 
 ```bash
-pip install "training-framework[vision]"
+pip install "naavik[vision]"
 ```
 
 They are not imported with the other built-ins. Import the package from any
@@ -34,7 +34,7 @@ every rank and a restored checkpoint all register them:
 
 ```python
 # my_project/components/__init__.py
-import training_framework.components.builtin.datasets  # noqa: F401
+import naavik.components.builtin.datasets  # noqa: F401
 ```
 
 Without torchvision that import fails with an `ImportError` naming the extra.
@@ -223,8 +223,8 @@ from typing import ClassVar
 
 from torchvision import datasets
 
-from training_framework.components import resource
-from training_framework.components.builtin.datasets import (
+from naavik.components import resource
+from naavik.components.builtin.datasets import (
     TorchvisionDataset,
     TorchvisionDatasetConfig,
 )
@@ -251,8 +251,8 @@ To let targets and runs fetch its data, declare it (class methods: nothing
 is built, and the target finds them again by importing the class):
 
 ```python
-from training_framework.data import DataRequirement
-from training_framework.components.builtin.datasets.base import missing_files
+from naavik.data import DataRequirement
+from naavik.components.builtin.datasets.base import missing_files
 
 
 @resource("food101")
@@ -277,5 +277,5 @@ field holding its path (`root`), and a `version` to change when the
 content changes; `key` adds what else identifies it (a split with its own
 download), `subpath` where under the path it lives, and `fetchable=False`
 data obtained by hand. Its content key is the name, version, and `key`
-only. `python -m training_framework.data fetch|verify --component DOTTED
+only. `python -m naavik.data fetch|verify --component DOTTED
 --config JSON --requirement NAME` runs one by hand.

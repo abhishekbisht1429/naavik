@@ -149,7 +149,7 @@ Calls a function, or an instance of a class, on context keys.
 **Finding `function`.** A name without a dot is looked up in these modules, in
 order, and the first match wins:
 
-1. `training_framework.functions` -- `weighted_sum`
+1. `naavik.functions` -- `weighted_sum`
 2. `torch.nn` -- `CrossEntropyLoss`, `MSELoss`, ...
 3. `torch.nn.functional` -- `cross_entropy`, `mse_loss`, ...
 4. `torch` -- `cat`, `stack`, ...
@@ -192,7 +192,7 @@ Put such state where the framework manages it:
   [`StatefulStep`](../guide/01-resources-hooks-steps.md#stateful-components)
   that declares what it reads and writes.
 
-### `training_framework.functions`
+### `naavik.functions`
 
 Small functions for `compute` to call by name:
 

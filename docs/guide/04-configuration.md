@@ -77,7 +77,7 @@ sessions:
   batch_size)` batches, or `floor` with `drop_last`.
 - **Your own data manager.** If you bind `data_manager` to your own resource,
   it counts epochs only if it subclasses
-  `training_framework.components.EpochSource` and implements
+  `naavik.components.EpochSource` and implements
   `iterations_for_epochs(epochs)`. Otherwise `epochs` is refused.
 - **Resuming** keeps the total that was stored, even under a different world
   size, so schedules do not move mid-run.
@@ -219,7 +219,7 @@ stay inside the repository; see
 [Running batches on an HPC cluster](08-hpc-batches.md).
 
 A Python program can load a file the same way:
-`training_framework.config_files.load_config(path).config`. A session given a
+`naavik.config_files.load_config(path).config`. A session given a
 mapping that still lists `includes` refuses it.
 
 ### No `${...}` interpolation

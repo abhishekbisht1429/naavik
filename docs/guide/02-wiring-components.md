@@ -300,10 +300,10 @@ only, marked deprecated (below).
 Some component names, like `dataset` and `model`, are required by built-in
 dependencies (`@requires_resource(...)`) with no built-in implementation.
 Declare such a name explicitly with `role(name, category, *, description=None,
-session_type=None, overwrite=False)` from `training_framework.components`:
+session_type=None, overwrite=False)` from `naavik.components`:
 
 ```python
-from training_framework.components import Resource, role
+from naavik.components import Resource, role
 
 role(
     "dataset",
@@ -314,8 +314,8 @@ role(
 ```
 
 `category` must be `Resource`, `Hook`, or `Step`.
-`training_framework.components.builtin.data` declares `dataset` this way;
-`training_framework.components.builtin.distributed` declares `model`.
+`naavik.components.builtin.data` declares `dataset` this way;
+`naavik.components.builtin.distributed` declares `model`.
 Declaring a role is optional — `@requires_resource`, `@requires_hook`,
 `@requires_step`, and `@wraps` accept any name whether or not it is
 declared — but a declared role improves the error raised when nothing
@@ -342,7 +342,7 @@ removed in the next release.
 Dependencies are declared using registry names:
 
 ```python
-from training_framework.components import (
+from naavik.components import (
     LifecycleHook,
     Step,
     hook,
@@ -416,7 +416,7 @@ would be active with nothing driving it. `@activates(name)` declares such a
 *companion*: activating the component activates `name` too.
 
 ```python
-from training_framework.components import activates, requires_resource, resource, step
+from naavik.components import activates, requires_resource, resource, step
 
 
 @activates("optimizer_step")
@@ -454,7 +454,7 @@ such a component; for the everyday case -- built-in steps configured in YAML
 -- see [Building an iteration](03-building-an-iteration.md).
 
 ```python
-from training_framework.components import Step, reads, step, writes
+from naavik.components import Step, reads, step, writes
 
 
 @reads("logits", "targets")

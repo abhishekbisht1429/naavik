@@ -122,7 +122,7 @@ def checkout_note(manifest, managed, framework: dict) -> str | None:
     if framework.get("version") is None and framework.get("sha"):
         version = _checkout_version(framework.get("location"))
         if version:
-            return (f"the configs were checked with a training-framework checkout "
+            return (f"the configs were checked with a naavik checkout "
                     f"({framework['sha'][:12]}{', with uncommitted changes' if framework.get('dirty') else ''}) "
                     f"that declares {version}; the host installs the pinned release")
     return None

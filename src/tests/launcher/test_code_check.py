@@ -161,7 +161,7 @@ def test_a_version_pin_accepts_a_checkout_of_that_version_with_a_note(tmp_path, 
     version = __import__("tomllib").loads((SRC.parent / "pyproject.toml").read_text())["project"]["version"]
     root = project(tmp_path, session(), requirements=f"training-framework=={version}\ntorch==2.13.0\n")
     assert validate(root, _managed(tmp_path / "targets.yaml", tmp_path)) == 0
-    assert f"checked with a training-framework checkout" in capsys.readouterr().out
+    assert f"checked with a naavik checkout" in capsys.readouterr().out
     other = project(tmp_path / "other", session(), requirements="training-framework==0.1.0\ntorch==2.13.0\n")
     assert validate(other, _managed(tmp_path / "targets2.yaml", tmp_path)) == 2
     assert "the host runs training-framework 0.1.0" in capsys.readouterr().err

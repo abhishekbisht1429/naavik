@@ -11,7 +11,7 @@ workstation; the host only checks and executes. The same mission file runs
 on every host: pick one with `--host`.
 
 ```bash
-pip install 'training-framework[hpc]'     # adds `packaging`, used on the workstation
+pip install 'naavik[hpc]'     # adds `packaging`, used on the workstation
 naavik validate missions/sweep.yaml
 naavik render   missions/sweep.yaml --output /tmp/preview
 naavik launch   missions/sweep.yaml
@@ -28,7 +28,7 @@ Every key of the hosts file, mission files, and the project file is
 described in the [configuration reference](../reference/hpc-configuration.md).
 
 **Earlier names still work.** `naavik` (also `navik`) is installed with the
-package; `python -m training_framework.hpc <command>` runs the same
+package; `python -m naavik.hpc <command>` runs the same
 commands. Files and flags written with earlier names (`hpc.yaml` or
 `targets.yaml`, `--target`, `submit`, `batches`, a mission file's `groups`,
 `matrix`, ...) are still read; each launch warns once and lists every
@@ -47,7 +47,7 @@ For a first run on Big Red 200, follow the staged checklist in
 
 ## 1. The hosts file (your machines, on your machine)
 
-`~/.config/training-framework/hosts.yaml` (or `--hosts-file PATH`) holds
+`~/.config/naavik/hosts.yaml` (or `--hosts-file PATH`) holds
 everything specific to the machines you run on, so the committed mission
 file runs unchanged anywhere. Pick a host with `--host NAME`, else
 `default_host`.
@@ -172,7 +172,7 @@ format_version: 1
 name: vit-fine-tuning
 code_transfer: {method: git_bundle, commit: HEAD}   # or git_clone, with clone_url:
 code:
-  framework_from: installed             # this_repository when this repo *is* training-framework
+  framework_from: installed             # this_repository when this repo *is* naavik
   python_paths: ["."]                   # PYTHONPATH entries in the checkout
 python_packages:
   requirements_file: requirements/hpc.txt   # fully pinned (see section 4)
@@ -358,7 +358,7 @@ never overwritten: remove it, or use a new path.
 A host without `dataset_delivery` manages nothing: experiments read what is
 at their configs' paths, as before, and `validate` notes which requirements
 it left alone. Managed data needs the code check (it is what finds the
-requirements), so `TRAINING_FRAMEWORK_CODE_CHECK=0` is refused on such a
+requirements), so `NAAVIK_CODE_CHECK=0` is refused on such a
 host.
 
 ### Data sources
@@ -406,7 +406,7 @@ uv pip compile pyproject.toml --extra vision -o requirements/hpc.txt
 [Setting up a project](10-hpc-projects.md) gives the full steps, for this
 repository and for projects that depend on it.
 
-With `framework_from: installed` it must pin `training-framework` exactly;
+With `framework_from: installed` it must pin `naavik` exactly;
 with `this_repository` it must not contain it. Your project's code is never
 installed: experiments see it through `code.python_paths`.
 
@@ -457,7 +457,7 @@ instead of stopping at the first. In order, it checks:
    signal), so mistakes `sbatch` would reject surface here.
 9. **Every experiment's config, with the mission's own code**: the commit
    (or working tree) that will run is exported once into
-   `~/.cache/training-framework/trees/<commit>`, and a separate Python
+   `~/.cache/naavik/trees/<commit>`, and a separate Python
    process checks each experiment's config there, building nothing: session
    settings, every component name (a misspelling is refused, naming the
    experiment), wiring, companions, singletons, and every `config_schema`
@@ -481,7 +481,7 @@ built-in has one).
 Those still fail when the experiment starts. Values handed to torch (an
 optimizer's `lr`, a scheduler's `T_max`) are checked by torch, at startup.
 
-`TRAINING_FRAMEWORK_CODE_CHECK=0` skips this check. It is never silent:
+`NAAVIK_CODE_CHECK=0` skips this check. It is never silent:
 `validate`, `render`, and `launch` print a warning, and the receipt records
 `code_check: skipped` (`done` otherwise).
 
@@ -491,7 +491,7 @@ exits 2.
 
 Hashing a `copy_from_here` source reads every file the first time; later
 runs only compare each file's size and timestamps with a cache
-(`~/.cache/training-framework/hashes.sqlite3`) and read only what changed.
+(`~/.cache/naavik/hashes.sqlite3`) and read only what changed.
 For large datasets the progress line says which is happening:
 `checking ...: 120,000/1,281,167 files, 14.2 GiB (0 hashed, 120,000
 unchanged since the last run)`. An interrupted run keeps what it hashed.
@@ -553,7 +553,7 @@ submitted are cancelled, so no partial mission runs. If an `sbatch` was in
 flight, the receipt says `needs reconciliation` with the `squeue` query to
 check it; otherwise `failed`.
 
-The receipt (`~/.local/state/training-framework/submissions/<mission-id>.json`,
+The receipt (`~/.local/state/naavik/submissions/<mission-id>.json`,
 mirrored as `receipt.json` in the mission directory) lists every job
 submitted. If a submission's outcome is uncertain (a dropped connection),
 nothing is retried; the receipt says `needs reconciliation` and prints the
@@ -602,7 +602,7 @@ keeps exactly what ran.
 Every `launch` leaves a **receipt**: a small JSON file describing the
 mission (when and from where it was launched, its host, commit, experiment
 count) and every job it submitted, with its job ID. Receipts live in
-`~/.local/state/training-framework/submissions/<mission-id>.json` (or
+`~/.local/state/naavik/submissions/<mission-id>.json` (or
 `$XDG_STATE_HOME/...`), and a copy is kept in the mission directory on the
 host as `receipt.json`. Two commands read them; neither changes anything.
 

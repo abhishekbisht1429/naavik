@@ -64,9 +64,9 @@ run 01M7KMT4A2T9AK0R89QKNFF9NG | done | started 2026-11-17 02:19 on gpubox (pid 
 launch   config: train --config configs/lr0.2.yaml
 code     9e041015717d2f0d331d67f57359eff86b0e4248 | /home/me/my-project
 env      python 3.13.14, torch 2.13.0+cu130, CUDA 13.0, packages 86a9ba0db444
-framework (no installed version) | /home/me/training-framework/src/training_framework | git 9e04101571 (dirty)
+framework (no installed version) | /home/me/naavik/src/naavik | git 9e04101571 (dirty)
 rank 0   cpu | gloo world 1 | CUDA_VISIBLE_DEVICES=2
-session  0: training | runs/session_20261117_021910 | config c45d78bab46b (~/.local/share/training-framework/runs/configs/c45d78...yaml)
+session  0: training | runs/session_20261117_021910 | config c45d78bab46b (~/.local/share/naavik/runs/configs/c45d78...yaml)
            from configs/lr0.2.yaml
 checkpoint iteration 2: runs/session_20261117_021910/checkpoints/20261117_021912_234657749
 checkpoint iteration 4: runs/session_20261117_021910/checkpoints/20261117_021912_256008841
@@ -126,7 +126,7 @@ A direct run records the Git repository holding its components package
   missions use, with the same limit on untracked files (50 MB);
 - outside a Git repository: nothing.
 
-With `TRAINING_FRAMEWORK_RUNS_SNAPSHOT=0`, or when untracked files exceed
+With `NAAVIK_RUNS_SNAPSHOT=0`, or when untracked files exceed
 the limit, no snapshot is kept: the record says the tree was dirty and why.
 A mission's experiment records its mission's commit (and snapshot base) instead.
 
@@ -155,7 +155,7 @@ unique and every record has one writer, so copies never conflict.
 ## Where records live
 
 ```
-$TRAINING_FRAMEWORK_RUNS (default ~/.local/share/training-framework/runs)/
+$NAAVIK_RUNS (default ~/.local/share/naavik/runs)/
   <run-id>/run.json        written once, when the run starts
   <run-id>/events.jsonl    its sessions and its end, added by the launching process
   <run-id>/rank-<r>.json   each worker's device, written once
@@ -164,9 +164,9 @@ $TRAINING_FRAMEWORK_RUNS (default ~/.local/share/training-framework/runs)/
 
 | Variable | Effect |
 |---|---|
-| `TRAINING_FRAMEWORK_RUNS=PATH` | keep the registry in `PATH` |
-| `TRAINING_FRAMEWORK_RUNS=off` | record nothing (`naavik runs` then needs `--registry`) |
-| `TRAINING_FRAMEWORK_RUNS_SNAPSHOT=0` | never make snapshot commits for runs of a dirty tree |
+| `NAAVIK_RUNS=PATH` | keep the registry in `PATH` |
+| `NAAVIK_RUNS=off` | record nothing (`naavik runs` then needs `--registry`) |
+| `NAAVIK_RUNS_SNAPSHOT=0` | never make snapshot commits for runs of a dirty tree |
 
 Run ids are 26 characters (time of start, then random) that sort by start
 time. Records are never rewritten, so removing a run is deleting its

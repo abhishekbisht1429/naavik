@@ -2,7 +2,7 @@
 
 [← Docs](../README.md) · [Project README](../../README.md)
 
-`training_framework.dataloader` provides two samplers that never exhaust, so a
+`naavik.dataloader` provides two samplers that never exhaust, so a
 run is bounded by `max_iterations` rather than by the end of the dataset. The
 built-in `data_manager` uses `DistributedInfiniteSampler`; use these directly
 only when building your own data pipeline.
@@ -13,7 +13,7 @@ only when building your own data pipeline.
 
 ```python
 from torch.utils.data import DataLoader
-from training_framework.dataloader import InfiniteSampler
+from naavik.dataloader import InfiniteSampler
 
 
 sampler = InfiniteSampler(len(dataset))
@@ -31,7 +31,7 @@ It has no natural end. Use the session's `max_iterations` to bound training.
 `DistributedInfiniteSampler` creates one deterministic, rank-specific slice of a shuffled global index sequence for each logical epoch:
 
 ```python
-from training_framework.dataloader import DistributedInfiniteSampler
+from naavik.dataloader import DistributedInfiniteSampler
 
 
 sampler = DistributedInfiniteSampler(
