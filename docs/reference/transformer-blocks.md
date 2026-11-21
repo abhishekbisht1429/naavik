@@ -2,7 +2,7 @@
 
 [← Docs](../README.md) · [Project README](../../README.md)
 
-Generic, swappable transformer building blocks, plus the two composite models
+Generic, swappable transformer building blocks, plus the three composite models
 that wire them together. This page lists each block's configuration keys and
 the role it fills.
 
@@ -11,7 +11,7 @@ that page first if you want to add a block of your own.
 
 ## The blocks
 
-`training_framework.components.builtin.transformer` provides generic
+`naavik.components.builtin.transformer` provides generic
 transformer building blocks you can swap in and out. Each block is a
 `ModuleResource`: it creates its own weights in `__init__`, owns and
 checkpoints them, and is configured, bound and shared like any other
@@ -60,7 +60,7 @@ conditioned_pooling_query:
   embed_dim: 256
   inputs:
     obj_patch:                 # the keyword this input is passed as
-      module: training_framework.components.builtin.transformer.ConvPatchEmbedding
+      module: naavik.components.builtin.transformer.ConvPatchEmbedding
       in_channels: 3           # any other key goes to the module constructor
       patch_size: 16
       embed_dim: 256
@@ -187,7 +187,7 @@ conditioned_pooling_query:
   embed_dim: 256
   inputs:
     obj_patch:
-      module: training_framework.components.builtin.transformer.ConvPatchEmbedding
+      module: naavik.components.builtin.transformer.ConvPatchEmbedding
       in_channels: 3
       patch_size: 16
       embed_dim: 256

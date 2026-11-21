@@ -52,14 +52,31 @@ which binds the topology's rendezvous port (a free one when none is set) and
 holds it in a `HostedRendezvous` until `close()`; the engine calls it for
 every multi-process launch.
 
-`naavik.components.builtin` also exports the classes of the
-[generic steps](generic-steps.md) (`LoadBatch`, `Forward`, `AnalysisForward`,
-`Compute`) and of the [optimization chain](optimization.md)
-(`OptimizerResource`, `ForwardContext`, `Backward`, `FreezeGradients`,
-`ClipGradients`, `OptimizerStep`, `GradientProcessor`), and the
-[fine-tuning](fine-tuning.md) resources (`ModulePart`,
-`FineTunedModel`). They are configured by name in YAML; only
-`GradientProcessor` is meant to be subclassed.
+`naavik.components.builtin` also exports the classes of the built-ins
+(see the [built-in components](builtin-components.md) for each one's
+configuration):
+
+- infrastructure and observability: `DDPResource` (`ddp`), `DataManager` /
+  `AnalysisDataManager` (`data_manager`), `TrainedModel` (`trained_model`),
+  `Checkpointer`, `Logger` / `AnalysisLogger` (`logger`), `Timer`,
+  `Tensorboard`, `TensorboardSummaries`, `Profiler`, `ModelDiagram`,
+  `LayerInspector` (and `LayerCapture`, what it captures);
+- the [generic steps](generic-steps.md): `LoadBatch`, `Forward`,
+  `AnalysisForward`, `Compute`;
+- the [optimization chain](optimization.md): `OptimizerResource`,
+  `ForwardContext`, `Backward`, `FreezeGradients`, `ClipGradients`,
+  `OptimizerStep`, `GradientProcessor`;
+- the [fine-tuning](fine-tuning.md) resources: `ModulePart`,
+  `BackboneWithHead`, and `FineTunedModel`, the deprecated former name of
+  `backbone_with_head`;
+- the [self-supervised](self-supervised.md) parts: `ProjectionHead`,
+  `MultiView`, `EMATeacher`, `EMAUpdate`, `DINOLoss`
+  (`dino_distillation_loss`);
+- the [transformer](transformer-blocks.md) composites: `PatchTransformer`,
+  `PooledPatchTransformer`, `AttentionPooledEncoder`.
+
+They are configured by name in YAML; only `GradientProcessor` is meant to be
+subclassed.
 
 `naavik.config_files` loads a configuration file the way
 `--config` does: `load_config(path, *, reader=None)` returns a
@@ -120,8 +137,8 @@ selects the concrete session implementation.
 |---|---|
 | `TrainingEngine(configurator)` | Create a process manager from CLI configuration |
 | `start_session()` | Start all worker ranks for the active session; requires engine context |
-| `register_session(config, *, session_type="training", session_kwargs=None)` | Construct a registered session type and its worker wrappers |
-| `load_session(path, session_update_params=None)` | Load a checkpoint, optionally apply extension overrides, and prepare worker wrappers |
+| `register_session(config, *, session_type="training", session_kwargs=None, config_sources=None)` | Construct a registered session type and its worker wrappers; `config_sources` (the files the config was built from) are written to the run directory as `config_sources.yaml` |
+| `load_session(checkpoint_path, session_update_params=None)` | Load a checkpoint, optionally apply extension overrides, and prepare worker wrappers |
 | `request_stop_all()` | Request cooperative shutdown of started workers |
 
 Normal usage is:
@@ -183,8 +200,8 @@ The engine monitors workers while leaving the context.
 | `GradientProcessor.process(session, named_parameters)` | Base class (`naavik.components.builtin`) for a step that edits gradients between `backward` and `optimizer_step`; see [custom gradient stages](optimization.md#custom-gradient-stages) |
 | `Checkpointer.save_checkpoint(session, path)` | Write `session` as a checkpoint directory of plain data |
 | `Checkpointer.load_checkpoint(path, map_location="cpu", restore_rng=True, *, on_mismatch="raise")` | Load a checkpointed session; `on_mismatch` (`"raise"`, `"reinit"` or instance names) decides what happens to a component whose saved state this version cannot take |
-| `Checkpointer.load_component(path, name, *, with_dependencies=True, session_type=None, device=None)` | Rebuild one resource and the instances it was wired to, resolved through the checkpoint's own bindings, without adopting its RNG; `device` moves every rebuilt module there |
-| `Checkpointer.load_component_state(path, name)` | Return one component's saved state without building anything |
+| `Checkpointer.load_component(path, name, *, with_dependencies=True, map_location="cpu", session_type=None, device=None)` | Rebuild one resource and the instances it was wired to, resolved through the checkpoint's own bindings, without adopting its RNG; `device` moves every rebuilt module there |
+| `Checkpointer.load_component_state(path, name, *, map_location="cpu")` | Return one component's saved state without building anything |
 | `Checkpointer.read_manifest(path)` | Return a checkpoint's `manifest.json` |
 | `Component.state_version` / `migrate_state(from_version, state)` / `migrate_init_args(from_version, init_args)` | Version what a component checkpoints, and bring an older checkpoint forward |
 | `Stateful.rename_instances(state, names)` | Rename the component instances a (migrated) state names, when [imported](import-components.md#instance-names-inside-a-saved-state) under other names; `ModuleResource` renames `linked` |
@@ -212,9 +229,9 @@ documented in [`ModuleResource`](../concepts/module-resource.md#members).
 
 | API | Purpose |
 |---|---|
-| `@resource(name, session_type=None)` | Register a shared Resource, or scope it to one session type |
-| `@hook(name, session_type=None)` | Register a shared Hook, or scope it to one session type |
-| `@step(name, session_type=None)` | Register a shared Step, or scope it to one session type |
+| `@resource(name, overwrite=False, *, session_type=None)` | Register a shared Resource, or scope it to one session type; `overwrite=True` replaces a Resource already registered under that name in that scope (one of another kind is still refused) |
+| `@hook(name, overwrite=False, *, session_type=None)` | Register a shared Hook, or scope it to one session type |
+| `@step(name, overwrite=False, *, session_type=None)` | Register a shared Step, or scope it to one session type |
 | `@requires_resource(name, *, local=False, description=None)` | Declare a resource prerequisite; `local=True` makes it a [local dependency](../guide/02-wiring-components.md#global-roles-and-local-dependencies), wired only in the component's own `dependency_bindings`; `description` is shown when nothing implements it |
 | `@requires_hook(name, *, local=False, description=None)` | Declare a Hook prerequisite for a Step |
 | `@requires_step(name, *, local=False, description=None)` | Declare a Step prerequisite for a Step |
@@ -230,7 +247,7 @@ documented in [`ModuleResource`](../concepts/module-resource.md#members).
 | `component_registry(session_type)` | Return shared components overlaid by the matching scoped registry |
 | `topological_sort_of_components(role_bindings, *, components, session_type)` | Validate and order the selected session type's component graph |
 | `format_execution_graph(*, ..., role_bindings, session_type)` | Render a session's components as its execution graph |
-| `RoleBindings(bindings, *, session_type)` | Role bindings as a session holds them: `role: implementation`, and `consumer: {role: target}` for one component. `scope_findings(consumers)` lists the session-wide bindings that reach a local dependency. `ComponentBindings` is its deprecated name; the `component_bindings=` and `aliases=` keywords of the functions above and of `SessionComponents` are deprecated names for `role_bindings=` |
+| `RoleBindings(bindings=None, *, dependency_bindings=None, session_type=None)` | Role bindings as a session holds them: `bindings` maps `role: implementation` session-wide, `dependency_bindings` maps `consumer: {role: target}` for one component's own wiring. `scope_findings(consumers)` lists the session-wide bindings that reach a local dependency. `ComponentBindings` is its deprecated name; the `component_bindings=` and `aliases=` keywords of the functions above and of `SessionComponents` (`naavik.session`) are deprecated names for `role_bindings=` |
 | `@register_session_type(name)` | Register a concrete Session subclass for engine and checkpoint dispatch |
 
 ---

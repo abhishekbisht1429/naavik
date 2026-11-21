@@ -39,7 +39,7 @@ which registers all built-ins. Their classes are also importable from
 | `timer` | Lifecycle hook | Reports iteration and elapsed durations |
 | `tensorboard` | Resource | Exposes a `SummaryWriter`; starts a TensorBoard server unless `serve: false` |
 | `tensorboard_summaries` | Hook | Writes chosen iteration values (and optimizer values) to the `tensorboard` writer; rank 0 only; see [`tensorboard_summaries`](#tensorboard_summaries) |
-| `model_diagram` | Session hook | Draws the `model`'s data flow (from its first forward call), and the component wiring of the model and of the whole session, into the session dir; rank 0; [below](#model_diagram); also in analysis sessions |
+| `model_diagram` | Session hook | Draws model data flow and component wiring into the session directory; rank 0; [below](#model_diagram) |
 | `profiler` | Lifecycle hook | Records `torch.profiler` traces and operator summaries of chosen iterations, on chosen ranks; `activities` is required; [Profiler](profiler.md); also in analysis sessions |
 
 `dataset` and `model` are declared roles (see [Role
@@ -47,6 +47,10 @@ bindings](../guide/02-wiring-components.md#role-bindings)) with no default
 implementation; register a `Resource` under that name, or bind one via
 `role_bindings`, before activating `data_manager` or `ddp`. Optional
 torchvision [image datasets](datasets.md) can fill the `dataset` role.
+
+The [transformer blocks and composite models](transformer-blocks.md) are
+also available as resources. The optional [image datasets and
+`normalize_images` step](datasets.md) provide image input and normalization.
 
 The training defaults are equivalent to:
 
@@ -64,7 +68,9 @@ An explicit component mapping replaces its default mapping, so retain required
 fields such as `log_every` and `checkpoint_every` when overriding defaults.
 The analysis logger likewise defaults to `log_every: 10`.
 
-**Every built-in checks its config.** Each one has a `config_schema`, so a
+**Most built-ins check their config.** `forward_context` and `optimizer_step`
+currently have no schema and silently ignore supplied keys. For built-ins with
+a `config_schema`, a
 session check (`naavik validate`) finds a mistake without building
 anything, with the message building would give: an unknown key is refused
 (it is never silently ignored), a required one named when missing, and
@@ -220,7 +226,7 @@ Because it is an iteration hook, it saves on:
 
 A component that needs something another run produced reads it with
 `Checkpointer.load_component(path, name, *, with_dependencies=True,
-session_type=None, device=None)`, which rebuilds only that resource and the
+map_location="cpu", session_type=None, device=None)`, which rebuilds only that resource and the
 instances it was wired to; `device` moves every rebuilt `nn.Module` among them
 there, including a part the resource reaches without holding it as a
 submodule. The name is
@@ -232,7 +238,7 @@ has no such resource (an instance suffixed `imported` is never found by its
 implementation's name alone) and `ComponentDependencyError` when several
 instances answer; `session_type="training"` also rejects a checkpoint of another kind.
 This is how the analysis `trained_model` gets its model.
-`Checkpointer.load_component_state(path, name)` returns a component's saved
+`Checkpointer.load_component_state(path, name, *, map_location="cpu")` returns a component's saved
 state without building anything, and `Checkpointer.read_manifest(path)`
 describes the checkpoint; see
 [reading part of a checkpoint](../guide/05-checkpoints-and-resume.md#reading-part-of-a-checkpoint).
@@ -382,7 +388,15 @@ seen.
 | `compute` | Step | Shared with training; [generic step](generic-steps.md#compute) |
 | `profiler` | Lifecycle hook | Shared with training; [Profiler](profiler.md) |
 
-The analysis logger lives in the analysis registry. `trained_model` is shared
+Analysis also provides `model_diagram`, `module_part`, `backbone_with_head`,
+the deprecated `fine_tuned_model`, `multi_view`, `ema_teacher`,
+`projection_head`, and the [transformer resources](transformer-blocks.md).
+To use `model_diagram` in analysis, bind its `model` dependency to a suitable
+`nn.Module` resource using `dependency_bindings`; the training `model` role
+does not provide an analysis default.
+
+The analysis logger lives in the analysis registry and accepts `log_every`
+and optional `log_file`, like the training logger. `trained_model` is shared
 and can be activated by any session type. Analysis sessions activate it by
 default, so an unbound analysis session must provide:
 

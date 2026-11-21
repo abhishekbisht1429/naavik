@@ -225,8 +225,8 @@ than being silently ignored. See
 ## Resuming on a different number of GPUs
 
 A run trained on eight GPUs resumes on four with the same command. If the
-stored world size no longer fits the visible CUDA devices, the launch warns
-and falls back to the device count. Choose a size explicitly with
+stored world size no longer fits the visible CUDA devices of an `nccl` run,
+the launch warns and falls back to the device count. Choose a size explicitly with
 `--override ddp.world_size=N`, which is the one kind of override
 `--resume-session` accepts.
 
@@ -270,11 +270,14 @@ The built-in mutable settings are the run length (`session_config.max_iterations
 or `session_config.epochs`), optimizer
 constructor values under `optimizer.optimizer.kwargs`, `optimizer.lr_scheduler`,
 the `clip_gradients` and `freeze_gradients` settings, `logger.log_every`,
-and `checkpointer.checkpoint_every` / `checkpoint_first`. Optimizer state such
+`checkpointer.checkpoint_every` / `checkpoint_first`, and the `profiler`
+schedule keys listed in
+[the profiler reference](../reference/profiler.md#resuming-and-extending).
+Optimizer state such
 as momentum buffers and step counters is retained; only explicitly overridden
 parameter-group values are replaced. The optimizer class cannot change, and
 existing optimizer kwargs cannot be removed. Model, DDP, data-manager,
-component-binding, and other session changes are rejected unless a custom
+role-binding, and other session changes are rejected unless a custom
 component explicitly opts into extension.
 
 The run length can be overridden either way, whichever way the session

@@ -19,13 +19,11 @@ sessions:
       sessions_dir: ./runs
       max_iterations: 1000
       components_package: my_project.components
-      device: cpu
+      device: cuda
 
     ddp:
       world_size: 4
       backend: nccl
-      master_addr: "127.0.0.1"
-      master_port: "12355"
 
     model: {}
     train: {}
@@ -37,8 +35,9 @@ sessions:
       checkpoint_every: 100
 ```
 
-`master_port` may be left out, and usually should be: the engine then asks
-the operating system for a free port. Either way, the engine binds the port
+`master_addr` and `master_port` may be given as well; `master_port` is
+usually best left out, as here: the engine then asks the operating system for
+a free port. Either way, the engine binds the port
 itself before it starts any worker and holds it until every worker has
 finished; the ranks meet through that rendezvous. Nothing else on the machine
 can take the port between the moment it is chosen and the moment the ranks
@@ -46,7 +45,8 @@ use it.
 
 A session driven by hand, outside the engine, has no launcher to hold the
 port: its DDP resource hands `master_addr` and `master_port` to the process
-group as a `tcp://` address, and rank 0 binds it. Either way the resource
+group as a `tcp://` address, and rank 0 binds it, so such a session must
+give `ddp.master_port` (setup refuses one without it). Either way the resource
 never writes `MASTER_ADDR` or `MASTER_PORT` into the environment, so nothing
 it sets outlives the session. An IPv6 `master_addr` is bracketed for you.
 
@@ -65,13 +65,16 @@ Each is taken from the first of these that provides it:
    config file is the launch's own statement and keeps precedence over an
    ambient variable;
 3. the configuration, whether from the file or the checkpoint;
-4. a default: the visible CUDA device count when resuming, and a free local
-   port, which the engine binds and holds for the run.
+4. a default: the visible CUDA device count when resuming with the `nccl`
+   backend on a machine with CUDA, and a free local port, which the engine
+   binds and holds for the run.
 
-A new session must still state its `world_size`. Asking for more ranks than
-there are visible CUDA devices is an error when the run is new, and a warning
-with a fallback to the device count when it is resumed — so a checkpoint
-written on eight GPUs resumes on four without being told to.
+A new session must still state its `world_size`. With the `nccl` backend on a
+machine with CUDA, asking for more ranks than there are visible CUDA devices is
+an error when the run is new, and a warning with a fallback to the device count
+when it is resumed — so a checkpoint written on eight GPUs resumes on four
+without being told to. Other launches (`gloo`, or no CUDA) take the
+`world_size` they are given.
 
 A port that is already in use is reported when the run is launched, before
 any worker starts. A port you configured, by file, environment or override,
@@ -116,8 +119,8 @@ ddp:
     - my_reporter
 ```
 
-The built-in `logger`, `checkpointer`, `tensorboard` and `timer` are marked
-already, so a default configuration keeps logging and checkpointing on rank 0
+The built-in `logger`, `checkpointer`, `tensorboard`, `tensorboard_summaries`,
+`timer` and `model_diagram` are marked already, so a default configuration keeps logging and checkpointing on rank 0
 without being told to.
 
 The two declarations are not treated alike. A class-level mark is its author's
@@ -186,7 +189,8 @@ which records the keys every component reads and writes.
 
 ### How a rank settles its component set
 
-The parent session holds a placeholder DDP resource with rank `-1`. Each child
+The parent builds one session per rank, and in each of them the DDP resource
+still has rank `-1`: no rank is assigned in the parent. Each child
 process settles its own configuration *before* it builds anything: it pins its
 CUDA device, records its rank and the launch's topology against the `ddp`
 entry in the session state it received, and, on a secondary rank, drops the
@@ -212,7 +216,7 @@ list as rank-zero-only instead.
 
 During setup, the built-in DDP resource:
 
-- selects CUDA device `rank` for the NCCL backend;
+- selects the rank's CUDA device (`rank % <visible devices>`) for the NCCL backend;
 - updates `session.device` to that CUDA device;
 - initializes the process group through the rendezvous the engine holds, or
   at `tcp://<master_addr>:<master_port>` when the session is driven by hand;

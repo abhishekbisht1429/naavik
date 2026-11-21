@@ -2,14 +2,39 @@
 
 [Project README](../README.md)
 
-The docs are in three tracks. Read the **guide** in order if you are new;
-dip into **reference** when you need a specific key or signature; read
-**concepts** when you need to know why something behaves the way it does.
+Naavik helps you launch training experiments, follow them across machines,
+and compare their results. Its training framework provides the sessions and
+components those experiments run. Start with the path that fits your work;
+you can return to the reference and concepts pages whenever you need them.
+
+## Run experiments with Naavik
+
+1. Follow [your first Naavik run](guide/00-naavik-first-run.md) for installation,
+   setup, and a local experiment.
+2. Run one configuration or a sweep locally, over SSH, or on a cluster with
+   [missions](guide/08-hpc-batches.md). For a single configuration, see
+   [`naavik run`](guide/08-hpc-batches.md#one-config-followed-naavik-run).
+3. Use the same guide to [follow a mission](guide/08-hpc-batches.md#7-keeping-track-of-your-missions),
+   [resume unfinished experiments](guide/08-hpc-batches.md#10-resuming-unfinished-experiments),
+   and [fetch results](guide/08-hpc-batches.md#11-getting-results-back).
+4. Find and inspect recorded runs with the [run registry](guide/13-run-registry.md),
+   then [compare their results](guide/12-comparing-runs.md).
+
+A **mission** is a collection of experiments launched on a host. Each
+experiment runs a training or analysis session; a **run record** captures
+what launched, where it ran, and how it ended. The mission guide explains
+how jobs and recipes group and generate experiments.
+
+For a new project, see [setting up a project for missions](guide/10-hpc-projects.md).
+For IU's cluster, follow the [Big Red 200 checklist](guide/09-hpc-big-red-200.md).
 
 ## Learn it
 
-A task-ordered path. It picks up where the
-[quick start](../README.md#quick-start) in the project README ends.
+### Build training workflows
+
+Start with the [quick start](../README.md#quick-start), then use these guides
+to build or customize a session. You can read them in order or choose the
+task you need.
 
 1. [Resources, hooks, and steps](guide/01-resources-hooks-steps.md) — the three
    kinds of component, giving one state that survives a checkpoint, and how the
@@ -37,7 +62,7 @@ A task-ordered path. It picks up where the
    and a staged checklist for bringing missions up on IU's cluster.
 10. [Setting up a project for missions](guide/10-hpc-projects.md) — where
     the framework comes from, generating the pinned requirements, and projects that depend on
-    training-framework.
+    naavik.
 11. [Self-supervised training with DINO](guide/11-self-supervised-dino.md) —
     a ViT-S/16 DINO run built part by part, checked on a small scale,
     resumed, and evaluated with a linear probe; what changes for BYOL.
@@ -46,7 +71,7 @@ A task-ordered path. It picks up where the
     runs that differ only in their seed as mean ± std.
 13. [Every run is recorded](guide/13-run-registry.md) — the record each
     launch leaves (config, code, environment, devices, outcome), and
-    `naavik runs` to list, show, compare, and sync them.
+    `naavik runs` to list, show, compare (`diff`), and sync them.
 
 ## Look it up
 
@@ -70,7 +95,7 @@ A task-ordered path. It picks up where the
   from generic parts: `projection_head`, `multi_view`, `ema_teacher`,
   `ema_update`, `dino_distillation_loss`, and dataset views.
 - [Transformer blocks](reference/transformer-blocks.md) — the swappable
-  transformer building blocks and the two composite models.
+  transformer building blocks and three composite models.
 - [Image datasets](reference/datasets.md) — optional torchvision datasets
   (CIFAR-10, Flowers-102, Stanford Cars, iNaturalist, ImageNet) for the
   `dataset` role.

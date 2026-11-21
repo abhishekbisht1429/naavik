@@ -41,7 +41,7 @@ for a component added after the session was built.
 
 `TrainingSession` activates `logger` and `checkpointer` by default.
 `AnalysisSession` instead activates `trained_model` and its analysis-specific
-`logger`. Both special entries and component dependencies support component
+`logger`. Both special entries and component dependencies support role
 bindings.
 
 ## Role bindings
@@ -300,7 +300,7 @@ only, marked deprecated (below).
 Some component names, like `dataset` and `model`, are required by built-in
 dependencies (`@requires_resource(...)`) with no built-in implementation.
 Declare such a name explicitly with `role(name, category, *, description=None,
-session_type=None, overwrite=False)` from `naavik.components`:
+session_type=None, overwrite=False, deprecated=None)` from `naavik.components`:
 
 ```python
 from naavik.components import Resource, role
@@ -388,7 +388,7 @@ class OuterHook(LifecycleHook):
 
 If `outer` wraps `inner`, pre-session and pre-iteration callbacks run outer
 then inner, while post-iteration and post-session callbacks run inner then outer.
-Wrapping names support session component bindings. Hooks must share a lifecycle
+Wrapping names support role bindings. Hooks must share a lifecycle
 phase. For
 two iteration-capable hooks, the wrapper's `call_every` must be a positive
 multiple of the wrapped hook's value. This lets the wrapper run less often while

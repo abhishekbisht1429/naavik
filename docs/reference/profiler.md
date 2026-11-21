@@ -72,7 +72,7 @@ An extended session may change `start_iteration`, `warmup`, `active`, `wait`
 and `repeat`, for instance to profile later iterations:
 
 ```bash
-naavik \
+python -m my_project.train \
   --extend-session ./runs/session_.../checkpoints/<checkpoint-name> \
   --override \
   session_config.max_iterations=6000 \

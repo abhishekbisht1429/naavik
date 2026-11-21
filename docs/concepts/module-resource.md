@@ -52,7 +52,7 @@ an ordinary `if` in the constructor, and `has_dependency(name)` reports whether
 | Member | Purpose |
 |---|---|
 | `get_dependency(name)` | The live prerequisite, resolved for this component, in `__init__` or later; records that this component was wired to it |
-| `linked_components` | The asked name -> implementation name map; recorded in the checkpoint and checked on restore |
+| `linked_components` | The asked name -> instance name map; recorded in the checkpoint and checked on restore |
 | `captured_tensors()` | The live tensors this component checkpoints, by state key |
 | `config_schema` | Optional dataclass; parsed into `self._cfg` (see [declaring a configuration schema](component-model.md#declaring-a-configuration-schema)) |
 | `usable_as_plain_module(cls)` | Whether a component class may be owned privately as an ordinary submodule |
@@ -79,9 +79,12 @@ otherwise be stored twice.
 
 ## What is recorded
 
-`linked_components` is the asked name -> implementation name map built by
+`linked_components` is the asked name -> instance name map built by
 `get_dependency`: the key is the name the component asked for (the role name),
-the value is the registered name of the implementation that filled it.
+the value is the name of the instance that filled it. Without an instance
+suffix that is the implementation's registered name; a suffixed instance
+records its full name, such as `conv_patch_embedding#student`, so rewiring a
+consumer between two instances of one component is caught as well.
 
 ```python
 {"patch_embedding": "conv_patch_embedding",
@@ -96,8 +99,8 @@ against the prerequisites this instance was *given* -- not the ones it has
 asked for so far, since `set_state` runs before `setup` and a component may
 take its prerequisite there -- and refuses state captured from a differently
 wired instance, such as state moved between instances by hand. A `version: 1` state is keyed by the attribute a child was attached
-under, which no longer exists, so it is compared on the implementation names
-alone. It is not a
+under, which no longer exists, so only its stored names are compared, each against
+the instance names this component was given. It is not a
 configuration guard: a restore rebuilds components from the checkpoint's own
 bindings, so rebinding a role in a later config never reaches this check, and a
 renamed component is caught earlier, when the checkpoint entry no longer

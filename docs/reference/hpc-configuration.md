@@ -353,6 +353,8 @@ current one is an error.
 | `hpc.yaml`, `targets.yaml` | `hosts.yaml` |
 | manifest, experiment file | mission file |
 | batch | mission |
+| group (in a mission file) | job |
+| experiment (in a mission file) | recipe: "experiment" now means one run, the former task |
 | task | experiment |
 | `naavik batches`, `submit`, `probe-python` | `naavik missions`, `launch`, `show-site-interpreter` |
 | `--target`, `--profile` / `--targets`, `--profiles` | `--host` / `--hosts-file` |

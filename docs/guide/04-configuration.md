@@ -97,7 +97,7 @@ Besides `session_config` and component mappings, a session entry may hold
 
 These top-level names are reserved and cannot name a component:
 `session_config`, `session_type`, `session_kwargs`, `role_bindings`,
-`import_components`, `resources`, `hooks`, `steps`, and the deprecated
+`import_components`, `includes`, `resources`, `hooks`, `steps`, and the deprecated
 `component_bindings`, `aliases` and `components`.
 `role_bindings`, `resources`, `hooks` and `steps` are newly reserved: a
 component registered under one of them is refused when it is registered, with
@@ -188,7 +188,7 @@ sessions:
 ```yaml
 # configs/common/dino_optimizer.yaml
 optimizer:
-  optimizer: {kind: adamw, kwargs: {lr: 0.001, weight_decay: 0.04}}
+  optimizer: {name: AdamW, kwargs: {lr: 0.001, weight_decay: 0.04}}
 clip_gradients: {max_norm: 3.0}
 ```
 

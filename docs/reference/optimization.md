@@ -35,6 +35,9 @@ want to configure one. Every post-iteration hook -- `checkpointer`, `logger`,
 | `clip_gradients` | Step | Clips, or only measures, the total gradient norm | [`clip_gradients`](#clip_gradients) |
 | `optimizer_step` | Step | Steps the optimizer and the schedule; the gradients stay until the next iteration (group) begins | none |
 
+`forward_context` and `optimizer_step` have no configuration options. They
+currently do not validate supplied keys, so misspelled keys are silently ignored.
+
 `optimizer.completed_steps` counts the optimizer steps actually taken in the
 run -- a step `fp16` skipped because its gradients overflowed is not one --
 and is checkpointed; `optimizer.stepped` says whether this iteration's

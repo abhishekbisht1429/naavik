@@ -41,8 +41,11 @@ from the model's outputs:
 ```yaml
 load_batch: {fields: [inputs, targets]}
 forward: {args: [inputs], outputs: logits}
-report: {output_path: ./report.json}   # a step that declares @reads("logits")
+report: {output_path: ./report.json}   # a step that consumes the output
 ```
+
+The `ReportStep` above accesses the model directly. To consume `logits`
+instead, declare `@reads("logits")` and accept `logits` in its `run` method.
 
 ## Configuring the source checkpoint
 
@@ -101,15 +104,17 @@ python -m my_project.train --config my_project/analysis.yaml
 The configured `trained_model.model_checkpoint_path` must identify a framework
 `TrainingSession` checkpoint, not a standalone model state dictionary. The
 source session must expose a model through the `model` resource role, directly
-or through a component binding, and that resource must
+or through a role binding, and that resource must
 provide `to(device)` and `eval()`. During analysis setup, `trained_model` loads
 the source session on CPU, moves the recovered model -- and every part it was
 wired to, whether or not it holds the part as a submodule -- to the analysis
 device,
 places it in evaluation mode, and exposes it as `.model` -- a component that
 declares `@requires_resource("trained_model")` reads it with
-`self.get_dependency("trained_model").model`. Gradients remain enabled for
-attribution-style analyses. Analysis does not activate the training
+`self.get_dependency("trained_model").model`. Gradients remain available to
+custom analysis steps for attribution, while the built-in `forward` step
+defaults to `no_grad: true`; set it to `false` when its output needs gradients.
+Analysis does not activate the training
 checkpointer by default.
 
 `layer_inspector` is an available opt-in building block for analysis `Step`s

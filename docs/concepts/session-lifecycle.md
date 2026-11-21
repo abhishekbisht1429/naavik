@@ -39,9 +39,15 @@ The main phases are:
 
 ```text
 NEW -> READY -> RUNNING -> FINISHED
-                  |
-                  +-> PAUSED when the context exits before max_iterations
+         |        |
+         |        +-> PAUSED when the context exits before max_iterations
+         |
+         +-> NEW when the context exits before the first iteration
 ```
+
+An iteration hook is *selected* on iteration 1, on the last iteration
+(`max_iterations`), and on every iteration that is a multiple of its
+`call_every`; the other iterations skip it.
 
 If an iteration fails, its iteration counter is rolled back and its iteration context is cleared before the exception propagates.
 

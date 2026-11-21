@@ -1,11 +1,13 @@
-# Training Framework
+# Naavik
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
 [![Package version](https://img.shields.io/badge/version-0.5.0-blue.svg)](./pyproject.toml)
-[![Python tests](https://github.com/abhishekbisht1429/training-framework/actions/workflows/python-tests.yaml/badge.svg)](https://github.com/abhishekbisht1429/training-framework/actions/workflows/python-tests.yaml)
+[![Python tests](https://github.com/abhishekbisht1429/naavik/actions/workflows/python-tests.yaml/badge.svg)](https://github.com/abhishekbisht1429/naavik/actions/workflows/python-tests.yaml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green.svg)](./LICENSE)
 
-A component-based framework for building, running, checkpointing, and supervising PyTorch training and trained-model analysis workflows.
+Naavik is a component-based framework for training and analysing PyTorch models. It helps you launch, monitor, and compare experiments on your machine, over SSH, or on a Slurm cluster. Its command is available as `naavik` or `navik`.
+
+Start with [your first Naavik run](docs/guide/00-naavik-first-run.md), or follow the component example below if you want to build a training workflow.
 
 Workflow code is organized into reusable **resources**, **hooks**, and **steps**. `TrainingSession` and `AnalysisSession` share the lifecycle implemented by the abstract `Session` base, while using separate component registries and defaults. `TrainingEngine` constructs or restores the appropriate session in the parent process, serializes its state, launches one or more spawned workers, and monitors them for completion, errors, interrupts, and missed heartbeats.
 
@@ -28,6 +30,7 @@ Workflow code is organized into reusable **resources**, **hooks**, and **steps**
 - Single-node PyTorch DistributedDataParallel setup with coordinated stopping
 - Resume and extend operations for saved sessions
 - Analysis sessions driven by a trained-session checkpoint
+- Mission launches, monitoring, run records, and comparisons with Naavik
 - Built-in model loading, logging, checkpointing, DDP, data management, optimization, timing, TensorBoard, and infinite samplers
 
 ## Requirements
@@ -35,7 +38,7 @@ Workflow code is organized into reusable **resources**, **hooks**, and **steps**
 The package currently declares:
 
 - Python 3.12 or newer
-- PyTorch 2.11 or newer
+- PyTorch 2.13.0 (pinned)
 - NumPy 2.4.4 or newer
 - OmegaConf 2.3 or newer
 - Matplotlib 3.10.9 or newer
@@ -51,17 +54,22 @@ See [`pyproject.toml`](./pyproject.toml) for the complete dependency list.
 
 ```bash
 python -m pip install \
-  "git+https://github.com/abhishekbisht1429/training-framework.git@main"
+  "git+https://github.com/abhishekbisht1429/naavik.git@main"
 ```
 
 ### Development installation
 
 ```bash
-git clone https://github.com/abhishekbisht1429/training-framework.git
-cd training-framework
+git clone https://github.com/abhishekbisht1429/naavik.git
+cd naavik
 python -m pip install --upgrade pip
 python -m pip install -e .
 ```
+
+For missions, install the `hpc` extra; for the built-in image datasets,
+install `vision`. From a clone, use `python -m pip install -e '.[hpc,vision]'`
+to install both. See [mission setup](docs/guide/10-hpc-projects.md) for
+environment and CUDA considerations.
 
 ### Optional: Graphviz
 
@@ -96,7 +104,7 @@ The package containing decorated components must be importable by both the paren
 Create `my_project/components/demo.py`:
 
 ```python
-from training_framework.components import (
+from naavik.components import (
     LifecycleHook,
     StatefulResource,
     Step,
@@ -107,7 +115,7 @@ from training_framework.components import (
     step,
     writes,
 )
-from training_framework.session import TrainingSession
+from naavik.session import TrainingSession
 
 
 @resource("counter")
@@ -215,8 +223,8 @@ components with a custom constructor must have one.
 Create `my_project/train.py`:
 
 ```python
-from training_framework.engine import Configurator
-from training_framework.engine import TrainingEngine
+from naavik.engine import Configurator
+from naavik.engine import TrainingEngine
 
 
 def main() -> None:
@@ -261,7 +269,7 @@ model, registered as resources:
 import torch
 from torch import nn
 
-from training_framework.components import ModuleResource, Resource, resource
+from naavik.components import ModuleResource, Resource, resource
 
 
 @resource("toy_dataset")
@@ -319,25 +327,11 @@ varies it: several loss terms, a second model, two views of one input.
 
 ## Documentation
 
-The README covers installation and a complete first run. Everything else is in
-the [documentation index](docs/README.md), which is organized in three tracks:
-
-- **[Guide](docs/README.md#learn-it)** — a task-ordered path starting from
-  [resources, hooks, and steps](docs/guide/01-resources-hooks-steps.md) and
-  ending at [analysis sessions](docs/guide/07-analysis-sessions.md).
-- **[Reference](docs/README.md#look-it-up)** —
-  [built-in components](docs/reference/builtin-components.md),
-  [generic steps](docs/reference/generic-steps.md),
-  [optimization](docs/reference/optimization.md),
-  [transformer blocks](docs/reference/transformer-blocks.md),
-  [samplers](docs/reference/samplers.md),
-  [CLI](docs/reference/cli.md) and [API](docs/reference/api.md).
-- **[Concepts](docs/README.md#understand-it)** —
-  [architecture](docs/concepts/architecture.md),
-  [session lifecycle](docs/concepts/session-lifecycle.md),
-  [the component model](docs/concepts/component-model.md),
-  [`ModuleResource`](docs/concepts/module-resource.md) and
-  [limitations](docs/concepts/limitations.md).
+The [documentation index](docs/README.md) helps you find a path for running
+experiments or building components, along with the command and API references.
+To launch a sweep or use another machine, see [running missions](docs/guide/08-hpc-batches.md).
+To inspect and compare results, see [run records](docs/guide/13-run-registry.md)
+and [comparing runs](docs/guide/12-comparing-runs.md).
 
 Working on the framework itself? See
 [development and testing](docs/development.md).
@@ -348,4 +342,4 @@ This repository is licensed under the [Apache License 2.0](./LICENSE).
 
 ---
 **Author Note**
-This README was generated using ChatGPT. Although, I have done an overview of it, please open an issue if you find anything missing and inconsistent.
+This README was created with the help of ChatGPT/Claude. Please open an issue if you find anything missing or inconsistent.

@@ -142,14 +142,17 @@ Each machine has its own registry. A mission's experiment records on the machine
 runs on; copy those runs here with:
 
 ```bash
-naavik runs sync                   # the target file's default target
-naavik runs sync --target gpubox   # repeatable
-naavik runs sync --all-targets
+naavik runs sync --host gpubox     # repeatable
 ```
 
+Pass each host explicitly. Currently `runs sync` reads legacy `default` and
+`targets`/`profiles` keys for default and `--all-hosts` selection; it does
+not use `default_host` or `hosts` for those selections. With a current hosts
+file, omitting `--host` fails and `--all-hosts` can silently select no hosts.
+
 `sync` copies over SSH (rsync) what is new or changed (a run's events keep
-arriving until it ends) and deletes nothing. A target on this machine
-(`local: true`) shares this registry; there is nothing to copy. Ids are
+arriving until it ends) and deletes nothing. A host on this machine
+(`connection: local`) shares this registry; there is nothing to copy. Ids are
 unique and every record has one writer, so copies never conflict.
 
 ## Where records live
@@ -175,4 +178,4 @@ directory; stored configs shared with other runs stay.
 ---
 
 **See also:** [Running missions](08-hpc-batches.md) for missions and
-targets; [Comparing runs](12-comparing-runs.md) for metrics.
+hosts; [Comparing runs](12-comparing-runs.md) for metrics.

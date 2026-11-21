@@ -26,8 +26,8 @@ steps           load_batch               batch -> inputs, targets
                 forward                  inputs -> logits
                 compute#loss             logits, targets -> loss
                 backward                 loss -> gradients
-                freeze_gradients         (only if configured)
-                clip_gradients           (only if configured)
+                freeze_gradients         (inert unless configured)
+                clip_gradients           (inert unless configured)
                 optimizer_step           gradients -> updated weights
 post-iteration  checkpointer, logger, ...  see the updated weights
 ```

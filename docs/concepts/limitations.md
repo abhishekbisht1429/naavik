@@ -44,7 +44,7 @@ The `model` role must resolve to a module accepted by PyTorch DDP. Distributed f
 
 ### Only the DDP root's module tree is gradient-synchronised
 
-`ddp` wraps the single `model` resource, so parameters owned by an attached `ModuleResource` are synchronised only while that component is reachable from the `model` root. A `ModuleResource` that is active but not reachable from `model` is also invisible to `OptimizerHook`, which collects parameters from the wrapped model, so its weights are never updated and never all-reduced while `Checkpointer` still saves them. Nothing raises: the same shape is legitimate weight sharing between two models.
+`ddp` wraps the single `model` resource, so parameters owned by an attached `ModuleResource` are synchronised only while that component is reachable from the `model` root. A `ModuleResource` that is active but not reachable from `model` is also invisible to the `optimizer` resource, which collects parameters from the wrapped model, so its weights are never updated and never all-reduced while `Checkpointer` still saves them. Nothing raises: the same shape is legitimate weight sharing between two models.
 
 ### Rank-zero-only work is opt-out
 
@@ -58,7 +58,7 @@ Components are wired to each other as they are built, so `--extend-session` can 
 
 ### Components are constructed in the parent process
 
-The engine builds the session before spawning workers, so a model's weights are allocated in the parent and shipped to each rank inside the session state. Every rank therefore starts from identical weights, at the cost of one model's memory in the parent.
+The engine builds one session per rank in the parent before spawning workers, so the model's weights are allocated there and shipped to each rank inside its session state. Every rank therefore starts from identical weights, at the cost of `world_size` copies of every component -- model weights included -- in the parent until the workers start.
 
 ### A component that uses a dependency in its constructor cannot be constructed by hand
 
@@ -94,10 +94,6 @@ DataLoader prefetching can move a sampler's issued position ahead of consumed ba
 
 Every rank must resume at the same offset into its own slice, so the sampler position rounds up to a multiple of the new world size: nothing is delivered twice, but up to `world_size - 1` samples from the tail of that epoch are skipped. One CUDA RNG stream is restored onto every rank rather than a per-rank stream, and `batch_size` must stay divisible by the new world size. The same checkpoint, world size and seed still reproduce the same run.
 
-### The data order does not follow `rng_seed`
-
-`DataManager` builds its sampler without a seed, so the shuffle always uses the sampler default of `0`. Two runs that differ only in `rng_seed` see the same data order.
-
 ### Legacy analysis checkpoint-path ownership is unsupported
 
 Analysis configurations must place the source checkpoint at `trained_model.model_checkpoint_path`. The removed top-level `model_checkpoint_path` entry and `AnalysisSession.model_checkpoint_path` property are not compatibility aliases. Analysis-session checkpoints that rely only on the removed session-level state must be recreated or explicitly migrated before loading.
@@ -110,4 +106,4 @@ A new session refuses a device it cannot use. A session restored from a checkpoi
 
 ### TensorBoard is an external process
 
-Starting it requires an available executable and port, and including it in DDP parallel components would start one server per retained rank.
+Starting it requires an available executable and port. `tensorboard` is `@rank_zero_only`, so a DDP run starts one server, on rank 0; a second instance needs a `port` of its own.

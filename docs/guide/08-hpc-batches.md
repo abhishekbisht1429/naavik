@@ -8,7 +8,9 @@ a Slurm job array, or one runner elsewhere); a job's **recipes** say which
 experiments to make; each **experiment** is a single-node run of the engine
 (with DDP inside the node if configured). Everything is decided on your
 workstation; the host only checks and executes. The same mission file runs
-on every host: pick one with `--host`.
+on every host -- pick one with `--host` -- unless a job gives
+`scheduler_options`, which tie it to that scheduler (see
+[the mission file](#2-the-mission-file-committed)).
 
 ```bash
 pip install 'naavik[hpc]'     # adds `packaging`, used on the workstation
@@ -49,7 +51,7 @@ For a first run on Big Red 200, follow the staged checklist in
 
 `~/.config/naavik/hosts.yaml` (or `--hosts-file PATH`) holds
 everything specific to the machines you run on, so the committed mission
-file runs unchanged anywhere. Pick a host with `--host NAME`, else
+file runs unchanged on any host whose scheduler its jobs accept. Pick a host with `--host NAME`, else
 `default_host`.
 
 ```yaml
@@ -215,7 +217,9 @@ jobs:
   shows each experiment's file.
 - `per_experiment` resources are portable; partitions, QoS, and account come
   from the host. Scheduler-specific options go under `scheduler_options:
-  {slurm: {...}}`.
+  {slurm: {...}}`; they tie the job to that scheduler, so validation refuses
+  the job on a host with another one (the `builtin` scheduler takes no
+  options at all).
 - `ddp.world_size` must be set explicitly: with `nccl` it must equal `gpus`;
   with `gloo` it must fit in `cpus`.
 - `base.engine_options` accepts `--heartbeat-timeout`,
@@ -622,8 +626,8 @@ naavik missions
 ```
 mission                                 launched          host       experiments  submit
 ssl-dino-20261015T091200Z-3f2a1c9e4b7d  2026-10-15 09:12  bigred200  4            submitted
-vit-probes-20261014T220100Z-9a8b7c6d5e  2026-10-14 22:01  bigred200  24           submitted
-vit-probes-20261014T214000Z-9a8b7c6d5e  2026-10-14 21:40  bigred200  24           staged (declined at confirmation)
+vit-probes-20261014T220100Z-9a8b7c6d5e4f  2026-10-14 22:01  bigred200  24           submitted
+vit-probes-20261014T214000Z-9a8b7c6d5e4f  2026-10-14 21:40  bigred200  24           staged (declined at confirmation)
 imagenet-20261013T014700Z-1c2d3e4f5a6b  2026-10-13 01:47  bigred200  8            failed (rsync not found on this machine's PATH; ...)
 ```
 
@@ -647,8 +651,8 @@ naavik missions --live
 ```
 mission                                 launched          host       experiments  submit     now
 ssl-dino-20261015T091200Z-3f2a1c9e4b7d  2026-10-15 09:12  bigred200  4            submitted  running: 2 running, 2 pending
-vit-probes-20261014T220100Z-9a8b7c6d5e  2026-10-14 22:01  bigred200  24           submitted  finished: 20 done, 3 interrupted, 1 failed
-vit-probes-20261014T214000Z-9a8b7c6d5e  2026-10-14 21:40  bigred200  24           staged     not submitted
+vit-probes-20261014T220100Z-9a8b7c6d5e4f  2026-10-14 22:01  bigred200  24           submitted  finished: 20 done, 3 interrupted, 1 failed
+vit-probes-20261014T214000Z-9a8b7c6d5e4f  2026-10-14 21:40  bigred200  24           staged     not submitted
 ```
 
 `--live` makes one SSH connection per host, whatever the number of missions:
@@ -750,8 +754,8 @@ recorded their host; newer receipts carry it.
 ```text
 $ naavik missions --all-hosts
 mission                     launched          host         from          experiments  note               submit
-arch-20261118T0900Z-...     2026-11-18 09:00  workstation  this machine  6            attn pool vs base  submitted
-arch-20261118T0905Z-...     2026-11-18 09:05  cluster      laptop        8            attn pool vs base  submitted
+arch-20261118T090000Z-...   2026-11-18 09:00  workstation  this machine  6            attn pool vs base  submitted
+arch-20261118T090500Z-...   2026-11-18 09:05  cluster      laptop        8            attn pool vs base  submitted
 ?                                             lab-box                                                    (cannot list: cannot reach lab-box over SSH: ...)
 ```
 
@@ -876,7 +880,7 @@ naavik resume <mission-id> --walltime 2-00:00:00
 ```
 
 ```
-resume vit-probes-20261014T220100Z-9a8b7c6d5e as attempt 2: 3 experiment(s)
+resume vit-probes-20261014T220100Z-9a8b7c6d5e4f as attempt 2: 3 experiment(s)
   probes/frozen/001   interrupted             from iteration 35640/89124  tasks/probes/frozen/001/sessions/.../checkpoints/...
   ...
   job probes: walltime 2-00:00:00, 1 GPU(s), 8 CPU(s), 64G
@@ -948,7 +952,7 @@ naavik fetch <mission-id>            # into ./hpc-results/<mission-id>/
 ```
 
 ```
-fetch vit-probes-20261014T220100Z-9a8b7c6d5e: 2 experiment(s) from bigred200 into hpc-results/vit-probes-...
+fetch vit-probes-20261014T220100Z-9a8b7c6d5e4f: 2 experiment(s) from bigred200 into hpc-results/vit-probes-...
   probes/frozen/000              done                     iteration 6000
   probes/frozen/001              done                     iteration 6000
 50 file(s), 1.2 GiB; already here: 0 file(s), 0 B

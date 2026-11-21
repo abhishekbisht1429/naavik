@@ -2,98 +2,55 @@
 
 [← Docs](README.md) · [Project README](../README.md)
 
-How to run the test suite and where everything lives in the repository. This
-page is for people working on the framework itself.
+This page is for contributors working on Naavik itself.
 
 ## Testing
 
-Install the package in editable mode and run:
+Install the package in editable mode with the extras used by the broader test
+suite, then run the tests:
 
 ```bash
-python -m pip install -e .
+python -m pip install -e '.[hpc,vision]'
 python -m pytest
 ```
 
-Run a focused file with:
+To focus on one area, pass a test directory or file:
 
 ```bash
 python -m pytest src/tests/engine -q
 ```
 
-The GitHub Actions workflow runs the suite on Python 3.12 and Python 3.13.
+With `pytest-xdist` installed, run files in parallel with:
 
-The current tests cover areas including:
+```bash
+python -m pytest -n 8 --dist loadfile
+```
 
-- config-driven session execution;
-- component registration and dependency validation;
-- lifecycle and shared-context behavior;
-- state and RNG restoration;
-- checkpoint resume and extension;
-- analysis session-type registration, model recovery, and spawned execution;
-- real spawned-worker continuation and error propagation;
-- rank-specific DDP session reconstruction; and
-- heartbeat/process-monitoring behavior.
+The GitHub Actions workflow runs tests on Python 3.12 and 3.13. The suite
+covers components, sessions, engine execution, distributed training,
+checkpoints, launcher and HPC workflows, run records and reporting, data,
+configuration files, documentation examples, and output handling.
 
 ## Project layout
 
 ```text
 naavik/
-├── docs/                 # Detailed Markdown documentation
-│   ├── README.md         # Documentation index
-│   ├── guide/            # Task-ordered learning path
-│   ├── concepts/         # How and why the framework works
-│   └── reference/        # Lookup: built-ins, CLI, API
-├── .github/
-│   └── workflows/
-│       └── python-tests.yaml
+├── docs/                   # Guides, concepts, and reference
 ├── src/
-│   ├── naavik/
-│   │   ├── __init__.py
-│   │   ├── components/
-│   │   │   ├── __init__.py
-│   │   │   ├── base.py           # Component categories, dependency view
-│   │   │   ├── config.py
-│   │   │   ├── config_schema.py  # Opt-in dataclass configuration parsing
-│   │   │   ├── diagnostics.py    # Missing-dependency explanations
-│   │   │   ├── graph.py
-│   │   │   ├── module.py         # ModuleResource
-│   │   │   ├── registry.py
-│   │   │   └── builtin/
-│   │   │       ├── __init__.py
-│   │   │       ├── analysis.py
-│   │   │       ├── checkpointing.py
-│   │   │       ├── data.py
-│   │   │       ├── distributed.py
-│   │   │       ├── layer_inspection.py
-│   │   │       ├── model.py
-│   │   │       ├── observability.py
-│   │   │       ├── optimization.py
-│   │   │       └── transformer/
-│   │   │           ├── __init__.py
-│   │   │           ├── components.py
-│   │   │           └── modules.py
-│   │   ├── engine/
-│   │   │   ├── __init__.py
-│   │   │   ├── config.py
-│   │   │   ├── core.py
-│   │   │   ├── supervision.py
-│   │   │   └── worker.py
-│   │   ├── session/
-│   │   │   ├── __init__.py
-│   │   │   ├── analysis.py
-│   │   │   ├── base.py
-│   │   │   ├── components.py
-│   │   │   ├── config.py
-│   │   │   ├── io.py
-│   │   │   ├── progress.py       # Shared-memory progress beacon
-│   │   │   ├── registry.py
-│   │   │   ├── runtime.py
-│   │   │   ├── state.py
-│   │   │   └── training.py
-│   │   ├── dataloader.py
-│   │   └── util.py
-│   └── tests/            # Mirrors the package layout, plus integration/
-├── LICENSE
+│   ├── naavik/             # Main Python package
+│   │   ├── cli/            # Naavik command
+│   │   ├── components/     # Component model and built-ins
+│   │   ├── engine/         # Worker execution and supervision
+│   │   ├── session/        # Training and analysis sessions
+│   │   ├── launcher/       # Mission construction and execution
+│   │   ├── hpc/            # Remote and scheduler support
+│   │   ├── runs/           # Run registry
+│   │   ├── reporting/      # Run comparison
+│   │   ├── data/           # Data utilities
+│   │   └── config_files.py
+│   ├── training_framework/ # Compatibility alias for the earlier package name
+│   └── tests/              # Unit and integration tests
+├── .github/workflows/      # CI configuration
 ├── README.md
 └── pyproject.toml
 ```

@@ -245,8 +245,13 @@ unmet prerequisite! Resource 'ddp' resolves to 'ddp', which is not registered as
   Fix: Use it from a 'training' session, register a Resource for this session type with @resource('ddp', session_type='analysis'), or register it as shared with @resource('ddp').
 ```
 
-A failed resource lookup raises `ComponentNotFoundError`, a `KeyError`
-subclass, so existing `except KeyError` handlers keep working.
+A component that cannot be found by name raises `ComponentNotFoundError`, a
+`KeyError` subclass, so existing `except KeyError` handlers keep working: a
+resource that resolves to nothing active, a name that
+`Checkpointer.load_component` / `load_component_state` does not find in the
+checkpoint, or an instance an `import_components` entry names that its source
+does not hold. It is defined in `naavik.session.components` (not re-exported
+by `naavik.session`).
 
 ## Opting into extension
 
@@ -259,11 +264,14 @@ configuration. The framework updates the component's captured constructor
 configuration after the method succeeds so later checkpoints reconstruct it
 with the effective values.
 
-The built-in logger and checkpointer use the contract for safe cadence changes.
-The built-in `optimizer` resource uses it to retain optimizer tensors and step
-counters while changing explicitly overridden parameter-group values — see the
+The built-in logger and checkpointer use the contract for safe cadence changes,
+and the `profiler` for its schedule keys (see the
+[profiler reference](../reference/profiler.md#resuming-and-extending)). The built-in `optimizer`
+resource uses it to retain optimizer tensors and step counters while changing
+explicitly overridden parameter-group values, and the `freeze_gradients` /
+`clip_gradients` stages to take a new configuration — see the
 [optimization reference](../reference/optimization.md#extending-a-session) for
-exactly what it allows. Model, DDP, data-manager, and all custom components
+exactly what they allow. Model, DDP, data-manager, and all custom components
 that do not opt in remain immutable.
 
 For the operator's view of what an extend may change, see

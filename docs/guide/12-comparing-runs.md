@@ -17,7 +17,7 @@ writing the values you want to compare.
 ## A first report
 
 ```bash
-python -m training_framework.reporting summarize runs/ \
+naavik summarize runs/ \
   --metric train/loss:min --metric val/accuracy:max --sort val/accuracy
 ```
 
@@ -88,7 +88,7 @@ Several roots go in one report; each run's id then starts with its root's
 name:
 
 ```bash
-python -m training_framework.reporting summarize runs/baseline runs/sweep-2 --metric loss:min
+naavik summarize runs/baseline runs/sweep-2 --metric loss:min
 ```
 
 A run's id is its path below the root. A mission's experiment is called by
@@ -130,14 +130,14 @@ by default `session_config.rng_seed`. Give other seeds with `--seed-key`
 (repeatable; it replaces the default):
 
 ```bash
-python -m training_framework.reporting summarize runs/ --metric loss:min \
+naavik summarize runs/ --metric loss:min \
   --seed-key session_config.rng_seed --seed-key data_manager:seed
 ```
 
 A seed key is a config path (`resources.data_manager.seed`) or, like a
 `vary` address in a mission file, `component:path`: the path inside that
 component's entry, wherever the entry is listed in each run's config (the
-top level or a `resources`/`hooks`/`steps` group). Matrix values match
+top level or a `resources`/`hooks`/`steps` group). `vary` values match
 either form.
 
 A seed key that no run has is an error, so a misspelt key does not turn every
@@ -257,7 +257,7 @@ run directory.
 The same is available from Python:
 
 ```python
-from training_framework.reporting import (
+from naavik.reporting import (
     discover_runs, render_markdown, summarize_runs,
 )
 

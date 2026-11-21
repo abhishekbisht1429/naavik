@@ -21,7 +21,7 @@ TrainingEngine
     +-- restore a checkpointed Session for --resume-session
     +-- restore TrainingSession and validate opt-in overrides for --extend-session
     |
-    +-- capture session state
+    +-- build one session per rank, then capture each one's state
     |
     +-- spawn worker process rank 0
     |       +-- adjust the state for this rank, before anything is built
@@ -58,7 +58,7 @@ A concrete `Session` contains:
 - **Hooks**: callbacks around session setup/teardown and/or iterations.
 - **Steps**: ordered units of work performed during every iteration.
 - **Session context**: shared state for the lifetime of an active session.
-- **Iteration context**: temporary shared state that is cleared after every iteration.
+- **Iteration context**: values that steps and iteration hooks pass to each other through declared `@reads`/`@writes` keys, cleared after every iteration.
 
 ## Process model and supervision
 
@@ -66,7 +66,7 @@ The engine uses `torch.multiprocessing.get_context("spawn")`.
 
 For each worker, the parent:
 
-1. calls `get_state()` on the concrete session;
+1. calls `get_state()` on that rank's concrete session (the engine builds one per rank);
 2. passes the state to a new interpreter;
 3. adjusts that state for the worker's rank, then reconstructs the correct
    subtype with `Session.from_state()`;
@@ -97,12 +97,15 @@ On interruption, worker failure, or heartbeat timeout, the engine:
 5. kills processes that still remain alive.
 
 Non-DDP workers check their local stop event between iterations. DDP workers
-instead combine their local event states with `all_reduce(MAX)` before each
-iteration, so all ranks either admit the next iteration or leave the loop
-together. This prevents one rank from stopping while another enters a DDP
-forward or backward collective.
+agree on a stop with a vote: every rank casts its local stop state
+asynchronously before an iteration and reads the combined result after it, so
+no rank waits for the vote while it trains. With the `nccl` backend the vote
+travels on a separate gloo process group and never touches the GPU. All ranks
+either admit the next iteration or leave the loop together, which prevents one
+rank from stopping while another enters a DDP forward or backward collective.
 
-A stop request that races with a completed DDP decision may permit one
-additional synchronized iteration. A step, hook, setup, teardown, or collective
+A stop requested before the first iteration runs none. A stop requested during
+an iteration lets every rank finish that iteration and one more, and all ranks
+stop after the same one. A step, hook, setup, teardown, or collective
 that is already running is not interrupted cooperatively; the supervisor's
 timeout and process termination remain the fallback for unresponsive workers.
