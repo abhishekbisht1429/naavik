@@ -109,13 +109,15 @@ def test_the_framework_is_the_imported_one_not_whatever_is_installed():
     facts = framework_facts()
     location = Path(naavik.__file__).resolve().parent
     assert facts["location"] == str(location)
-    try:
-        distribution = importlib.metadata.distribution("training-framework")
-        installed_here = (Path(distribution.locate_file("naavik/__init__.py"))
-                          .resolve().parent == location)
-        expected = distribution.version if installed_here else None
-    except importlib.metadata.PackageNotFoundError:
-        expected = None
+    expected = None
+    for name in ("naavik", "training-framework"):       # the distribution, by either name
+        try:
+            distribution = importlib.metadata.distribution(name)
+        except importlib.metadata.PackageNotFoundError:
+            continue
+        if Path(distribution.locate_file("naavik/__init__.py")).resolve().parent == location:
+            expected = distribution.version
+            break
     assert facts["version"] == expected       # an installation elsewhere names nothing
     # This checkout is a Git repository: its commit is recorded, never snapshotted.
     assert len(facts["sha"]) == 40 and isinstance(facts["dirty"], bool)
