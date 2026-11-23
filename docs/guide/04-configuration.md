@@ -214,9 +214,8 @@ clip_gradients: {max_norm: 3.0}
 The run records one complete config: its `config.yaml` has every included
 setting and no `includes`. Next to it, `config_sources.yaml` lists the
 files it was built from, each with its SHA-256 and the file that included
-it. For HPC batches the includes are read from the batch's commit and must
-stay inside the repository; see
-[Running batches on an HPC cluster](08-hpc-batches.md).
+it. For a mission the includes are read from the mission's commit and must
+stay inside the repository; see [Running missions](08-missions.md).
 
 A Python program can load a file the same way:
 `naavik.config_files.load_config(path).config`. A session given a

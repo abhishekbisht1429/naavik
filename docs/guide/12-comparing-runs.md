@@ -7,7 +7,7 @@ events and the config it ran with. `summarize` reads them all and writes one
 report: the hyperparameters that differ between the runs, each metric you
 ask for, and the runs that differ only in their seed grouped into
 mean ± std. It works the same on local runs, on a mission directory, and
-on results brought back with [`naavik fetch`](08-hpc-batches.md#11-getting-results-back).
+on results brought back with [`naavik fetch`](08-missions.md#11-getting-results-back).
 
 It assumes the runs use the [`tensorboard`](../reference/builtin-components.md#tensorboard)
 resource, usually with
@@ -196,7 +196,7 @@ some run has one. Runs with different notes still share a seed group.
 
 ### Analysis missions: compared by their training
 
-The experiments of an analysis mission ([`from_mission`](08-hpc-batches.md#analysing-another-missions-checkpoints-from_mission))
+The experiments of an analysis mission ([`from_mission`](08-missions.md#analysing-another-missions-checkpoints-from_mission))
 differ in the checkpoint each one analyses, a path no two runs share. The
 path itself is not compared. What trained the checkpoint is compared in
 its place:
@@ -274,5 +274,5 @@ Every option of the command line is described in the
 
 ---
 
-**See also:** [Running missions](08-hpc-batches.md) for
+**See also:** [Running missions](08-missions.md) for
 producing and fetching sweeps.

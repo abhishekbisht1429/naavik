@@ -69,7 +69,7 @@ python -m pip install -e .
 Missions need nothing extra: the launcher is part of the core install. For
 the built-in image datasets, install the `vision` extra; from a clone, use
 `python -m pip install -e '.[vision]'`. See
-[mission setup](docs/guide/10-hpc-projects.md) for environment and CUDA
+[mission setup](docs/guide/10-mission-projects.md) for environment and CUDA
 considerations.
 
 ### Optional: Graphviz
@@ -330,7 +330,7 @@ varies it: several loss terms, a second model, two views of one input.
 
 The [documentation index](docs/README.md) helps you find a path for running
 experiments or building components, along with the command and API references.
-To launch a sweep or use another machine, see [running missions](docs/guide/08-hpc-batches.md).
+To launch a sweep or use another machine, see [running missions](docs/guide/08-missions.md).
 To inspect and compare results, see [run records](docs/guide/13-run-registry.md)
 and [comparing runs](docs/guide/12-comparing-runs.md).
 

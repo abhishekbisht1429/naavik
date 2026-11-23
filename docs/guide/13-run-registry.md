@@ -122,7 +122,7 @@ A direct run records the Git repository holding its components package
   temporary index (your index, branch, and files are untouched) and kept as
   `refs/naavik/runs/<run-id>`, so `git diff <HEAD> refs/naavik/runs/<run-id>`
   shows exactly what ran. The same tree on the same HEAD is the same commit.
-  This is the [working tree snapshot](08-hpc-batches.md#uncommitted-work-run_code_from-working_tree)
+  This is the [working tree snapshot](08-missions.md#uncommitted-work-run_code_from-working_tree)
   missions use, with the same limit on untracked files (50 MB);
 - outside a Git repository: nothing.
 
@@ -177,5 +177,5 @@ directory; stored configs shared with other runs stay.
 
 ---
 
-**See also:** [Running missions](08-hpc-batches.md) for missions and
+**See also:** [Running missions](08-missions.md) for missions and
 hosts; [Comparing runs](12-comparing-runs.md) for metrics.

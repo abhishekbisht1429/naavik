@@ -188,7 +188,7 @@ list of view batches and normalizes each.
 
 Each built-in dataset declares the data it needs, so a host can download,
 copy, or check it (the host's
-[`dataset_delivery`](../guide/08-hpc-batches.md#declared-data-dataset_delivery-on-the-host)),
+[`dataset_delivery`](../guide/08-missions.md#declared-data-dataset_delivery-on-the-host)),
 and so a download never happens twice:
 
 | Dataset | Requirement | Fetched | Kept at |

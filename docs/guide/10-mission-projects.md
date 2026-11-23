@@ -1,9 +1,10 @@
 # Setting up a project for missions
 
-How to prepare a repository for [missions](08-hpc-batches.md): where the
+How to prepare a repository for [missions](08-missions.md): where the
 framework comes from, and how to produce the pinned requirements file a
 managed environment is built from. Every key used here is described in the
-[configuration reference](../reference/hpc-configuration.md).
+references for [mission files](../reference/mission-files.md) and [the hosts
+file](../reference/hosts-file.md).
 
 ## Where the framework comes from
 
@@ -72,8 +73,8 @@ mkdir -p requirements
 uv pip compile pyproject.toml --extra vision \
     --python-version 3.12 \
     --python-platform linux \
-    -o requirements/hpc.txt
-grep -i '^naavik' requirements/hpc.txt    # must print nothing
+    -o requirements/missions.txt
+grep -i '^naavik' requirements/missions.txt    # must print nothing
 ```
 
 `uv pip compile pyproject.toml` writes the dependencies only, not the
@@ -83,7 +84,7 @@ datasets. `--python-platform linux` resolves for Linux x86_64 even on a Mac.
 ```yaml
 code: {framework_from: this_repository, python_paths: ["src"]}
 python_packages:
-  requirements_file: requirements/hpc.txt
+  requirements_file: requirements/missions.txt
 ```
 
 ## `installed`: a project that uses naavik
@@ -112,7 +113,7 @@ my-project/
     components.py          # session_config.components_package
   configs/train.yaml
   missions/sweep.yaml
-  requirements/hpc.txt     # generated in step 4
+  requirements/missions.txt     # generated in step 4
 ```
 
 ### 3. Depend on the framework at that SHA
@@ -137,8 +138,8 @@ cd my-project
 uv pip compile pyproject.toml \
     --python-version 3.12 \
     --python-platform linux \
-    -o requirements/hpc.txt
-grep -i '^naavik' requirements/hpc.txt
+    -o requirements/missions.txt
+grep -i '^naavik' requirements/missions.txt
 # naavik @ git+https://github.com/abhishekbisht1429/naavik.git@<the same sha>
 ```
 
@@ -161,7 +162,7 @@ code:
   framework_from: installed      # the framework comes from the environment
   python_paths: ["."]            # puts my_project/ on PYTHONPATH (["src"] for a src layout)
 python_packages:
-  requirements_file: requirements/hpc.txt
+  requirements_file: requirements/missions.txt
   python_version: "3.12"         # optional with interpreter_from: site
 ```
 
@@ -215,7 +216,7 @@ hosts:
 
 `naavik launch missions/sweep.yaml --host here` then needs no requirements
 file (the environment exists) and no commit; see
-[Hosts](08-hpc-batches.md#hosts-this-machine-an-ssh-machine-or-a-cluster).
+[Hosts](08-missions.md#hosts-this-machine-an-ssh-machine-or-a-cluster).
 
 ### 8. Commit, validate, launch
 
@@ -262,7 +263,7 @@ If you have a working environment on Linux x86_64 with the host's Python
 version (for example a conda environment on a training machine):
 
 ```bash
-python -m pip list --format=freeze --exclude-editable > requirements/hpc.txt
+python -m pip list --format=freeze --exclude-editable > requirements/missions.txt
 ```
 
 Use `pip list --format=freeze`, not `pip freeze`: for packages installed by

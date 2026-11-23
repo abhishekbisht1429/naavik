@@ -12,11 +12,11 @@ you can return to the reference and concepts pages whenever you need them.
 1. Follow [your first Naavik run](guide/00-naavik-first-run.md) for installation,
    setup, and a local experiment.
 2. Run one configuration or a sweep locally, over SSH, or on a cluster with
-   [missions](guide/08-hpc-batches.md). For a single configuration, see
-   [`naavik run`](guide/08-hpc-batches.md#one-config-followed-naavik-run).
-3. Use the same guide to [follow a mission](guide/08-hpc-batches.md#7-keeping-track-of-your-missions),
-   [resume unfinished experiments](guide/08-hpc-batches.md#10-resuming-unfinished-experiments),
-   and [fetch results](guide/08-hpc-batches.md#11-getting-results-back).
+   [missions](guide/08-missions.md). For a single configuration, see
+   [`naavik run`](guide/08-missions.md#one-config-followed-naavik-run).
+3. Use the same guide to [follow a mission](guide/08-missions.md#7-keeping-track-of-your-missions),
+   [resume unfinished experiments](guide/08-missions.md#10-resuming-unfinished-experiments),
+   and [fetch results](guide/08-missions.md#11-getting-results-back).
 4. Find and inspect recorded runs with the [run registry](guide/13-run-registry.md),
    then [compare their results](guide/12-comparing-runs.md).
 
@@ -25,8 +25,8 @@ experiment runs a training or analysis session; a **run record** captures
 what launched, where it ran, and how it ended. The mission guide explains
 how jobs and recipes group and generate experiments.
 
-For a new project, see [setting up a project for missions](guide/10-hpc-projects.md).
-For IU's cluster, follow the [Big Red 200 checklist](guide/09-hpc-big-red-200.md).
+For a new project, see [setting up a project for missions](guide/10-mission-projects.md).
+For IU's cluster, follow the [Big Red 200 checklist](guide/09-big-red-200.md).
 
 ## Learn it
 
@@ -54,20 +54,20 @@ task you need.
    how a launch decides its topology, and coordinated stopping.
 7. [Analysis sessions](guide/07-analysis-sessions.md) — driving a trained
    checkpoint through an analysis workflow.
-8. [Running missions: here, over SSH, or on a cluster](guide/08-hpc-batches.md) — sweeps of
+8. [Running missions: here, over SSH, or on a cluster](guide/08-missions.md) — sweeps of
    experiments from one mission file on this machine, a machine over SSH, or a
    Slurm cluster (committed or as a snapshot of your working tree), and
    keeping track of every mission you launched.
-9. [First runs on Big Red 200](guide/09-hpc-big-red-200.md) — SSH, host settings,
+9. [First runs on Big Red 200](guide/09-big-red-200.md) — SSH, host settings,
    and a staged checklist for bringing missions up on IU's cluster.
-10. [Setting up a project for missions](guide/10-hpc-projects.md) — where
+10. [Setting up a project for missions](guide/10-mission-projects.md) — where
     the framework comes from, generating the pinned requirements, and projects that depend on
     naavik.
 11. [Self-supervised training with DINO](guide/11-self-supervised-dino.md) —
     a ViT-S/16 DINO run built part by part, checked on a small scale,
     resumed, and evaluated with a linear probe; what changes for BYOL.
 12. [Comparing runs](guide/12-comparing-runs.md) — one report over a sweep's
-    runs, local or HPC: the hyperparameters that differ, each metric, and
+    runs, local or from a mission: the hyperparameters that differ, each metric, and
     runs that differ only in their seed as mean ± std.
 13. [Every run is recorded](guide/13-run-registry.md) — the record each
     launch leaves (config, code, environment, devices, outcome), and
@@ -75,9 +75,14 @@ task you need.
 
 ## Look it up
 
-- [Configuration: hosts, missions, projects](reference/hpc-configuration.md) — every key
-  of the hosts file, mission files, and the project file, with defaults, rules,
-  and the earlier names.
+- [The hosts file](reference/hosts-file.md) — the machines you run on
+  (this machine, over SSH, or a Slurm cluster): connection, scheduler,
+  directories, Python environments; read by missions, `naavik run`, and
+  `naavik runs sync`.
+- [Mission files and the project file](reference/mission-files.md) — every
+  key of the committed files: code, packages, data sources, jobs, recipes.
+- [Earlier names](reference/earlier-names.md) — old file, key, and command
+  names that are still read, and what they are called now.
 - [Built-in components](reference/builtin-components.md) — every component the
   framework ships with, and its configuration keys.
 - [Generic steps](reference/generic-steps.md) — `load_batch`, `forward` and

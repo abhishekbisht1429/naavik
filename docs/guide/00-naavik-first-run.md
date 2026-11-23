@@ -107,5 +107,5 @@ includes the configuration, code, outcome, and session locations. To see the
 mission and its experiments, use `naavik missions` and
 `naavik status MISSION_ID`.
 
-Next, learn how to [run missions on other hosts](08-hpc-batches.md),
+Next, learn how to [run missions on other hosts](08-missions.md),
 [compare results](12-comparing-runs.md), or [build your own components](01-resources-hooks-steps.md).

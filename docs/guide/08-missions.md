@@ -4,7 +4,7 @@ The launcher (`naavik`) turns one session config into a **mission**: a set
 of experiments, launched on a **host**: this machine, a machine you reach
 over SSH, or a Slurm cluster. A mission file groups its experiments into
 **jobs** (experiments that need the same resources run as one scheduler job:
-a Slurm job array, or one runner elsewhere); a job's **recipes** say which
+one runner of naavik's builtin scheduler, or a Slurm job array); a job's **recipes** say which
 experiments to make; each **experiment** is a single-node run of the engine
 (with DDP inside the node if configured). Everything is decided on your
 workstation; the host only checks and executes. The same mission file runs
@@ -26,15 +26,16 @@ naavik logs     <mission-id> <experiment> --follow   # an experiment's log
 naavik cancel   <mission-id> [--experiment <name>]   # stop jobs, or some experiments
 ```
 
-Every key of the hosts file, mission files, and the project file is
-described in the [configuration reference](../reference/hpc-configuration.md).
+Every key is described in the references for [the hosts
+file](../reference/hosts-file.md) and for [mission files and the project
+file](../reference/mission-files.md).
 
 **Earlier names still work.** `naavik` (also `navik`) is installed with the
 package; `python -m naavik.hpc <command>` runs the same
 commands. Files and flags written with earlier names (`hpc.yaml` or
 `targets.yaml`, `--target`, `submit`, `batches`, a mission file's `groups`,
 `matrix`, ...) are still read; each launch warns once and lists every
-`old -> new` to rename by hand ([earlier names](../reference/hpc-configuration.md#earlier-names)).
+`old -> new` to rename by hand ([earlier names](../reference/earlier-names.md)).
 A mission file was called an *experiment file*, and before that a
 *manifest*; checkpoints have a `manifest.json` of their own, which is a
 different thing.
@@ -45,54 +46,32 @@ working_tree` it is your working tree as it is (see
 [Uncommitted work](#uncommitted-work-run_code_from-working_tree)).
 
 For a first run on Big Red 200, follow the staged checklist in
-[First runs on Big Red 200](09-hpc-big-red-200.md).
+[First runs on Big Red 200](09-big-red-200.md).
 
 ## 1. The hosts file (your machines, on your machine)
 
 `~/.config/naavik/hosts.yaml` (or `--hosts-file PATH`) holds
 everything specific to the machines you run on, so the committed mission
-file runs unchanged on any host whose scheduler its jobs accept. Pick a host with `--host NAME`, else
-`default_host`.
+file runs unchanged on any host whose scheduler its jobs accept. Pick a host
+with `--host NAME`, else `default_host`. The same file tells `naavik run`
+and `naavik runs sync` where your hosts are. Every key is described in the
+[hosts file reference](../reference/hosts-file.md).
+
+The smallest hosts file runs missions on this machine, in the environment
+that runs `naavik`:
 
 ```yaml
-default_host: bigred200
+default_host: here
 hosts:
-  bigred200:
-    connection: {ssh: bigred200}          # an alias from ~/.ssh/config
-    scheduler:
-      kind: slurm
-      sbatch_options: {account: r00000}
-      partitions: {gpu_jobs: gpu, cpu_jobs: general}
-      max_array_size: 1000                # the site's MaxArraySize
+  here:
+    connection: local
+    scheduler: {kind: builtin, gpus: [0]}   # the GPUs experiments may use
     directories:
-      missions: /N/scratch/me/naavik/missions
-      python_environments: /N/scratch/me/naavik/envs
-      datasets: /N/scratch/me/naavik/datasets
-    shell_commands_before:                # shell lines, per phase
-      everything: ["module load python/3.12"]
-      experiments: ["module load cudatoolkit"]
-    python_environment:
-      interpreter_from: site              # site | uv | conda
-      site_interpreter: ...               # printed by show-site-interpreter (below)
-    environment_build: {on: compute_node} # or login_node, when compute nodes lack internet
-    data_preparation: {on: compute_node}
-    local_to_host_paths: {/home/me/datasets: /N/project/mylab/datasets}
-    confirm_uploads_over: 20G
+      missions: /data/me/naavik/missions
+      python_environments: /data/me/naavik/envs
+      datasets: /data/me/naavik/datasets
+    python_environment: {use_existing: current}
 ```
-
-SSH uses your own OpenSSH configuration, agent, and control connections; no
-credentials are stored and MFA is never automated (`BatchMode=yes` fails fast
-instead of prompting). Open a control connection first if your site needs MFA.
-
-For a managed environment built from the site's Python, record that
-interpreter's identity once and paste the output into the host:
-
-```bash
-naavik show-site-interpreter
-```
-
-If the site later changes its Python, `launch` stops with the new block to
-paste; the new identity gives a new, separate environment.
 
 ### Hosts: this machine, an SSH machine, or a cluster
 
@@ -112,11 +91,24 @@ hosts:
     scheduler: {kind: builtin, gpus: [0, 1, 2, 3]}
     directories: {...}
     python_environment: {use_existing: /opt/envs/train}
-  bigred200:                     # a Slurm cluster, as above
-    connection: {ssh: bigred200}
-    scheduler: {kind: slurm, ...}
+  bigred200:                     # a Slurm cluster
+    connection: {ssh: bigred200}  # an alias from ~/.ssh/config
+    scheduler:
+      kind: slurm
+      sbatch_options: {account: r00000}
+      partitions: {gpu_jobs: gpu, cpu_jobs: general}
+      max_array_size: 1000        # the site's MaxArraySize
     directories: {...}
+    shell_commands_before:        # shell lines, per phase
+      everything: ["module load python/3.12"]
+    python_environment:
+      interpreter_from: site      # a managed environment from the site's Python
+      site_interpreter: ...       # printed by show-site-interpreter (below)
+    environment_build: {on: login_node}   # when compute nodes lack internet
 ```
+
+[First runs on Big Red 200](09-big-red-200.md) walks through a complete
+cluster host.
 
 - **How it is reached:** `connection: {ssh: ...}` (over SSH and rsync) or
   `connection: local` (this machine: no `ssh` or `rsync` needed, nothing is
@@ -141,6 +133,21 @@ hosts:
   limited.
 - **Before staging,** `launch` checks the host: `python3` 3.8 or newer for
   the runner and, with a GPU pool, every pool GPU in `nvidia-smi`.
+
+SSH uses your own OpenSSH configuration, agent, and control connections; no
+credentials are stored and MFA is never automated (`BatchMode=yes` fails fast
+instead of prompting). Open a control connection first if your site needs MFA.
+
+For a managed environment built from the host's own Python
+(`interpreter_from: site`), record that interpreter's identity once and
+paste the output into the host:
+
+```bash
+naavik show-site-interpreter
+```
+
+If the site later changes its Python, `launch` stops with the new block to
+paste; the new identity gives a new, separate environment.
 
 Results, logs, `status`, `resume`, `cancel`, and `fetch` are the same on
 every host. A mission that ran on this machine is already here: `fetch`
@@ -177,7 +184,7 @@ code:
   framework_from: installed             # this_repository when this repo *is* naavik
   python_paths: ["."]                   # PYTHONPATH entries in the checkout
 python_packages:
-  requirements_file: requirements/hpc.txt   # fully pinned (see section 4)
+  requirements_file: requirements/missions.txt   # fully pinned (see section 4)
   python_version: "3.12"                # optional pin; required for uv/conda
 base:
   config_file: configs/fine-tuning.yaml
@@ -292,7 +299,7 @@ mission file:
 ```yaml
 # naavik-project.yaml
 code: {framework_from: installed, python_paths: ["."]}
-python_packages: {requirements_file: requirements/hpc.txt, python_version: "3.12"}
+python_packages: {requirements_file: requirements/missions.txt, python_version: "3.12"}
 data_sources: [...]
 quick_run_defaults:           # what `naavik run` uses (see below)
   per_experiment: {walltime: "04:00:00", gpus: 1, cpus: 8, memory: 64G}
@@ -404,10 +411,10 @@ commands) by an environment build step and shared by later missions. The
 requirements file must pin everything, for example:
 
 ```bash
-uv pip compile pyproject.toml --extra vision -o requirements/hpc.txt
+uv pip compile pyproject.toml --extra vision -o requirements/missions.txt
 ```
 
-[Setting up a project](10-hpc-projects.md) gives the full steps, for this
+[Setting up a project](10-mission-projects.md) gives the full steps, for this
 repository and for projects that depend on it.
 
 With `framework_from: installed` it must pin `naavik` exactly;
@@ -434,8 +441,8 @@ names (read-only; it says so in a note). It builds the whole plan
 and reports every problem at once, each with the file and key it concerns,
 instead of stopping at the first. In order, it checks:
 
-1. **The host**: every key strictly (unknown keys, types, values), and the
-   Slurm settings (no options naavik owns, no control characters).
+1. **The host**: every key strictly (unknown keys, types, values), and, on
+   a Slurm host, its settings (no options naavik owns, no control characters).
 2. **The repository**: the working tree is clean (no uncommitted or
    untracked files), the mission file is committed and identical at `HEAD`
    and `code_transfer.commit`, and the commit resolves to one. Everything
@@ -456,9 +463,9 @@ instead of stopping at the first. In order, it checks:
    (see below); `already_on_host` and `prepare_on_host` paths go through
    `local_to_host_paths`. Absolute local paths that are not data sources
    give a note; `--suggest-data` prints entries for them.
-8. **Job scripts**: every Slurm script is rendered (resources, partitions,
-   array sizes against `max_array_size`, dependencies, the early-stop
-   signal), so mistakes `sbatch` would reject surface here.
+8. **Job scripts**: every job script is rendered (resources, dependencies,
+   the early-stop signal; on Slurm also partitions and array sizes against
+   `max_array_size`), so mistakes the scheduler would reject surface here.
 9. **Every experiment's config, with the mission's own code**: the commit
    (or working tree) that will run is exported once into
    `~/.cache/naavik/trees/<commit>`, and a separate Python
@@ -504,7 +511,8 @@ Give a huge, fixed dataset a `content_version` to skip hashing entirely.
 What `validate` cannot know, because it stays offline, `launch` checks
 next: the site interpreter's identity over SSH, which environments and data
 are already on the host, that `already_on_host` paths exist (preflight), and
-whether Slurm accepts the account, partition, and limits.
+whether the scheduler accepts the job (on Slurm: the account, partition, and
+limits; with `builtin`: the runner's `python3` and the GPU pool).
 
 **Part of a mission file.** `--job JOB` and `--recipe JOB/RECIPE` (each
 repeatable, on `validate`, `render`, and `launch`) make only those recipes
@@ -861,13 +869,14 @@ tensorboard --logdir <mission dir>/tasks --port 6006
 
 ## 9. Interrupts and time limits
 
-Each array job asks the scheduler for an early signal
+Each experiment gets an early signal from its scheduler
 (`process_timeout_on_join` plus the job's `stop_grace_period`, default 120s,
-before the time limit). The experiment wrapper turns it into a cooperative
-stop of the engine; the experiment records `interrupted` and exits non-zero.
-The latest periodic checkpoint is kept. Slurm's own SIGTERM at the limit
-stops everything without that grace, so leave enough `stop_grace_period` for
-one iteration.
+before the time limit); Slurm and the builtin runner both send it. The
+experiment wrapper turns it into a cooperative stop of the engine; the
+experiment records `interrupted` and exits non-zero. The latest periodic
+checkpoint is kept. At the limit itself, Slurm's SIGTERM or the builtin
+runner's kill stops everything without that grace, so leave enough
+`stop_grace_period` for one iteration.
 
 ## 10. Resuming unfinished experiments
 
@@ -912,10 +921,11 @@ What it does:
    environment are there, and its framework supports resuming (missions
    whose environment predates `resume` are refused: launch a new mission).
    It refuses while any job of the mission is still queued or running.
-4. Submits one job array per job with exactly those experiments, as
-   **attempt 2** (then 3, ...), in the same mission directory, with the same
-   environment, experiment wrapper (early-stop signal, logs), and scheduler
-   settings: account, QoS, partitions, and `sbatch_options` come from the
+4. Submits one scheduler job per job (on Slurm, a job array) with exactly
+   those experiments, as **attempt 2** (then 3, ...), in the same mission
+   directory, with the same environment, experiment wrapper (early-stop
+   signal, logs), and scheduler settings. The scheduler settings (on Slurm:
+   account, QoS, partitions, and `sbatch_options`) come from the
    mission's own plan, so editing or switching hosts afterwards does not
    change them, and no hosts file is needed to resume. A submission that
    fails part-way cancels only that attempt's jobs, and its experiments stay

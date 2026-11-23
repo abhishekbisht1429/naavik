@@ -1,6 +1,6 @@
 # First runs on Big Red 200
 
-A checklist for bringing up [missions](08-hpc-batches.md) on Indiana
+A checklist for bringing up [missions](08-missions.md) on Indiana
 University's Big Red 200, one new risk per stage. Site details (account,
 partitions, modules, limits) change; the commands in step 1 read the current
 values from the cluster instead of assuming them.
@@ -93,7 +93,7 @@ environment that is still marked ready.
 ## 2. The host
 
 `~/.config/naavik/hosts.yaml` (every key is described in the
-[configuration reference](../reference/hpc-configuration.md)). Everything
+[hosts file reference](../reference/hosts-file.md)). Everything
 except `python_environment` is the same for both kinds of environment:
 
 ```yaml
@@ -182,7 +182,7 @@ scancel --signal=USR1 --batch <jobid>_0
 The log shows `received the scheduler advance signal...` and `finished:
 exit 75 (interrupted)`; `status` shows `interrupted`. Continue it with
 `naavik resume <mission-id> --walltime 01:00:00`
-(see [Resuming unfinished experiments](08-hpc-batches.md#10-resuming-unfinished-experiments)).
+(see [Resuming unfinished experiments](08-missions.md#10-resuming-unfinished-experiments)).
 For the real time limit: `walltime: "00:05:00"` with `stop_grace_period: 60s`.
 
 **D. A managed environment.** Follow [section 5](#5-managed-environments-building-on-the-cluster):
@@ -232,13 +232,13 @@ match it.
 ### Write the pinned requirements file
 
 Step by step, including installing uv and a project that depends on
-naavik: [Setting up a project](10-hpc-projects.md).
+naavik: [Setting up a project](10-mission-projects.md).
 
 The mission file (or the project file) names a fully pinned file:
 
 ```yaml
 python_packages:
-  requirements_file: requirements/hpc.txt
+  requirements_file: requirements/missions.txt
   python_version: "3.12"                 # optional with site; required with uv/conda
 ```
 
@@ -251,7 +251,7 @@ requirement. Anything else is reported with its line number by `validate`.
   *not* contain `naavik`; it comes from the staged commit.
 
   ```bash
-  uv pip compile pyproject.toml --extra vision -o requirements/hpc.txt
+  uv pip compile pyproject.toml --extra vision -o requirements/missions.txt
   ```
 
 - **`framework_from: installed`** (your project): the file must pin
@@ -314,7 +314,7 @@ and are cancelled if it fails. Its log is `<mission-dir>/logs/setup/<job>.out`:
 
 ```
 [hpc setup ...] creating the venv environment at ...
-[hpc setup ...] installing the pinned requirements from requirements/hpc.txt (this can take several minutes)
+[hpc setup ...] installing the pinned requirements from requirements/missions.txt (this can take several minutes)
 [hpc setup ...] checking installed dependencies (pip check)
 [hpc setup ...] running preflight in the new environment
 [hpc setup ...] preflight ok: Python 3.12.x | naavik ...

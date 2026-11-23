@@ -28,7 +28,7 @@ python -m pytest -n 8 --dist loadfile
 
 The GitHub Actions workflow runs tests on Python 3.12 and 3.13. The suite
 covers components, sessions, engine execution, distributed training,
-checkpoints, launcher and HPC workflows, run records and reporting, data,
+checkpoints, the launcher (local, SSH, and Slurm hosts), run records and reporting, data,
 configuration files, documentation examples, and output handling.
 
 ## Project layout
@@ -43,7 +43,7 @@ naavik/
 │   │   ├── engine/         # Worker execution and supervision
 │   │   ├── session/        # Training and analysis sessions
 │   │   ├── launcher/       # Mission construction and execution
-│   │   ├── hpc/            # Remote and scheduler support
+│   │   ├── hpc/            # Slurm scheduler support
 │   │   ├── runs/           # Run registry
 │   │   ├── reporting/      # Run comparison
 │   │   ├── data/           # Data utilities
