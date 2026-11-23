@@ -66,10 +66,11 @@ python -m pip install --upgrade pip
 python -m pip install -e .
 ```
 
-For missions, install the `hpc` extra; for the built-in image datasets,
-install `vision`. From a clone, use `python -m pip install -e '.[hpc,vision]'`
-to install both. See [mission setup](docs/guide/10-hpc-projects.md) for
-environment and CUDA considerations.
+Missions need nothing extra: the launcher is part of the core install. For
+the built-in image datasets, install the `vision` extra; from a clone, use
+`python -m pip install -e '.[vision]'`. See
+[mission setup](docs/guide/10-hpc-projects.md) for environment and CUDA
+considerations.
 
 ### Optional: Graphviz
 

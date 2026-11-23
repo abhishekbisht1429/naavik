@@ -13,7 +13,7 @@ on every host -- pick one with `--host` -- unless a job gives
 [the mission file](#2-the-mission-file-committed)).
 
 ```bash
-pip install 'naavik[hpc]'     # adds `packaging`, used on the workstation
+pip install naavik
 naavik validate missions/sweep.yaml
 naavik render   missions/sweep.yaml --output /tmp/preview
 naavik launch   missions/sweep.yaml

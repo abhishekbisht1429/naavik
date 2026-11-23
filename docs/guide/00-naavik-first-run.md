@@ -8,12 +8,12 @@ project README; no GPU or cluster is needed.
 
 ## Before you start
 
-You need Git, Python 3.12 or newer, and an environment with the framework and
-its launcher dependencies installed. From a clone of this repository, install
-both into your active environment:
+You need Git, Python 3.12 or newer, and an environment with the framework
+installed (the launcher comes with it). From a clone of this repository,
+install it into your active environment:
 
 ```bash
-python -m pip install -e '.[hpc]'
+python -m pip install -e .
 ```
 
 Create the `my_project` package, component module, and `config.yaml` described

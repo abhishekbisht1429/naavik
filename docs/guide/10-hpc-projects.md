@@ -147,10 +147,10 @@ torchvision, and the rest are pinned with it.
 
 ### 5. Install the same framework on your workstation
 
-The CLI runs locally, from the same commit, with the `hpc` extra:
+The CLI runs locally, from the same commit:
 
 ```bash
-pip install "naavik[hpc] @ git+https://github.com/abhishekbisht1429/naavik.git@<the same sha>"
+pip install "naavik @ git+https://github.com/abhishekbisht1429/naavik.git@<the same sha>"
 ```
 
 ### 6. The project file and a mission file

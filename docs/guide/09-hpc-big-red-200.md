@@ -18,8 +18,8 @@ get one, and the stages below use both:
 ## 0. On your workstation
 
 ```bash
-pip install "naavik[hpc] @ git+ssh://git@github.com/abhishekbisht1429/naavik.git@dev"
-# or, from a clone: pip install -e '.[hpc]'
+pip install "naavik @ git+ssh://git@github.com/abhishekbisht1429/naavik.git@dev"
+# or, from a clone: pip install -e .
 naavik --help         # validate, render, launch, status, show-site-interpreter
 ```
 

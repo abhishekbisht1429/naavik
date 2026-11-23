@@ -6,11 +6,11 @@ This page is for contributors working on Naavik itself.
 
 ## Testing
 
-Install the package in editable mode with the extras used by the broader test
-suite, then run the tests:
+Install the package in editable mode with the `vision` extra used by the
+broader test suite, then run the tests:
 
 ```bash
-python -m pip install -e '.[hpc,vision]'
+python -m pip install -e '.[vision]'
 python -m pytest
 ```
 

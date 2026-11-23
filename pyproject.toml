@@ -24,7 +24,11 @@ dependencies = [
     "pyyaml",
     "OmegaConf",
     "pytest",
-    "tensorboard>=2.20.0"
+    "tensorboard>=2.20.0",
+    # The launcher (naavik.launcher) evaluates pinned requirements and
+    # requires-python with it. 22.0 removed the legacy (non-PEP 440)
+    # versions and specifiers the strict checks rely on.
+    "packaging>=22.0",
 ]
 
 [project.scripts]
@@ -39,13 +43,6 @@ navik = "naavik.cli:main"
 vision = [
     "torchvision==0.28.0",
     "scipy",
-]
-# Launching missions (naavik.launcher; Slurm in
-# naavik.hpc); packaging
-# evaluates pinned requirements and requires-python. 22.0 removed the
-# legacy (non-PEP 440) versions and specifiers the strict checks rely on.
-hpc = [
-    "packaging>=22.0",
 ]
 
 [tool.setuptools.packages.find]
