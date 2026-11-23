@@ -90,42 +90,41 @@ class Classifier(ModuleResource):
 The rest is configuration:
 
 ```yaml
-sessions:
-  - session_config:
-      rng_seed: 42
-      sessions_dir: ./runs
-      max_iterations: 20
-      components_package: my_project.components
-      device: cpu
-      show_execution_graph: true
+session_config:
+  rng_seed: 42
+  sessions_dir: ./runs
+  max_iterations: 20
+  components_package: my_project.components
+  device: cpu
+  show_execution_graph: true
 
-    role_bindings:
-      model: classifier          # the roles data_manager and forward use
-      dataset: toy_dataset
+role_bindings:
+  model: classifier          # the roles data_manager and forward use
+  dataset: toy_dataset
 
-    resources:
-      classifier:                # they have constructors, so they are listed
-      toy_dataset:
-      ddp: {world_size: 1, backend: gloo}
-      data_manager:
-        batch_size: 32
-        num_workers: 0
-        pin_memory: false
-      optimizer:
-        optimizer:
-          name: AdamW
-          kwargs: {lr: 0.001}
+resources:
+  classifier:                # they have constructors, so they are listed
+  toy_dataset:
+  ddp: {world_size: 1, backend: gloo}
+  data_manager:
+    batch_size: 32
+    num_workers: 0
+    pin_memory: false
+  optimizer:
+    optimizer:
+      name: AdamW
+      kwargs: {lr: 0.001}
 
-    steps:                       # listed in any order: dataflow orders them
-      load_batch:
-        fields: [inputs, targets]  # the sample is a pair: name its two parts
-      forward:
-        args: [inputs]             # classifier(inputs) ...
-        outputs: logits            # ... stored as "logits"
-      compute#loss:
-        function: cross_entropy    # torch.nn.functional.cross_entropy
-        args: [logits, targets]
-        outputs: loss              # what backward reads
+steps:                       # listed in any order: dataflow orders them
+  load_batch:
+    fields: [inputs, targets]  # the sample is a pair: name its two parts
+  forward:
+    args: [inputs]             # classifier(inputs) ...
+    outputs: logits            # ... stored as "logits"
+  compute#loss:
+    function: cross_entropy    # torch.nn.functional.cross_entropy
+    args: [logits, targets]
+    outputs: loss              # what backward reads
 ```
 
 Reading it top to bottom:

@@ -22,32 +22,16 @@ def _write_yaml(tmp_path: Path, data: dict, name: str = "config.yaml") -> str:
 
 def test_configurator_reads_overrides_and_returns_deep_copies(tmp_path, monkeypatch):
     sample_config = {
-        "sessions": [
-            {
-                "session_config": {
-                    "max_iterations": 5,
-                    "sessions_dir": str(tmp_path / "sessions_1"),
-                    "device": "cpu",
-                    "rng_seed": 123,
-                    "components_package": "naavik.components.builtin",
-                },
-                "logger": {"log_every": 1, "log_file": str(tmp_path / "log_1.txt"), "nested": {"enabled": True}},
-                "checkpointer": {"checkpoint_every": 2, "checkpoints_dir": str(tmp_path / "ckpts_1")},
-                "tensorboard": {"host": "0.0.0.0", "port": 16040},
-            },
-            {
-                "session_config": {
-                    "max_iterations": 7,
-                    "sessions_dir": str(tmp_path / "sessions_2"),
-                    "device": "cpu",
-                    "rng_seed": 456,
-                    "components_package": "naavik.components.builtin",
-                },
-                "logger": {"log_every": 3, "log_file": str(tmp_path / "log_2.txt")},
-                "checkpointer": {"checkpoint_every": 4, "checkpoints_dir": str(tmp_path / "ckpts_2")},
-                "tensorboard": {"host": "0.0.0.0", "port": 16041},
-            },
-        ]
+        "session_config": {
+            "max_iterations": 5,
+            "sessions_dir": str(tmp_path / "sessions_1"),
+            "device": "cpu",
+            "rng_seed": 123,
+            "components_package": "naavik.components.builtin",
+        },
+        "logger": {"log_every": 1, "log_file": str(tmp_path / "log_1.txt"), "nested": {"enabled": True}},
+        "checkpointer": {"checkpoint_every": 2, "checkpoints_dir": str(tmp_path / "ckpts_1")},
+        "tensorboard": {"host": "0.0.0.0", "port": 16040},
     }
 
     config_path = _write_yaml(tmp_path, sample_config)
@@ -64,8 +48,8 @@ def test_configurator_reads_overrides_and_returns_deep_copies(tmp_path, monkeypa
             "--stop-sync-poll-interval",
             "0.007",
             "--override",
-            "sessions[0].checkpointer.checkpoint_every=11",
-            "sessions.1.logger.log_every=9",
+            "checkpointer.checkpoint_every=11",
+            "tensorboard.port=16041",
         ],
     )
 
@@ -77,16 +61,16 @@ def test_configurator_reads_overrides_and_returns_deep_copies(tmp_path, monkeypa
     assert configurator.debug is True
     assert configurator.stop_sync_grace_period == 0.02
     assert configurator.stop_sync_poll_interval == 0.007
-    assert configurator.get_component_config(1, "logger")["log_every"] == 9
-    assert resource_config == sample_config["sessions"][0]["logger"]
+    assert configurator.get_component_config(0, "tensorboard")["port"] == 16041
+    assert resource_config == sample_config["logger"]
 
     resource_config["nested"]["enabled"] = False
-    assert sample_config["sessions"][0]["logger"]["nested"]["enabled"] is True
+    assert sample_config["logger"]["nested"]["enabled"] is True
 
     with pytest.raises(KeyError):
         configurator.get_component_config(0, "missing")
 
-    sample_config["sessions"][0]["logger"]["log_every"] = 99
+    sample_config["logger"]["log_every"] = 99
     assert configurator.get_session_definition(0)["logger"]["log_every"] == 1
 
 
@@ -116,27 +100,14 @@ def test_configurator_rejects_invalid_stop_sync_timing(
 
 def test_configurator_create_sessions_attaches_expected_components(tmp_path, monkeypatch):
     sample_config = {
-        "sessions": [
-            {
-                "session_config": {
-                    "max_iterations": 2,
-                            "sessions_dir": str(tmp_path / "s1"),
-                    "device": "cpu",
-                    "rng_seed": 1,
-                    "components_package": "naavik.components.builtin",
-                },
-                "tensorboard": {"host": "0.0.0.0", "port": 16050},
-            },
-            {
-                "session_config": {
-                    "max_iterations": 2,
-                            "sessions_dir": str(tmp_path / "s1"),
-                    "device": "cpu",
-                    "rng_seed": 1,
-                    "components_package": "naavik.components.builtin",
-                },
-            },
-        ]
+        "session_config": {
+            "max_iterations": 2,
+            "sessions_dir": str(tmp_path / "s1"),
+            "device": "cpu",
+            "rng_seed": 1,
+            "components_package": "naavik.components.builtin",
+        },
+        "tensorboard": {"host": "0.0.0.0", "port": 16050},
     }
 
     config_path = _write_yaml(tmp_path, sample_config, "config_create_sessions.yaml")
@@ -145,20 +116,13 @@ def test_configurator_create_sessions_attaches_expected_components(tmp_path, mon
     configurator = Configurator()
     sessions = [TrainingSession(config) for config in configurator.session_configs]
 
-    assert len(sessions) == 2
+    assert len(sessions) == 1
     assert configurator.debug is False
     assert configurator.stop_sync_grace_period == 0.01
     assert configurator.stop_sync_poll_interval == 0.005
 
-    first_hook_names = {
-        component.name for component in sessions[0].get_all_hooks()
-    }
-    second_hook_names = {
-        component.name for component in sessions[1].get_all_hooks()
-    }
+    hook_names = {component.name for component in sessions[0].get_all_hooks()}
 
-    assert {"logger", "checkpointer"} <= first_hook_names
-    assert {"logger", "checkpointer"} <= second_hook_names
+    assert {"logger", "checkpointer"} <= hook_names
     assert has_resource_named(sessions[0], "tensorboard")
     assert resource_named(sessions[0], "tensorboard").name == "tensorboard"
-    assert not has_resource_named(sessions[1], "tensorboard")

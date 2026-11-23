@@ -1,5 +1,6 @@
 import argparse
 import math
+import re
 import warnings
 from collections.abc import Mapping
 from copy import deepcopy
@@ -8,8 +9,9 @@ from omegaconf import OmegaConf
 
 from naavik.config_files import (
     ConfigFileError,
+    SessionsListWarning,
     check_no_interpolation,
-    load_config,
+    load_session,
     unescape,
 )
 from naavik.components.config import (
@@ -22,6 +24,42 @@ from naavik.engine.topology import TOPOLOGY_KEYS
 #: Overrides that describe the launch rather than the session, and so may be
 #: given when resuming a checkpoint that changes nothing else.
 _TOPOLOGY_OVERRIDES = frozenset(f"ddp.{name}" for name in TOPOLOGY_KEYS)
+
+#: An override key written for the earlier `sessions: [entry]` form:
+#: `sessions[0].a.b` or `sessions.0.a.b` (group 1 or 2: the index; group 3:
+#: the rest, `a.b`).
+_SESSIONS_PREFIX = re.compile(r"\Asessions(?:\[(\d+)\]|\.(\d+))?(?:\.(.*))?\Z")
+
+
+def _session_overrides(overrides, path: str, wrapped: bool) -> list[str]:
+    """`--override` items as dotlist items relative to the session.
+
+    `a.b=v` is relative to the session. `sessions[0].a.b=v` (the earlier
+    form) is accepted only for a file in the earlier form, and means `a.b=v`;
+    any other `sessions...` key is refused, since a file is one session.
+    """
+    relative = []
+    for item in overrides:
+        key, separator, value = item.partition("=")
+        match = _SESSIONS_PREFIX.match(key.strip())
+        if match is None:
+            relative.append(item)
+            continue
+        index = match.group(1) or match.group(2)
+        rest = match.group(3)
+        if not wrapped:
+            hint = f" (write {rest}={value})" if rest else ""
+            raise ConfigFileError(
+                f"--override {item!r}: {path} is one session, so overrides are "
+                f"relative to it{hint}"
+            )
+        if index != "0" or not rest:
+            raise ConfigFileError(
+                f"--override {item!r}: a config file is one session; address a "
+                "value in it as sessions[0].<path> or, better, <path>"
+            )
+        relative.append(f"{rest}{separator}{value}")
+    return relative
 
 
 class Configurator:
@@ -105,20 +143,28 @@ class Configurator:
         if self._args.config:
             self._mode = "new"
             try:
-                loaded = load_config(self._args.config)
+                loaded = load_session(self._args.config)
+                overrides = _session_overrides(
+                    self._args.override or [], self._args.config, loaded.wrapped,
+                )
             except ConfigFileError as error:
                 self._parser.error(str(error))
-            config = OmegaConf.create(loaded.config)
-            if self._args.override is not None:
-                config.merge_with_dotlist(self._args.override)
+            if loaded.wrapped:
+                warnings.warn(
+                    SessionsListWarning(loaded.unwrap_advice(self._args.config)),
+                    stacklevel=2,
+                )
+            config = OmegaConf.create(loaded.session)
+            if overrides:
+                config.merge_with_dotlist(overrides)
             merged = OmegaConf.to_container(config)
             try:
                 # Again after the overrides, which can bring one in too.
                 check_no_interpolation(merged, f"{self._args.config} with --override")
             except ConfigFileError as error:
                 self._parser.error(str(error))
-            self._session_configs = unescape(merged)["sessions"]
-            self._config_sources = loaded.sources
+            self._session_configs = [unescape(merged)]
+            self._config_sources = [loaded.sources]
         elif self._args.extend_session:
             self._mode = "extend"
             values = self._args.extend_session

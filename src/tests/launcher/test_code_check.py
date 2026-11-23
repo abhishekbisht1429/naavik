@@ -43,7 +43,7 @@ def project(tmp_path, *configs, requirements=None, code=None, extra=None):
     config (files `configs/<name>.yaml`)."""
     experiments, files = [], {"my_project/components.py": COMPONENTS.read_text()}
     for index, config in enumerate(configs):
-        files[f"configs/c{index}.yaml"] = yaml.safe_dump({"sessions": [config]})
+        files[f"configs/c{index}.yaml"] = yaml.safe_dump(config)
         experiments.append({"name": f"c{index}"})
     manifest = {
         "version": 1, "name": "check", "code": code or {"framework": "dependency", "paths": ["."]},
@@ -54,7 +54,7 @@ def project(tmp_path, *configs, requirements=None, code=None, extra=None):
     if requirements is not None:
         manifest["environment"] = {"requirements": "requirements/hpc.txt"}
     files.update(extra or {})
-    return make_repo(tmp_path, manifest=manifest, config={"sessions": [configs[0]]},
+    return make_repo(tmp_path, manifest=manifest, config=configs[0],
                      requirements=requirements, extra_files=files)
 
 

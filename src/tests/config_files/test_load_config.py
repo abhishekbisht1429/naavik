@@ -148,14 +148,13 @@ def test_an_empty_fragment_adds_nothing(tmp_path):
     assert session == {"model": {"depth": 2}}
 
 
-def test_each_session_has_its_own_includes(tmp_path):
-    loaded = load_config(_write(tmp_path, {
-        "train.yaml": {"sessions": [{"includes": ["a.yaml"]}, {"model": {"depth": 9}}]},
-        "a.yaml": {"model": {"depth": 2}},
-    }))
-
-    assert loaded.config["sessions"] == [{"model": {"depth": 2}}, {"model": {"depth": 9}}]
-    assert [len(sources) for sources in loaded.sources] == [2, 1]
+def test_a_file_with_several_sessions_is_refused(tmp_path):
+    with pytest.raises(ConfigFileError, match=r"2 sessions in one file; a config file is now one "
+                                              r"session\. Split it into one file per session"):
+        load_config(_write(tmp_path, {
+            "train.yaml": {"sessions": [{"includes": ["a.yaml"]}, {"model": {"depth": 9}}]},
+            "a.yaml": {"model": {"depth": 2}},
+        }))
 
 
 def test_sources_list_every_file_with_its_hash_and_includer(tmp_path):

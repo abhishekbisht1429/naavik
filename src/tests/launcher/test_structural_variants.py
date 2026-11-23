@@ -88,8 +88,9 @@ def test_a_missing_config_is_named_with_its_experiment(tmp_path):
 def test_a_config_without_the_selected_session_is_named(tmp_path):
     root = two_structures(tmp_path, {"name": "attnpool", "config": "configs/attnpool.yaml"},
                           other={"sessions": []})
-    with pytest.raises(PlanError, match=r"recipes\[attnpool\].config_file 'configs/attnpool.yaml' "
-                                        r"has no 'sessions' list"):
+    with pytest.raises(PlanError, match=r"recipes\[attnpool\].config_file at \w+: "
+                                        r"configs/attnpool.yaml: 'sessions' must be a list "
+                                        r"with one session"):
         compile_repo(root)
 
 

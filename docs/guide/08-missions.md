@@ -187,8 +187,7 @@ python_packages:
   requirements_file: requirements/missions.txt   # fully pinned (see section 4)
   python_version: "3.12"                # optional pin; required for uv/conda
 base:
-  config_file: configs/fine-tuning.yaml
-  session_index: 0
+  config_file: configs/fine-tuning.yaml   # one session per file
 jobs:
   probes:
     per_experiment: {walltime: "02:00:00", gpus: 1, cpus: 8, memory: 64G}
@@ -211,8 +210,7 @@ jobs:
 - A recipe may have its own session config, for a change of structure
   (other components or wiring) rather than of values:
   `{name: attnpool, config_file: configs/model/vit-attnpool.yaml, vary: [...]}`.
-  Its overrides and `vary` are checked against its own session (the same
-  `base.session_index`). When any recipe sets `config_file:`, every
+  Its overrides and `vary` are checked against its own session. When any recipe sets `config_file:`, every
   experiment records the file it was made from, and `summarize` compares it
   as `config`, so two structures are never one seed group.
 - To compare several structures on the same sweep, one recipe can list them:

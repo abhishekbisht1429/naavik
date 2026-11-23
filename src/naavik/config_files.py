@@ -1,16 +1,20 @@
-"""Loading a configuration file whose sessions include other files.
+"""Loading a session file, and the files it includes.
 
-A session entry may list `includes`: files holding fragments of a session
-(a model, an optimizer recipe, data settings). They are merged in order,
-then the entry itself on top; a fragment may include others. Paths are
-relative to the file that names them.
+A session file is one session: its top level is the session's entry
+(`session_config`, components, `includes`, ...). `includes` lists files
+holding fragments of a session (a model, an optimizer recipe, data
+settings). They are merged in order, then the file itself on top; a
+fragment may include others. Paths are relative to the file that names them.
 
 ```yaml
-sessions:
-  - includes: [common/vit_s16.yaml, common/dino_optimizer.yaml]
-    session_config: {...}
-    optimizer: {optimizer: {kwargs: {lr: 0.0005}}}
+includes: [common/vit_s16.yaml, common/dino_optimizer.yaml]
+session_config: {...}
+optimizer: {optimizer: {kwargs: {lr: 0.0005}}}
 ```
+
+The earlier form, `sessions: [entry]` with exactly one entry, is still read
+as that entry; `LoadedSession.wrapped` says so, for the caller to warn. A
+`sessions` list with several entries is an error: a file is one session.
 
 Merging is strict, so a setting cannot change without anyone seeing it:
 mappings merge key by key, every other value (lists included) is replaced
@@ -30,13 +34,15 @@ import os
 import posixpath
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 import yaml
 from omegaconf import OmegaConf
 
 INCLUDES_KEY = "includes"
+#: The earlier form's top-level key: `sessions: [entry]`.
+SESSIONS_KEY = "sessions"
 #: Written next to a run's `config.yaml`: the files its config came from.
 SOURCES_FILE = "config_sources.yaml"
 
@@ -47,6 +53,14 @@ _ESCAPED = re.compile(r"\\\$\{")
 
 class ConfigFileError(ValueError):
     """A configuration file, or a file it includes, cannot be used."""
+
+
+class SessionsListWarning(FutureWarning):
+    """A config file in the earlier `sessions: [entry]` form was read.
+
+    Its own class so that a program writing that form on purpose (the
+    launcher's experiment configs, read by whichever framework version a
+    mission runs) can ignore exactly this warning."""
 
 
 @dataclass(frozen=True)
@@ -63,8 +77,38 @@ class ConfigSource:
 
 
 @dataclass
+class LoadedSession:
+    """A session file, includes merged.
+
+    `sources` lists the files the session was built from: the file loaded,
+    then each included file in the order it was read. `wrapped` is true for
+    the earlier form (`sessions: [entry]`); `rest` holds that form's other
+    top-level keys (such as a block of YAML anchors), which no session reads.
+    """
+
+    session: dict[str, Any]
+    sources: list[ConfigSource]
+    wrapped: bool = False
+    rest: dict[str, Any] = field(default_factory=dict)
+
+    def unwrap_advice(self, path: str) -> str:
+        """What to tell the user about an earlier-form file."""
+        advice = (
+            f"{path}: a config file is now one session; 'sessions: [...]' is an "
+            "earlier form. Move the entry's keys to the top of the file"
+        )
+        if self.rest:
+            names = ", ".join(sorted(str(key) for key in self.rest))
+            advice += (f" and drop its other top-level keys ({names}): no session "
+                       "reads them, and at the top of a session file they would be "
+                       "unknown keys of the session")
+        return advice
+
+
+@dataclass
 class LoadedConfig:
-    """A whole configuration file, includes merged.
+    """A configuration file in the earlier shape `{"sessions": [entry]}`,
+    includes merged (`load_config`).
 
     `sources[i]` lists the files session `i` was built from: the file
     loaded, then each included file in the order it was read.
@@ -128,10 +172,11 @@ class RepositoryFiles:
         return resolved
 
 
-def load_config(path: str | os.PathLike, *, reader: ConfigReader | None = None) -> LoadedConfig:
-    """The configuration file at `path` with every session's includes
-    merged. Raises `ConfigFileError` naming the file (and the chain of
-    includes) for anything that cannot be used.
+def load_session(path: str | os.PathLike, *, reader: ConfigReader | None = None) -> LoadedSession:
+    """The session file at `path`, its includes merged. Raises
+    `ConfigFileError` naming the file (and the chain of includes) for
+    anything that cannot be used, including a `sessions` list that is not
+    exactly one mapping.
 
     Escaped `\\${` stay escaped, so the result can be written out and loaded
     again; `unescape` it last, where the values are used.
@@ -139,23 +184,43 @@ def load_config(path: str | os.PathLike, *, reader: ConfigReader | None = None) 
     reader = reader or LocalFiles()
     top = reader.resolve(os.fspath(path), None)
     config, digest = _read_mapping(reader, top, (), what="configuration")
+    sources = [ConfigSource(top, digest, None)]
+    if SESSIONS_KEY not in config:
+        session = _expand(reader, config, top, (top,), sources, "")
+        return LoadedSession(session=session, sources=sources)
+    entries = config[SESSIONS_KEY]
+    if not isinstance(entries, list) or not entries:
+        raise ConfigFileError(
+            f"{top}: 'sessions' must be a list with one session; a config file is "
+            "now the session itself (its keys at the top of the file)"
+        )
+    if len(entries) > 1:
+        raise ConfigFileError(
+            f"{top}: {len(entries)} sessions in one file; a config file is now one "
+            "session. Split it into one file per session, each with that entry's "
+            "keys at the top of the file"
+        )
+    if not isinstance(entries[0], Mapping):
+        raise ConfigFileError(f"{top}: sessions[0] must be a mapping")
     if INCLUDES_KEY in config:
         raise ConfigFileError(
             f"{top}: {INCLUDES_KEY!r} belongs in a session entry "
-            f"(sessions[i].{INCLUDES_KEY}), not at the top of the file"
+            f"(sessions[0].{INCLUDES_KEY}) in the 'sessions: [...]' form, not at the "
+            "top of the file; or move the entry's keys to the top of the file"
         )
-    sessions = config.get("sessions")
-    all_sources: list[list[ConfigSource]] = []
-    if isinstance(sessions, list):
-        merged_sessions = []
-        for index, entry in enumerate(sessions):
-            sources = [ConfigSource(top, digest, None)]
-            if isinstance(entry, Mapping):
-                entry = _expand(reader, dict(entry), top, (top,), sources, f"sessions[{index}]")
-            merged_sessions.append(entry)
-            all_sources.append(sources)
-        config = {**config, "sessions": merged_sessions}
-    return LoadedConfig(config=config, sources=all_sources)
+    session = _expand(reader, dict(entries[0]), top, (top,), sources, "sessions[0]")
+    rest = {key: value for key, value in config.items() if key != SESSIONS_KEY}
+    return LoadedSession(session=session, sources=sources, wrapped=True, rest=rest)
+
+
+def load_config(path: str | os.PathLike, *, reader: ConfigReader | None = None) -> LoadedConfig:
+    """The session file at `path` in the earlier shape `{"sessions":
+    [session]}` (with `load_session`'s rules; an earlier-form file keeps its
+    other top-level keys); kept for callers written against that shape. New
+    code uses `load_session`."""
+    loaded = load_session(path, reader=reader)
+    return LoadedConfig(config={**loaded.rest, SESSIONS_KEY: [loaded.session]},
+                        sources=[loaded.sources])
 
 
 def check_no_interpolation(value: Any, where: str) -> None:
@@ -227,8 +292,9 @@ def _expand(reader, entry, file, chain, sources, where) -> dict:
             not isinstance(includes, list)
             or not all(isinstance(item, str) and item for item in includes)
     ):
+        key = f"{where}.{INCLUDES_KEY}" if where else INCLUDES_KEY
         raise ConfigFileError(_with_chain(
-            f"{file}: {where}.{INCLUDES_KEY} must be a list of file paths; got {includes!r}",
+            f"{file}: {key} must be a list of file paths; got {includes!r}",
             chain[:-1],
         ))
     layers: list[tuple[str, dict]] = []
@@ -238,9 +304,9 @@ def _expand(reader, entry, file, chain, sources, where) -> dict:
             cycle = " -> ".join((*chain[chain.index(path):], path))
             raise ConfigFileError(f"includes form a cycle: {cycle}")
         fragment, digest = _read_mapping(reader, path, chain, what="fragment")
-        if "sessions" in fragment:
+        if SESSIONS_KEY in fragment:
             raise ConfigFileError(_with_chain(
-                f"{path}: an included file is a fragment of a session entry and "
+                f"{path}: an included file is a fragment of a session and "
                 "cannot have 'sessions'", chain,
             ))
         sources.append(ConfigSource(path, digest, file))

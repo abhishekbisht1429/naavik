@@ -73,43 +73,42 @@ with a package of your own, import
 `naavik.components.builtin.datasets` from it instead:
 
 ```yaml
-sessions:
-  - session_config:
-      rng_seed: 0
-      sessions_dir: ./runs/dino
-      max_iterations: 125100      # 100 epochs of 1251 steps at batch 1024
-      device: cuda
-      components_package: naavik.components.builtin.datasets
-    ddp:
-      world_size: 8
-      backend: nccl
-    role_bindings:
-      model: ema_teacher
-      dataset: imagenet
+session_config:
+  rng_seed: 0
+  sessions_dir: ./runs/dino
+  max_iterations: 125100      # 100 epochs of 1251 steps at batch 1024
+  device: cuda
+  components_package: naavik.components.builtin.datasets
+ddp:
+  world_size: 8
+  backend: nccl
+role_bindings:
+  model: ema_teacher
+  dataset: imagenet
 ```
 
-Everything that follows goes inside this `sessions[0]` entry. The model the
+Everything that follows goes in the same file, next to `session_config`. The model the
 run trains is `ema_teacher` -- the student and teacher pair -- and the
 dataset is `imagenet`.
 
 ## 1. The data: ten views of each image
 
 ```yaml
-    imagenet:
-      root: /data/imagenet
-      split: train
-      transform: views
-      mean: imagenet
-      std: imagenet
-      image_dtype: uint8
-      views:
-        - {count: 1, size: 224, scale: [0.4, 1.0], blur_p: 1.0}
-        - {count: 1, size: 224, scale: [0.4, 1.0], blur_p: 0.1, solarize_p: 0.2}
-        - {count: 8, size: 96, scale: [0.05, 0.4], blur_p: 0.5}
+imagenet:
+  root: /data/imagenet
+  split: train
+  transform: views
+  mean: imagenet
+  std: imagenet
+  image_dtype: uint8
+  views:
+    - {count: 1, size: 224, scale: [0.4, 1.0], blur_p: 1.0}
+    - {count: 1, size: 224, scale: [0.4, 1.0], blur_p: 0.1, solarize_p: 0.2}
+    - {count: 8, size: 96, scale: [0.05, 0.4], blur_p: 0.5}
 
-    data_manager: {batch_size: 1024, num_workers: 10, pin_memory: true}
-    load_batch: {fields: [pixels, labels], non_blocking: true}
-    normalize_images: {input: pixels, output: views}
+data_manager: {batch_size: 1024, num_workers: 10, pin_memory: true}
+load_batch: {fields: [pixels, labels], non_blocking: true}
+normalize_images: {input: pixels, output: views}
 ```
 
 `transform: views` makes each sample a list of crops instead of one image,
@@ -140,23 +139,23 @@ The student is a ViT-S/16, its class token, and the DINO head. The ViT is
 here has the suffix `#student`, because the teacher will need its own:
 
 ```yaml
-    conv_patch_embedding#student: &patch {in_channels: 3, patch_size: 16, embed_dim: 384}
-    learned_positional_embedding_2d#student: &positions {grid_size: 14, embed_dim: 384}
-    torch_transformer_encoder#student: &encoder
-      embed_dim: 384
-      num_heads: 6
-      num_layers: 12
-      dim_feedforward: 1536
-      dropout: 0.0
-      activation: gelu
-      norm_first: true
-      final_norm: true
-    patch_transformer#student:
-      class_token: true
-      dependency_bindings:
-        patch_embedding: conv_patch_embedding#student
-        positional_embedding: learned_positional_embedding_2d#student
-        sequence_encoder: torch_transformer_encoder#student
+conv_patch_embedding#student: &patch {in_channels: 3, patch_size: 16, embed_dim: 384}
+learned_positional_embedding_2d#student: &positions {grid_size: 14, embed_dim: 384}
+torch_transformer_encoder#student: &encoder
+  embed_dim: 384
+  num_heads: 6
+  num_layers: 12
+  dim_feedforward: 1536
+  dropout: 0.0
+  activation: gelu
+  norm_first: true
+  final_norm: true
+patch_transformer#student:
+  class_token: true
+  dependency_bindings:
+    patch_embedding: conv_patch_embedding#student
+    positional_embedding: learned_positional_embedding_2d#student
+    sequence_encoder: torch_transformer_encoder#student
 ```
 
 The learned positional table is 14 x 14 for the 224 px crops; for a 96 px
@@ -165,17 +164,17 @@ crop it is interpolated to 6 x 6, so one ViT encodes both sizes.
 The head sits on the class token:
 
 ```yaml
-    projection_head#student: &head
-      in_dim: 384
-      hidden_dim: 2048
-      out_dim: 256
-      num_layers: 3
-      prototypes: {num: 65536}
-    backbone_with_head#student:
-      pool: cls
-      dependency_bindings:
-        backbone: patch_transformer#student
-        head: projection_head#student
+projection_head#student: &head
+  in_dim: 384
+  hidden_dim: 2048
+  out_dim: 256
+  num_layers: 3
+  prototypes: {num: 65536}
+backbone_with_head#student:
+  pool: cls
+  dependency_bindings:
+    backbone: patch_transformer#student
+    head: projection_head#student
 ```
 
 `projection_head` is DINO's head: a 3-layer MLP to a 256-wide bottleneck,
@@ -191,8 +190,8 @@ concatenates each run of same-sized views -- the 2 global, then the 8 local
 -- and calls the network once per size:
 
 ```yaml
-    multi_view#student:
-      dependency_bindings: {network: backbone_with_head#student}
+multi_view#student:
+  dependency_bindings: {network: backbone_with_head#student}
 ```
 
 ## 3. The teacher
@@ -204,24 +203,24 @@ them, so the teacher is the same blocks **configured again**, under
 one, so they cannot drift apart:
 
 ```yaml
-    conv_patch_embedding#teacher: *patch
-    learned_positional_embedding_2d#teacher: *positions
-    torch_transformer_encoder#teacher: *encoder
-    patch_transformer#teacher:
-      class_token: true
-      dependency_bindings:
-        patch_embedding: conv_patch_embedding#teacher
-        positional_embedding: learned_positional_embedding_2d#teacher
-        sequence_encoder: torch_transformer_encoder#teacher
-    projection_head#teacher: *head
-    backbone_with_head#teacher:
-      pool: cls
-      dependency_bindings:
-        backbone: patch_transformer#teacher
-        head: projection_head#teacher
-    multi_view#teacher:
-      views: 2
-      dependency_bindings: {network: backbone_with_head#teacher}
+conv_patch_embedding#teacher: *patch
+learned_positional_embedding_2d#teacher: *positions
+torch_transformer_encoder#teacher: *encoder
+patch_transformer#teacher:
+  class_token: true
+  dependency_bindings:
+    patch_embedding: conv_patch_embedding#teacher
+    positional_embedding: learned_positional_embedding_2d#teacher
+    sequence_encoder: torch_transformer_encoder#teacher
+projection_head#teacher: *head
+backbone_with_head#teacher:
+  pool: cls
+  dependency_bindings:
+    backbone: patch_transformer#teacher
+    head: projection_head#teacher
+multi_view#teacher:
+  views: 2
+  dependency_bindings: {network: backbone_with_head#teacher}
 ```
 
 `views: 2` is the only difference: the teacher sees the two global crops.
@@ -229,10 +228,10 @@ one, so they cannot drift apart:
 `ema_teacher` holds the pair and is the `model`:
 
 ```yaml
-    ema_teacher:
-      dependency_bindings:
-        student: multi_view#student
-        teacher: multi_view#teacher
+ema_teacher:
+  dependency_bindings:
+    student: multi_view#student
+    teacher: multi_view#teacher
 ```
 
 When the session is built it checks that the two have the same parameter
@@ -244,19 +243,19 @@ gradients.
 ## 4. The iteration
 
 ```yaml
-    forward#student: {args: [views], outputs: student}
-    forward#teacher:
-      method: teacher_forward
-      args: [views]
-      no_grad: true
-      outputs: teacher
-    dino_distillation_loss:
-      out_dim: 65536
-      num_student_views: 10
-      num_teacher_views: 2
-      teacher_temp: {start: 0.04, end: 0.07, kind: linear, steps: 37530}
-    ema_update:
-      momentum: {start: 0.996, end: 1.0, kind: cosine}
+forward#student: {args: [views], outputs: student}
+forward#teacher:
+  method: teacher_forward
+  args: [views]
+  no_grad: true
+  outputs: teacher
+dino_distillation_loss:
+  out_dim: 65536
+  num_student_views: 10
+  num_teacher_views: 2
+  teacher_temp: {start: 0.04, end: 0.07, kind: linear, steps: 37530}
+ema_update:
+  momentum: {start: 0.996, end: 1.0, kind: cosine}
 ```
 
 - `forward#student` calls the model DDP wraps -- the student -- on the ten
@@ -300,19 +299,19 @@ written after an iteration therefore holds a matching pair.
 ## 5. Optimization
 
 ```yaml
-    optimizer:
-      optimizer: {name: AdamW, kwargs: {lr: 0.002, weight_decay: 0.04}}
-      precision: bf16
-      lr_scheduler:
-        stages:
-          - {name: LinearLR, kwargs: {start_factor: 0.001, total_iters: "$stage_iterations"}}
-          - {name: CosineAnnealingLR, kwargs: {T_max: "$stage_iterations", eta_min: 1.0e-6}}
-        milestones: [12510]
-      param_groups:
-        - {match: ["*.bias", "*norm*"], kwargs: {weight_decay: 0.0}}
-    freeze_gradients:
-      rules: [{match: "student.network.head.last_layer.*", until_iteration: 1251}]
-    clip_gradients: {max_norm: 3.0}
+optimizer:
+  optimizer: {name: AdamW, kwargs: {lr: 0.002, weight_decay: 0.04}}
+  precision: bf16
+  lr_scheduler:
+    stages:
+      - {name: LinearLR, kwargs: {start_factor: 0.001, total_iters: "$stage_iterations"}}
+      - {name: CosineAnnealingLR, kwargs: {T_max: "$stage_iterations", eta_min: 1.0e-6}}
+    milestones: [12510]
+  param_groups:
+    - {match: ["*.bias", "*norm*"], kwargs: {weight_decay: 0.0}}
+freeze_gradients:
+  rules: [{match: "student.network.head.last_layer.*", until_iteration: 1251}]
+clip_gradients: {max_norm: 3.0}
 ```
 
 - The lr is DINO's 0.0005 per 256 images, scaled to the batch of 1024. It
@@ -332,8 +331,8 @@ gradient, so it never changes them.
 Logging and checkpoints, once per epoch:
 
 ```yaml
-    logger: {log_every: 50}
-    checkpointer: {checkpoint_every: 1251}
+logger: {log_every: 50}
+checkpointer: {checkpoint_every: 1251}
 ```
 
 ## 6. Watch it train
@@ -344,26 +343,26 @@ resource owns the writer, and `tensorboard_summaries` writes the values you
 name to it.
 
 ```yaml
-    tensorboard: {serve: false}         # or a server: {host: 0.0.0.0, port: 6006}
-    tensorboard_summaries:
-      call_every: 50
-      scalars:
-        train/loss: loss
-        dino: dino_metrics
-        ema/momentum: ema_momentum
-      optimizer: true
+tensorboard: {serve: false}         # or a server: {host: 0.0.0.0, port: 6006}
+tensorboard_summaries:
+  call_every: 50
+  scalars:
+    train/loss: loss
+    dino: dino_metrics
+    ema/momentum: ema_momentum
+  optimizer: true
 ```
 
 and let the two DINO steps publish what they compute, in their entries from
 [step 4](#4-the-iteration):
 
 ```yaml
-    dino_distillation_loss:
-      metrics_key: dino_metrics         # teacher_temp, center_norm, teacher_entropy
-      # ... the keys from step 4
-    ema_update:
-      momentum_key: ema_momentum
-      # ... the keys from step 4
+dino_distillation_loss:
+  metrics_key: dino_metrics         # teacher_temp, center_norm, teacher_entropy
+  # ... the keys from step 4
+ema_update:
+  momentum_key: ema_momentum
+  # ... the keys from step 4
 ```
 
 The summaries hook reads `loss`, `dino_metrics` and `ema_momentum` the way a
@@ -395,19 +394,19 @@ without GPUs, with a few images in `imagenet/train/<class>/`:
 
 ```bash
 python train.py --config dino.yaml --override \
-  'sessions[0].imagenet.root=./imagenet' \
-  'sessions[0].session_config.sessions_dir=./runs/check' \
-  'sessions[0].session_config.max_iterations=3' \
-  'sessions[0].session_config.device=cpu' \
-  'sessions[0].ddp.backend=gloo' \
-  'sessions[0].ddp.world_size=2' \
-  'sessions[0].data_manager.batch_size=4' \
-  'sessions[0].data_manager.num_workers=0' \
-  'sessions[0].data_manager.pin_memory=false' \
-  'sessions[0].optimizer.precision=fp32' \
-  'sessions[0].optimizer.lr_scheduler.milestones=[1]' \
-  'sessions[0].logger.log_every=1' \
-  'sessions[0].checkpointer.checkpoint_every=2'
+  'imagenet.root=./imagenet' \
+  'session_config.sessions_dir=./runs/check' \
+  'session_config.max_iterations=3' \
+  'session_config.device=cpu' \
+  'ddp.backend=gloo' \
+  'ddp.world_size=2' \
+  'data_manager.batch_size=4' \
+  'data_manager.num_workers=0' \
+  'data_manager.pin_memory=false' \
+  'optimizer.precision=fp32' \
+  'optimizer.lr_scheduler.milestones=[1]' \
+  'logger.log_every=1' \
+  'checkpointer.checkpoint_every=2'
 ```
 
 The milestone has to fit in the shortened run. Every rank builds the full
@@ -444,25 +443,25 @@ class token does. Import the teacher's ViT from the run, freeze it, and
 train one linear layer:
 
 ```yaml
-    import_components:
-      patch_transformer#teacher:
-        checkpoint: ./runs/dino/session_<time>/checkpoints/<time>
-    role_bindings:
-      model: backbone_with_head
-      dataset: imagenet
-    backbone_with_head:
-      pool: cls
-      frozen: ["*"]
-      dependency_bindings:
-        backbone: patch_transformer#imported_teacher
-        head: projection_head#probe
-    projection_head#probe: {in_dim: 384, out_dim: 1000, num_layers: 1}
-    imagenet: {root: /data/imagenet, split: train, transform: train, mean: imagenet, std: imagenet}
-    load_batch: {fields: [images, labels]}
-    forward: {args: [images], outputs: logits}
-    compute#loss: {function: cross_entropy, args: [logits, labels], outputs: loss}
-    optimizer:
-      optimizer: {name: SGD, kwargs: {lr: 0.004, momentum: 0.9}}
+import_components:
+  patch_transformer#teacher:
+    checkpoint: ./runs/dino/session_<time>/checkpoints/<time>
+role_bindings:
+  model: backbone_with_head
+  dataset: imagenet
+backbone_with_head:
+  pool: cls
+  frozen: ["*"]
+  dependency_bindings:
+    backbone: patch_transformer#imported_teacher
+    head: projection_head#probe
+projection_head#probe: {in_dim: 384, out_dim: 1000, num_layers: 1}
+imagenet: {root: /data/imagenet, split: train, transform: train, mean: imagenet, std: imagenet}
+load_batch: {fields: [images, labels]}
+forward: {args: [images], outputs: logits}
+compute#loss: {function: cross_entropy, args: [logits, labels], outputs: loss}
+optimizer:
+  optimizer: {name: SGD, kwargs: {lr: 0.004, momentum: 0.9}}
 ```
 
 Importing `patch_transformer#teacher` brings its three blocks with it, all
@@ -496,130 +495,129 @@ teacher temperature warms up per step rather than per epoch. See
 ## The whole configuration
 
 ```yaml
-sessions:
-  - session_config:
-      rng_seed: 0
-      sessions_dir: ./runs/dino
-      max_iterations: 125100
-      device: cuda
-      components_package: naavik.components.builtin.datasets
-    ddp:
-      world_size: 8
-      backend: nccl
-    role_bindings:
-      model: ema_teacher
-      dataset: imagenet
+session_config:
+  rng_seed: 0
+  sessions_dir: ./runs/dino
+  max_iterations: 125100
+  device: cuda
+  components_package: naavik.components.builtin.datasets
+ddp:
+  world_size: 8
+  backend: nccl
+role_bindings:
+  model: ema_teacher
+  dataset: imagenet
 
-    imagenet:
-      root: /data/imagenet
-      split: train
-      transform: views
-      mean: imagenet
-      std: imagenet
-      image_dtype: uint8
-      views:
-        - {count: 1, size: 224, scale: [0.4, 1.0], blur_p: 1.0}
-        - {count: 1, size: 224, scale: [0.4, 1.0], blur_p: 0.1, solarize_p: 0.2}
-        - {count: 8, size: 96, scale: [0.05, 0.4], blur_p: 0.5}
-    data_manager: {batch_size: 1024, num_workers: 10, pin_memory: true}
-    load_batch: {fields: [pixels, labels], non_blocking: true}
-    normalize_images: {input: pixels, output: views}
+imagenet:
+  root: /data/imagenet
+  split: train
+  transform: views
+  mean: imagenet
+  std: imagenet
+  image_dtype: uint8
+  views:
+    - {count: 1, size: 224, scale: [0.4, 1.0], blur_p: 1.0}
+    - {count: 1, size: 224, scale: [0.4, 1.0], blur_p: 0.1, solarize_p: 0.2}
+    - {count: 8, size: 96, scale: [0.05, 0.4], blur_p: 0.5}
+data_manager: {batch_size: 1024, num_workers: 10, pin_memory: true}
+load_batch: {fields: [pixels, labels], non_blocking: true}
+normalize_images: {input: pixels, output: views}
 
-    conv_patch_embedding#student: &patch {in_channels: 3, patch_size: 16, embed_dim: 384}
-    learned_positional_embedding_2d#student: &positions {grid_size: 14, embed_dim: 384}
-    torch_transformer_encoder#student: &encoder
-      embed_dim: 384
-      num_heads: 6
-      num_layers: 12
-      dim_feedforward: 1536
-      dropout: 0.0
-      activation: gelu
-      norm_first: true
-      final_norm: true
-    patch_transformer#student:
-      class_token: true
-      dependency_bindings:
-        patch_embedding: conv_patch_embedding#student
-        positional_embedding: learned_positional_embedding_2d#student
-        sequence_encoder: torch_transformer_encoder#student
-    projection_head#student: &head
-      in_dim: 384
-      hidden_dim: 2048
-      out_dim: 256
-      num_layers: 3
-      prototypes: {num: 65536}
-    backbone_with_head#student:
-      pool: cls
-      dependency_bindings:
-        backbone: patch_transformer#student
-        head: projection_head#student
-    multi_view#student:
-      dependency_bindings: {network: backbone_with_head#student}
+conv_patch_embedding#student: &patch {in_channels: 3, patch_size: 16, embed_dim: 384}
+learned_positional_embedding_2d#student: &positions {grid_size: 14, embed_dim: 384}
+torch_transformer_encoder#student: &encoder
+  embed_dim: 384
+  num_heads: 6
+  num_layers: 12
+  dim_feedforward: 1536
+  dropout: 0.0
+  activation: gelu
+  norm_first: true
+  final_norm: true
+patch_transformer#student:
+  class_token: true
+  dependency_bindings:
+    patch_embedding: conv_patch_embedding#student
+    positional_embedding: learned_positional_embedding_2d#student
+    sequence_encoder: torch_transformer_encoder#student
+projection_head#student: &head
+  in_dim: 384
+  hidden_dim: 2048
+  out_dim: 256
+  num_layers: 3
+  prototypes: {num: 65536}
+backbone_with_head#student:
+  pool: cls
+  dependency_bindings:
+    backbone: patch_transformer#student
+    head: projection_head#student
+multi_view#student:
+  dependency_bindings: {network: backbone_with_head#student}
 
-    conv_patch_embedding#teacher: *patch
-    learned_positional_embedding_2d#teacher: *positions
-    torch_transformer_encoder#teacher: *encoder
-    patch_transformer#teacher:
-      class_token: true
-      dependency_bindings:
-        patch_embedding: conv_patch_embedding#teacher
-        positional_embedding: learned_positional_embedding_2d#teacher
-        sequence_encoder: torch_transformer_encoder#teacher
-    projection_head#teacher: *head
-    backbone_with_head#teacher:
-      pool: cls
-      dependency_bindings:
-        backbone: patch_transformer#teacher
-        head: projection_head#teacher
-    multi_view#teacher:
-      views: 2
-      dependency_bindings: {network: backbone_with_head#teacher}
+conv_patch_embedding#teacher: *patch
+learned_positional_embedding_2d#teacher: *positions
+torch_transformer_encoder#teacher: *encoder
+patch_transformer#teacher:
+  class_token: true
+  dependency_bindings:
+    patch_embedding: conv_patch_embedding#teacher
+    positional_embedding: learned_positional_embedding_2d#teacher
+    sequence_encoder: torch_transformer_encoder#teacher
+projection_head#teacher: *head
+backbone_with_head#teacher:
+  pool: cls
+  dependency_bindings:
+    backbone: patch_transformer#teacher
+    head: projection_head#teacher
+multi_view#teacher:
+  views: 2
+  dependency_bindings: {network: backbone_with_head#teacher}
 
-    ema_teacher:
-      dependency_bindings:
-        student: multi_view#student
-        teacher: multi_view#teacher
+ema_teacher:
+  dependency_bindings:
+    student: multi_view#student
+    teacher: multi_view#teacher
 
-    forward#student: {args: [views], outputs: student}
-    forward#teacher:
-      method: teacher_forward
-      args: [views]
-      no_grad: true
-      outputs: teacher
-    dino_distillation_loss:
-      out_dim: 65536
-      num_student_views: 10
-      num_teacher_views: 2
-      teacher_temp: {start: 0.04, end: 0.07, kind: linear, steps: 37530}
-      metrics_key: dino_metrics
-    ema_update:
-      momentum: {start: 0.996, end: 1.0, kind: cosine}
-      momentum_key: ema_momentum
+forward#student: {args: [views], outputs: student}
+forward#teacher:
+  method: teacher_forward
+  args: [views]
+  no_grad: true
+  outputs: teacher
+dino_distillation_loss:
+  out_dim: 65536
+  num_student_views: 10
+  num_teacher_views: 2
+  teacher_temp: {start: 0.04, end: 0.07, kind: linear, steps: 37530}
+  metrics_key: dino_metrics
+ema_update:
+  momentum: {start: 0.996, end: 1.0, kind: cosine}
+  momentum_key: ema_momentum
 
-    optimizer:
-      optimizer: {name: AdamW, kwargs: {lr: 0.002, weight_decay: 0.04}}
-      precision: bf16
-      lr_scheduler:
-        stages:
-          - {name: LinearLR, kwargs: {start_factor: 0.001, total_iters: "$stage_iterations"}}
-          - {name: CosineAnnealingLR, kwargs: {T_max: "$stage_iterations", eta_min: 1.0e-6}}
-        milestones: [12510]
-      param_groups:
-        - {match: ["*.bias", "*norm*"], kwargs: {weight_decay: 0.0}}
-    freeze_gradients:
-      rules: [{match: "student.network.head.last_layer.*", until_iteration: 1251}]
-    clip_gradients: {max_norm: 3.0}
+optimizer:
+  optimizer: {name: AdamW, kwargs: {lr: 0.002, weight_decay: 0.04}}
+  precision: bf16
+  lr_scheduler:
+    stages:
+      - {name: LinearLR, kwargs: {start_factor: 0.001, total_iters: "$stage_iterations"}}
+      - {name: CosineAnnealingLR, kwargs: {T_max: "$stage_iterations", eta_min: 1.0e-6}}
+    milestones: [12510]
+  param_groups:
+    - {match: ["*.bias", "*norm*"], kwargs: {weight_decay: 0.0}}
+freeze_gradients:
+  rules: [{match: "student.network.head.last_layer.*", until_iteration: 1251}]
+clip_gradients: {max_norm: 3.0}
 
-    logger: {log_every: 50}
-    checkpointer: {checkpoint_every: 1251}
-    tensorboard: {serve: false}
-    tensorboard_summaries:
-      call_every: 50
-      scalars:
-        train/loss: loss
-        dino: dino_metrics
-        ema/momentum: ema_momentum
-      optimizer: true
+logger: {log_every: 50}
+checkpointer: {checkpoint_every: 1251}
+tensorboard: {serve: false}
+tensorboard_summaries:
+  call_every: 50
+  scalars:
+    train/loss: loss
+    dino: dino_metrics
+    ema/momentum: ema_momentum
+  optimizer: true
 ```
 
 ---

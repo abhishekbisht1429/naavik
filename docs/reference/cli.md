@@ -103,14 +103,14 @@ The following options apply when you launch your own entry point, such as `pytho
 
 The three operations, `--config`, `--resume-session`, and
 `--extend-session`, are mutually exclusive and one is required. New-session
-type selection and constructor-specific arguments belong to each
-`sessions[]` entry.
+type selection and constructor-specific arguments belong in the session file
+(`session_type`, `session_kwargs`).
 
 | Argument | Operation | Notes |
 |---|---|---|
-| `--config PATH` | Start new sessions from a YAML file | Its session entries may [include other files](../guide/04-configuration.md#sharing-configuration-between-files); overrides are addressed with a `sessions[i].` prefix and applied after the includes; see [Configuration](../guide/04-configuration.md#omegaconf-overrides) |
+| `--config PATH` | Start a new session from a YAML file that is the session | It may [include other files](../guide/04-configuration.md#sharing-configuration-between-files); overrides are relative to the session and applied after the includes; see [Configuration](../guide/04-configuration.md#omegaconf-overrides) |
 | `--resume-session PATH` | Continue a checkpoint unchanged | Accepts only the three launch-topology overrides; see [Resume](../guide/05-checkpoints-and-resume.md#resume) |
-| `--extend-session PATH` | Continue a checkpoint with changed, extension-safe settings | Overrides are session-relative, without a `sessions[0]` prefix; see [Extend](../guide/05-checkpoints-and-resume.md#extend) |
+| `--extend-session PATH` | Continue a checkpoint with changed, extension-safe settings | Overrides are relative to the session, as with `--config`; see [Extend](../guide/05-checkpoints-and-resume.md#extend) |
 
 `--override KEY=VALUE [KEY=VALUE ...]` applies to any of the three: the
 keys each operation accepts, and how they are addressed, are in the notes

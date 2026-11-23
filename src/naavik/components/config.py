@@ -65,7 +65,7 @@ def reject_unresolved_includes(config: Mapping) -> None:
             "The session config still lists 'includes' ("
             f"{config['includes']!r}). Included files are merged when a config "
             "file is loaded (--config, or naavik.config_files."
-            "load_config); give the session the merged config."
+            "load_session); give the session the merged config."
         )
 
 

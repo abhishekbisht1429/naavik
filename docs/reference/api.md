@@ -78,12 +78,17 @@ configuration):
 They are configured by name in YAML; only `GradientProcessor` is meant to be
 subclassed.
 
-`naavik.config_files` loads a configuration file the way
-`--config` does: `load_config(path, *, reader=None)` returns a
-`LoadedConfig` (`config`, with every session's `includes` merged, and
-`sources`: per session, the `ConfigSource`s `path`, `sha256`,
-`included_by`); `LocalFiles` (default) and `RepositoryFiles(read)` are the
-readers; problems raise `ConfigFileError`. `check_no_interpolation` and
+`naavik.config_files` loads a session file the way `--config` does:
+`load_session(path, *, reader=None)` returns a `LoadedSession` (`session`,
+with its `includes` merged; `sources`, the `ConfigSource`s `path`, `sha256`,
+`included_by`; `wrapped`, true for a file in the earlier `sessions: [entry]`
+form, with `rest`, that form's other top-level keys, and
+`unwrap_advice(path)`). The engine warns about the earlier form with
+`SessionsListWarning`. `load_config(path, *, reader=None)` returns the same
+in the earlier shape, `LoadedConfig` (`config` = `{"sessions": [session]}`,
+`sources` = `[sources]`). `LocalFiles` (default) and `RepositoryFiles(read)`
+are the readers; problems, including a file with several sessions, raise
+`ConfigFileError`. `check_no_interpolation` and
 `unescape` are the `${` rules; see
 [Sharing configuration between files](../guide/04-configuration.md#sharing-configuration-between-files).
 

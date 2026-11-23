@@ -255,7 +255,7 @@ position is converted to the topology-independent form.
 ## Extend
 
 To restore one training checkpoint and change extension-safe hyperparameters,
-use overrides relative to that session (without a `sessions[0]` prefix):
+use overrides relative to that session, as with `--config`:
 
 ```bash
 python -m my_project.train \

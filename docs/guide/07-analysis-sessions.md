@@ -55,22 +55,21 @@ trained-model resource has no default checkpoint, configure its checkpoint
 path in the component mapping:
 
 ```yaml
-sessions:
-  - session_type: analysis
+session_type: analysis
 
-    session_config:
-      rng_seed: 42
-      sessions_dir: ./analysis-runs
-      max_iterations: 1
-      components_package: my_project.analysis_components
-      device: cpu
-      show_execution_graph: true
+session_config:
+  rng_seed: 42
+  sessions_dir: ./analysis-runs
+  max_iterations: 1
+  components_package: my_project.analysis_components
+  device: cpu
+  show_execution_graph: true
 
-    trained_model:
-      model_checkpoint_path: ./runs/session_.../checkpoints/<checkpoint-name>
+trained_model:
+  model_checkpoint_path: ./runs/session_.../checkpoints/<checkpoint-name>
 
-    report:
-      output_path: ./analysis-runs/report.json
+report:
+  output_path: ./analysis-runs/report.json
 ```
 
 To analyse every checkpoint of a training mission instead of one, a mission

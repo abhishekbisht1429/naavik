@@ -13,26 +13,25 @@ The framework is single-node by design; see
 Adding a top-level `ddp` resource makes the engine create `world_size` worker processes.
 
 ```yaml
-sessions:
-  - session_config:
-      rng_seed: 42
-      sessions_dir: ./runs
-      max_iterations: 1000
-      components_package: my_project.components
-      device: cuda
+session_config:
+  rng_seed: 42
+  sessions_dir: ./runs
+  max_iterations: 1000
+  components_package: my_project.components
+  device: cuda
 
-    ddp:
-      world_size: 4
-      backend: nccl
+ddp:
+  world_size: 4
+  backend: nccl
 
-    model: {}
-    train: {}
+model: {}
+train: {}
 
-    logger:
-      log_every: 10
+logger:
+  log_every: 10
 
-    checkpointer:
-      checkpoint_every: 100
+checkpointer:
+  checkpoint_every: 100
 ```
 
 `master_addr` and `master_port` may be given as well; `master_port` is

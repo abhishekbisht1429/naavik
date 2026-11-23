@@ -2,9 +2,9 @@
 
 [← Docs](../README.md) · [Project README](../../README.md)
 
-Every run is described by a YAML file containing a `sessions` list. This page
-covers that structure, the `session_config` fields each session must supply,
-and how to override values from the command line when starting a new session.
+Every run is described by a YAML file that is one session. This page covers
+that structure, the `session_config` fields each session must supply, and how
+to override values from the command line when starting a new session.
 
 Resuming or extending an existing checkpoint uses a different set of rules —
 see [Checkpoints, resume, and extend](05-checkpoints-and-resume.md). For the
@@ -12,25 +12,26 @@ complete flag list, see the [CLI reference](../reference/cli.md).
 
 ## YAML structure
 
-The configuration root must contain a `sessions` list:
+The top level of the file is the session: its `session_config`, its
+components, and optionally `includes`, `role_bindings`, `session_type`, and
+`session_kwargs`:
 
 ```yaml
-sessions:
-  - session_config:
-      rng_seed: 42
-      sessions_dir: ./runs
-      max_iterations: 1000
-      components_package: my_project.components
-      device: cuda:0
+session_config:
+  rng_seed: 42
+  sessions_dir: ./runs
+  max_iterations: 1000
+  components_package: my_project.components
+  device: cuda:0
 
-    model:
-      hidden_size: 512
+model:
+  hidden_size: 512
 
-    train:
-      learning_rate: 0.0003
+train:
+  learning_rate: 0.0003
 
-    logger:
-      log_every: 10
+logger:
+  log_every: 10
 ```
 
 `session_config` fields:
@@ -57,12 +58,11 @@ both values, e.g. `Max iterations: 8 (from 3 epochs)`, and the checkpoint
 stores both.
 
 ```yaml
-sessions:
-  - session_config:
-      rng_seed: 42
-      sessions_dir: ./runs
-      epochs: 90
-      components_package: my_project.components
+session_config:
+  rng_seed: 42
+  sessions_dir: ./runs
+  epochs: 90
+  components_package: my_project.components
 ```
 
 - **Training.** An epoch is what the training `DataManager`'s sampler counts
@@ -90,7 +90,7 @@ A session directory is created as:
 
 The resolved session configuration is written to `config.yaml` in that directory.
 
-Besides `session_config` and component mappings, a session entry may hold
+Besides `session_config` and component mappings, a session file may hold
 `role_bindings` ([wiring](02-wiring-components.md)) and
 `import_components`, which takes components of an earlier run into the session
 ([importing components](../reference/import-components.md)).
@@ -107,34 +107,33 @@ group is refused too.
 ### Grouping components by kind
 
 Components may be listed under `resources`, `hooks` and `steps` instead of
-directly in the session entry:
+directly at the top level of the file:
 
 ```yaml
-sessions:
-  - session_config: {...}
+session_config: {...}
 
-    role_bindings:
-      model: classifier
-      dataset: my_dataset
-      data_manager: data_manager#train   # what every other consumer gets
+role_bindings:
+  model: classifier
+  dataset: my_dataset
+  data_manager: data_manager#train   # what every other consumer gets
 
-    resources:
-      classifier:                 # an empty value: configured, no settings
-      my_dataset: {root: ./data}
-      ddp: {world_size: 1, backend: gloo, master_addr: localhost, master_port: 12355}
-      data_manager#train: {batch_size: 32, num_workers: 2, pin_memory: true}
-      data_manager#validation: {batch_size: 256, num_workers: 2, pin_memory: true}
+resources:
+  classifier:                 # an empty value: configured, no settings
+  my_dataset: {root: ./data}
+  ddp: {world_size: 1, backend: gloo, master_addr: localhost, master_port: 12355}
+  data_manager#train: {batch_size: 32, num_workers: 2, pin_memory: true}
+  data_manager#validation: {batch_size: 256, num_workers: 2, pin_memory: true}
 
-    steps:
-      load_batch: {fields: [inputs, targets]}
-      forward: {args: [inputs], outputs: logits}
-      compute#loss: {function: cross_entropy, args: [logits, targets], outputs: loss}
+steps:
+  load_batch: {fields: [inputs, targets]}
+  forward: {args: [inputs], outputs: logits}
+  compute#loss: {function: cross_entropy, args: [logits, targets], outputs: loss}
 
-    hooks:
-      logger: {log_every: 10}
-      evaluator:                  # wired to the validation data
-        dependency_bindings: {data_manager: data_manager#validation}
-        every: 100
+hooks:
+  logger: {log_every: 10}
+  evaluator:                  # wired to the validation data
+    dependency_bindings: {data_manager: data_manager#validation}
+    every: 100
 ```
 
 `classifier`, `my_dataset` and `evaluator` stand for components of your own
@@ -152,8 +151,8 @@ project.
 - The configuration is stored as written: `config.yaml` in the session
   directory and every checkpoint keep the grouped layout.
 - An override addresses a component where it is listed:
-  `sessions[0].steps.forward.args=[x]` on the command line,
-  `steps.forward.args=[x]` for `--extend-session`. Overriding
+  `steps.forward.args=[x]`, with `--config` and with `--extend-session`
+  alike. Overriding
   `forward.args` when `forward` is listed under `steps` is refused with the
   path to use. The launch-topology overrides stay `ddp.<key>` either way.
 
@@ -163,26 +162,28 @@ same as `classifier: {}`, at the top level or in a group.
 `component_bindings` and `aliases` are deprecated names for `role_bindings`;
 see [role bindings](02-wiring-components.md#role-bindings).
 
-Every `sessions[]` entry is registered for the same engine run. Entries may use different registered session types; all resulting worker wrappers start together.
+A file is one session. The earlier form, a `sessions` list holding one
+entry, is still read, with a warning to move the entry's keys to the top of
+the file. A file with several sessions is refused: split it into one file per
+session.
 
 ## Sharing configuration between files
 
-A session entry can take part of its configuration from other files, with
+A session file can take part of its configuration from other files, with
 `includes`. Each included file is a *fragment*: a mapping shaped like (part
-of) a session entry, such as a model, an optimizer recipe, or data settings.
+of) a session, such as a model, an optimizer recipe, or data settings.
 
 <!-- docs-test: skip: the included files are not next to this page -->
 ```yaml
 # configs/dino_small.yaml
-sessions:
-  - includes: [common/vit_s16.yaml, common/dino_optimizer.yaml]
-    session_config:
-      rng_seed: 0
-      sessions_dir: ./runs/dino
-      max_iterations: 1000
-      components_package: my_project.components
-    optimizer:
-      optimizer: {kwargs: {lr: 0.0005}}   # overrides the fragment's lr
+includes: [common/vit_s16.yaml, common/dino_optimizer.yaml]
+session_config:
+  rng_seed: 0
+  sessions_dir: ./runs/dino
+  max_iterations: 1000
+  components_package: my_project.components
+optimizer:
+  optimizer: {kwargs: {lr: 0.0005}}   # overrides the fragment's lr
 ```
 
 ```yaml
@@ -192,7 +193,7 @@ optimizer:
 clip_gradients: {max_norm: 3.0}
 ```
 
-- Fragments are merged **in list order**, then the session entry itself on
+- Fragments are merged **in list order**, then the session file itself on
   top. Mappings merge key by key; **every other value, lists included, is
   replaced whole**, so a fragment's `steps` order or freezing `rules` is
   replaced, not appended to.
@@ -207,8 +208,8 @@ clip_gradients: {max_norm: 3.0}
   `model: 3` in another is the same error.
 - A missing file, a fragment that is not a mapping, a fragment with
   `sessions`, and includes that form a cycle are errors naming the chain
-  of files. `includes` belongs in a session entry, not at the top of the
-  file.
+  of files. In a file of the earlier `sessions: [...]` form, `includes`
+  belongs in the entry, not at the top of the file.
 - `--override` applies after the includes are merged.
 
 The run records one complete config: its `config.yaml` has every included
@@ -218,7 +219,7 @@ it. For a mission the includes are read from the mission's commit and must
 stay inside the repository; see [Running missions](08-missions.md).
 
 A Python program can load a file the same way:
-`naavik.config_files.load_config(path).config`. A session given a
+`naavik.config_files.load_session(path).session`. A session given a
 mapping that still lists `includes` refuses it.
 
 ### No `${...}` interpolation
@@ -241,12 +242,14 @@ python -m my_project.train --config my_project/config.yaml
 python -m my_project.train \
   --config my_project/config.yaml \
   --override \
-  'sessions[0].session_config.max_iterations=2000' \
-  'sessions[0].logger.log_every=25'
+  'session_config.max_iterations=2000' \
+  'logger.log_every=25'
 ```
 
-With `--config`, overrides are applied to the selected `sessions[]`
-definitions.
+Overrides are relative to the session, and are applied after its includes are
+merged. For a file still in the earlier `sessions: [...]` form,
+`sessions[0].logger.log_every=25` is accepted too; on a session file it is
+refused with the path to write instead.
 
 The `ddp.world_size`, `ddp.master_addr` and `ddp.master_port` keys are an
 exception to everything on this page: they describe the machine a run is

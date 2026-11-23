@@ -20,10 +20,11 @@ from typing import Any
 import yaml
 
 from naavik.config_files import (
+    SESSIONS_KEY,
     ConfigFileError,
     RepositoryFiles,
     check_no_interpolation,
-    load_config,
+    load_session,
 )
 from naavik.launcher import EXECUTION_PROTOCOL_VERSION, task_module
 from naavik.launcher.config import address as addresses
@@ -303,9 +304,12 @@ def compile_plan(
         problems.add(problem)
 
     # Each session config once: `base.config_file`, and every recipe's own
-    # (`config_file`, or each of its `config_files`).
+    # (`config_file`, or each of its `config_files`). path -> (its session,
+    # the earlier form's other top-level keys); `earlier_form`: notes for the
+    # files written as `sessions: [entry]`.
+    earlier_form: list[str] = []
     configs = {manifest.training_config: _training_config(
-        manifest, manifest.training_config, repository, sha, problems)}
+        manifest.training_config, repository, sha, problems, earlier_form)}
     for group in manifest.groups:
         for experiment in group.experiments:
             recipe = f"jobs.{group.name}.recipes[{experiment.name}]"
@@ -314,8 +318,8 @@ def compile_plan(
                            for index, path in enumerate(experiment.configs)])
             for path, where in named:
                 if path not in configs:
-                    configs[path] = _training_config(manifest, path, repository, sha, problems,
-                                                     where=where)
+                    configs[path] = _training_config(path, repository, sha, problems,
+                                                     earlier_form, where=where)
     several_configs = any(experiment.config is not None or experiment.configs
                           for group in manifest.groups for experiment in group.experiments)
 
@@ -345,6 +349,10 @@ def compile_plan(
         problems.add(problem)
     if requires_python is None and not problem:
         notes.append("pyproject.toml declares no requires-python; the interpreter version is not checked against it")
+    notes += earlier_form
+    if manifest.session_index_given:
+        notes.append("base.session_index is no longer needed: a config file is one "
+                     "session; remove it")
     requirements = _requirements(manifest, repository, sha, managed, problems)
     expectation, python_problems = interpreter_expectation(
         profile.env, manifest.python_pin, requires_python, managed,
@@ -374,15 +382,16 @@ def compile_plan(
     # Tasks ------------------------------------------------------------------
     chosen = _choose_checkpoints(manifest, checkpoint_facts, problems, notes)
     problems.raise_if_any()
-    tasks_raw = _expand(manifest, lambda path: configs[path][1], dialect, problems, chosen,
+    tasks_raw = _expand(manifest, lambda path: configs[path][0], dialect, problems, chosen,
                         files_of)
     problems.raise_if_any()
 
     facts_found = None
     if code_facts is not None:
         facts_found = code_facts(sha, manifest, bool(environment["managed"]), [
-            (name, {**configs[path][0], "sessions": [
-                _with_sessions_dir(session, f"{batch_dir}/tasks/{name}/sessions")]})
+            (name, _experiment_config(
+                _with_sessions_dir(session, f"{batch_dir}/tasks/{name}/sessions"),
+                configs[path][1]))
             for name, path, session in (
                 (f"{group.name}/{experiment.name}/{number:03d}", path, session)
                 for group, experiment, number, _, session, _, _, path in tasks_raw)])
@@ -433,7 +442,7 @@ def compile_plan(
             )
         seen_hashes[identity_hash] = name
         session = _with_sessions_dir(session, f"{batch_dir}/tasks/{name}/sessions")
-        config = {**configs[config_file][0], "sessions": [session]}
+        config = _experiment_config(session, configs[config_file][1])
         tasks.append(Task(
             group.name, experiment.name, number, array_index, tuple(variant),
             config, hash_value(config),
@@ -556,45 +565,43 @@ def compile_plan(
 # Helpers -----------------------------------------------------------------------
 
 
-def _training_config(manifest, path, repository, sha, problems, where="base.config_file"):
-    """(config, selected session) of the training config at `path`."""
+def _experiment_config(session: dict, rest: dict) -> dict:
+    """An experiment's config file as the launcher writes it: the earlier
+    form `sessions: [session]`, on purpose. The mission's own framework reads
+    it, and that may be a version from before a file was the session itself;
+    every version reads this form (the task wrapper silences the warning).
+    `rest`: an earlier-form file's other top-level keys, kept as they were."""
+    return {**rest, SESSIONS_KEY: [session]}
+
+
+def _training_config(path, repository, sha, problems, earlier_form, where="base.config_file"):
+    """(session, other top-level keys) of the config file at `path` (({}, {})
+    when it cannot be used). A file in the earlier `sessions: [entry]` form
+    adds a note to `earlier_form`."""
     if repository.read(sha, path) is None:
         problems.add(f"{where} '{path}' does not exist at {sha[:12]}")
         return {}, {}
     # Includes are read at the same commit: the commit is the whole config.
     try:
-        config = load_config(
+        loaded = load_session(
             path,
             reader=RepositoryFiles(lambda included: repository.read(sha, included)),
-        ).config
+        )
     except ConfigFileError as error:
         problems.add(f"{where} at {sha[:12]}: {error}")
         return {}, {}
-    sessions = config.get("sessions") if isinstance(config, dict) else None
-    if not isinstance(sessions, list) or not sessions:
-        problems.add(f"{where} '{path}' has no 'sessions' list")
-        return {}, {}
-    if manifest.training_session >= len(sessions):
-        problems.add(
-            f"base.session_index {manifest.training_session} is out of range "
-            f"({len(sessions)} session(s)"
-            + (f" in {path})" if where != "base.config_file" else ")")
-        )
-        return {}, {}
-    session = sessions[manifest.training_session]
-    if not isinstance(session, dict):
-        problems.add("the selected session must be a mapping"
-                     + (f" ({path})" if where != "base.config_file" else ""))
-        return {}, {}
+    if loaded.wrapped:
+        earlier_form.append(loaded.unwrap_advice(path))
+    session = loaded.session
     session_config = session.get("session_config")
     if not isinstance(session_config, dict) or not isinstance(
             session_config.get("components_package"), str):
         problems.add(
-            "the selected session needs session_config.components_package "
+            "the session needs session_config.components_package "
             "(the package that registers its components)"
             + (f" ({path})" if where != "base.config_file" else "")
         )
-    return config, session
+    return session, loaded.rest
 
 
 def _requires_python(repository, sha):

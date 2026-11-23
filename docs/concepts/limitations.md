@@ -9,9 +9,9 @@ bugs; each says what the behavior is so you can design around it.
 
 ## Processes and supervision
 
-### Configured sessions start as one concurrent batch
+### One session per config file
 
-Every `sessions[]` entry contributes worker wrappers to the run; the engine does not provide sequencing or dependency ordering between sessions.
+A config file is one session; a file with several (the earlier `sessions:` list) is refused. Sessions registered through the Python API (`TrainingEngine.register_session`) start together, without sequencing or dependency ordering between them.
 
 ### Spawn requires importable and serializable definitions
 

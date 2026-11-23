@@ -182,29 +182,28 @@ stores what `run` returns under `counter_value`, and `@reads` passes it to
 Create `my_project/config.yaml`:
 
 ```yaml
-sessions:
-  - session_config:
-      rng_seed: 42
-      sessions_dir: ./runs
-      max_iterations: 5
-      components_package: my_project.components
-      device: cpu
+session_config:
+  rng_seed: 42
+  sessions_dir: ./runs
+  max_iterations: 5
+  components_package: my_project.components
+  device: cpu
 
-    resources:
-      counter:
-        start: 0
+resources:
+  counter:
+    start: 0
 
-    steps:
-      increment:
-        amount: 2
+steps:
+  increment:
+    amount: 2
 
-    hooks:
-      progress:
-        call_every: 1
-      logger:
-        log_every: 1
-      checkpointer:
-        checkpoint_every: 5
+hooks:
+  progress:
+    call_every: 1
+  logger:
+    log_every: 1
+  checkpointer:
+    checkpoint_every: 5
 ```
 
 Components are listed by kind under `resources`, `steps` and `hooks`, and each
@@ -305,19 +304,19 @@ class Classifier(ModuleResource):
 In the session's YAML, next to `session_config`:
 
 ```yaml
-    role_bindings: {model: classifier, dataset: toy_dataset}
+role_bindings: {model: classifier, dataset: toy_dataset}
 
-    resources:
-      classifier:
-      toy_dataset:
-      ddp: {world_size: 1, backend: gloo}
-      data_manager: {batch_size: 32, num_workers: 0, pin_memory: false}
-      optimizer: {optimizer: {name: AdamW, kwargs: {lr: 0.001}}}
+resources:
+  classifier:
+  toy_dataset:
+  ddp: {world_size: 1, backend: gloo}
+  data_manager: {batch_size: 32, num_workers: 0, pin_memory: false}
+  optimizer: {optimizer: {name: AdamW, kwargs: {lr: 0.001}}}
 
-    steps:
-      load_batch: {fields: [inputs, targets]}         # batch -> inputs, targets
-      forward: {args: [inputs], outputs: logits}      # classifier(inputs)
-      compute#loss: {function: cross_entropy, args: [logits, targets], outputs: loss}
+steps:
+  load_batch: {fields: [inputs, targets]}         # batch -> inputs, targets
+  forward: {args: [inputs], outputs: logits}      # classifier(inputs)
+  compute#loss: {function: cross_entropy, args: [logits, targets], outputs: loss}
 ```
 
 Each step names the `iteration_context` keys it reads and writes, and the

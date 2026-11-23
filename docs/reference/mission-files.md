@@ -93,8 +93,8 @@ the host).
 
 | Key | Default | Meaning |
 |---|---|---|
-| `config_file` | | Repository path of the session config (the usual `sessions:` file). Required. Its [includes](../guide/04-configuration.md#sharing-configuration-between-files) are read at the mission's commit, by paths that stay inside the repository; each experiment's rendered config has them merged. A recipe may name its own (`config_file`). |
-| `session_index` | `0` | Index of the session in `sessions` that the experiments run. |
+| `config_file` | | Repository path of the session config: a file that is one session. Required. Its [includes](../guide/04-configuration.md#sharing-configuration-between-files) are read at the mission's commit, by paths that stay inside the repository; each experiment's rendered config has them merged. A recipe may name its own (`config_file`). |
+| `session_index` | | No longer needed: a config file is one session. `0` is accepted with a note to remove it; any other value is an error. |
 | `engine_options` | `[]` | Engine command-line options passed to every experiment. Only `--heartbeat-timeout`, `--stop-sync-grace-period`, `--stop-sync-poll-interval`, and `--process_timeout_on_join` are accepted; config changes belong in overrides. |
 
 ### data_sources
@@ -184,7 +184,7 @@ Used by jobs, `prepare_on_host` sources (`allocation`), and the host's
 | Key | Required | Meaning |
 |---|---|---|
 | `name` | yes | Unique within the job; experiments are `<job>/<name>/000`, `001`, ... |
-| `config_file` | no | Its own session config (a repository path; default `base.config_file`), for a change of structure. Its session is `base.session_index`, and its overrides and `vary` are checked against it. When any recipe sets it, every experiment records its file (`config_file`), compared as `config` by `summarize`. Not with `config_files`. |
+| `config_file` | no | Its own session config (a repository path; default `base.config_file`), for a change of structure. Its overrides and `vary` are checked against it. When any recipe sets it, every experiment records its file (`config_file`), compared as `config` by `summarize`. Not with `config_files`. |
 | `config_files` | no | Two or more session configs, distinct: one more axis, each file with every `vary` combination. Every override and `vary` address is checked against each file (a problem ends with `(in <file>)`). Each experiment records its own file, and `status` shows it (`config=<file>`). Not with `config_file`. |
 | `overrides` | no | List of `{component?, path, value}`: values set for every experiment of the recipe. |
 | `vary` | no | List of `{component?, path, values}`: one experiment per combination of the values; the last entry varies fastest. Without it the recipe is one experiment. |

@@ -1,7 +1,8 @@
 """The session configurations the guides show are built, as written.
 
-Every YAML block of a guide that holds a `sessions` list is a configuration a
-reader may copy, so each of its sessions is built here. Only the
+Every YAML block of a guide that is a session file (a top-level
+`session_config`) is a configuration a reader may copy, so it is built here.
+Only the
 `session_config` is replaced (it names the reader's own package and
 directories). Components the examples name but the framework does not ship
 are registered as the stand-ins below; a block that cannot be built on its
@@ -44,17 +45,15 @@ def _examples():
         text = (DOCS / guide).read_text(encoding="utf-8")
         for match in _BLOCK.finditer(text):
             config = yaml.safe_load(match["body"])
-            if not isinstance(config, dict) or "sessions" not in config:
+            # A session file: its top level is the session.
+            if not isinstance(config, dict) or "session_config" not in config:
                 continue
             line = text[:match.start("body")].count("\n")
-            for index, session in enumerate(config["sessions"]):
-                marks = (
-                    [pytest.mark.skip(reason=match["skip"])]
-                    if match["skip"] else []
-                )
-                yield pytest.param(
-                    session, id=f"{guide}:{line}:sessions[{index}]", marks=marks,
-                )
+            marks = (
+                [pytest.mark.skip(reason=match["skip"])]
+                if match["skip"] else []
+            )
+            yield pytest.param(config, id=f"{guide}:{line}", marks=marks)
 
 
 # -- stand-ins for the reader's own components -------------------------------------

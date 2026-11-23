@@ -22,6 +22,7 @@ import socket
 import sys
 import tempfile
 import traceback
+import warnings
 from datetime import datetime, timezone
 
 import yaml
@@ -183,6 +184,7 @@ def run_task(config_path: str, record_path: str, plan_path: str,
     })
     engine = None
     try:
+        from naavik.config_files import SessionsListWarning
         from naavik.engine import Configurator, TrainingEngine
 
         if resume:
@@ -191,7 +193,12 @@ def run_task(config_path: str, record_path: str, plan_path: str,
             sys.argv = [sys.argv[0], "--resume-session", resume, *engine_options]
         else:
             sys.argv = [sys.argv[0], "--config", config_path, *engine_options]
-        engine = TrainingEngine(Configurator())
+        with warnings.catch_warnings():
+            # The launcher writes experiment configs as `sessions: [entry]` on
+            # purpose: every framework version a mission may run reads it.
+            warnings.simplefilter("ignore", SessionsListWarning)
+            configurator = Configurator()
+        engine = TrainingEngine(configurator)
         with engine:
             engine.start_session()
     except KeyboardInterrupt:

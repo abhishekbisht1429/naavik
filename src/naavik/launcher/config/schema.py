@@ -551,7 +551,9 @@ class MissionFile:
     requirements: str | None
     python_pin: str | None
     training_config: str
-    training_session: int
+    #: `base.session_index` was written (it can only be 0: a config file is
+    #: one session); compiling notes that it is no longer needed.
+    session_index_given: bool
     engine_options: tuple[str, ...]
     data_sources: tuple[Any, ...]
     groups: tuple[Group, ...]
@@ -742,10 +744,17 @@ def parse_mission_file(raw: Any, source: str) -> MissionFile:
             )
             python_pin = None
 
-    base = _Reader(reader.get("base", {}, required=True), f"{source}.base", problems,
+    base_raw = reader.get("base", {}, required=True)
+    base = _Reader(base_raw, f"{source}.base", problems,
                    {"config_file", "session_index", "engine_options"})
     config = base.string("config_file", required=True)
-    session = base.positive_int("session_index", 0, minimum=0)
+    session_index_given = isinstance(base_raw, Mapping) and "session_index" in base_raw
+    if base.positive_int("session_index", 0, minimum=0):
+        problems.add(
+            f"{source}.base.session_index: a config file is now one session, so there "
+            "is no other session to pick; put that session in a file of its own and "
+            "name it in base.config_file"
+        )
     engine_options = base.strings("engine_options")
 
     sources = reader.get("data_sources", [])
@@ -776,7 +785,7 @@ def parse_mission_file(raw: Any, source: str) -> MissionFile:
         requirements=requirements,
         python_pin=python_pin,
         training_config=config,
-        training_session=session,
+        session_index_given=session_index_given,
         engine_options=engine_options,
         data_sources=tuple(sources),
         groups=tuple(groups),

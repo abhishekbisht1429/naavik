@@ -47,6 +47,9 @@ file](hosts-file.md) and [mission files](mission-files.md).
 | Earlier | Current |
 |---|---|
 | `version`, `description`, `project` | `format_version`, `note`, `project_file` |
+| a config file `sessions: [entry]` (one entry) | the entry's keys at the top of the file; a file is one session (several entries are refused) |
+| `--override sessions[0].a.b=V` | `--override a.b=V` (the earlier form still works on an earlier-form file) |
+| `base.session_index` | not needed: `0` is noted, anything else refused |
 | `source {strategy: bundle\|fetch, ref, url}` | `code_transfer {method: git_bundle\|git_clone, commit, clone_url}` |
 | `code {framework: dependency\|checkout, paths}` | `code {framework_from: installed\|this_repository, python_paths}` |
 | `environment {requirements, python}` | `python_packages {requirements_file, python_version}` |
