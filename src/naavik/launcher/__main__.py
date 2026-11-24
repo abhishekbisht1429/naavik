@@ -196,6 +196,22 @@ def _parser(prog: str = "python -m naavik.hpc") -> argparse.ArgumentParser:
                      help="build a managed environment for this run only")
     run.add_argument("--yes", action="store_true", help="do not ask, even above confirm_uploads_over")
     host_options(run)
+    init = add(
+        "init", help="write the project file and a host for this machine, for naavik run",
+        description="Write naavik-project.yaml at the repository root and a host for this "
+                    "machine in the hosts file: what `naavik run` needs. Never overwrites; "
+                    "with an existing hosts file, asks before adding the host to it.")
+    init.add_argument("--host", default=None, metavar="NAME",
+                      help="the name of the host to create (default: here)")
+    init.add_argument("--hosts-file", dest="profiles", type=Path, metavar="PATH",
+                      help="the hosts file (default: $XDG_CONFIG_HOME/naavik/hosts.yaml)")
+    init.add_argument("--gpus", default="all",
+                      help="the GPU pool: all (default), none, a count, or indices such as 0,1")
+    init.add_argument("--python-paths", metavar="PATHS",
+                      help="code.python_paths, comma-separated (default: detected)")
+    init.add_argument("--dry-run", action="store_true", help="print the files; write nothing")
+    init.add_argument("--yes", action="store_true",
+                      help="add the host to an existing hosts file without asking")
     status = add("status", help="show the state of every experiment of a mission")
     status.add_argument("batch_id", metavar="MISSION", help="a mission id, or the path to its receipt")
     receipts(status)
@@ -877,6 +893,120 @@ def _resume(args) -> int:
     return 0
 
 
+def _init(args) -> int:
+    """`naavik init`: see `services/init.py`."""
+    from naavik.launcher.config.schema import PROJECT_FILE
+    from naavik.launcher.services import init as initializing
+    from naavik.paths import app_dir
+
+    name = args.host or initializing.DEFAULT_HOST
+    repository = GitRepository(Path.cwd())
+    root = repository.root
+    try:
+        repository.resolve("HEAD")
+        first_commit = None
+    except HpcError:
+        # The working tree runs as a snapshot on HEAD, so there must be one.
+        first_commit = ("note: the repository has no commit yet; naavik run needs one: "
+                        "commit your code first (git add -A && git commit -m 'first commit')")
+    gpus = initializing.parse_gpus(args.gpus)
+    paths = (tuple(path.strip() for path in args.python_paths.split(",") if path.strip())
+             if args.python_paths else None)
+    detected = initializing.detect(root, paths)
+    print(f"framework_from: {detected.framework_from} ({detected.framework_reason})")
+    print(f"python_paths: {list(detected.python_paths)} ({detected.python_paths_reason})")
+    directories = initializing.directories_under(app_dir("data").resolve())
+    project_path = root / PROJECT_FILE
+    hosts_path = (args.profiles or default_profiles_path()).expanduser().absolute()
+
+    # The project file: written when absent, never changed.
+    if project_path.exists():
+        existing = yaml.safe_load(project_path.read_text()) or {}
+        named = ((existing.get("quick_run_defaults") or {}).get("host")
+                 if isinstance(existing, dict) else None)
+        print(f"{project_path} exists; left as is"
+              + ("" if named == name else
+                 f" (it does not name host '{name}': add `quick_run_defaults: {{host: {name}}}` "
+                 f"or pass --host {name} to naavik run)"))
+        project = None
+    else:
+        project = initializing.project_text(detected, name)
+
+    # The host: a new hosts file, or added to the existing one when asked.
+    if hosts_path.exists():
+        insertion = initializing.insert_host(hosts_path.read_text(), name, gpus, directories,
+                                             str(hosts_path))
+        block = "\n".join(initializing.host_lines(name, gpus, directories, 2))
+    else:
+        insertion, block = None, None
+        hosts_text = initializing.new_hosts_text(name, gpus, directories)
+
+    if args.dry_run:
+        if project is not None:
+            print(f"\n# {project_path}\n{project}")
+        print(f"# {hosts_path}")
+        print(hosts_text if insertion is None else (insertion.text or block))
+        return 0
+
+    if project is not None:
+        _write_new(project_path, project)
+        print(f"wrote {project_path} (commit it)")
+    if insertion is None:
+        _write_new(hosts_path, hosts_text)
+        print(f"wrote {hosts_path} (host '{name}')")
+    elif insertion.text is None:
+        print(f"{hosts_path} exists and naavik init does not edit it here "
+              f"({insertion.reason}); add this under its `hosts:`:\n{block}")
+    else:
+        print(f"{hosts_path} exists; the host to add under its `hosts:`:\n{block}")
+        if _confirmed(f"Add host '{name}' to {hosts_path}? [y/N] ", args.yes):
+            backup = _backup(hosts_path)
+            _write_new(hosts_path, insertion.text, replace=True)
+            print(f"added host '{name}' to {hosts_path} (the original is {backup})")
+        else:
+            print(f"{hosts_path} left as is; add the host above yourself")
+    if first_commit:
+        print(first_commit)
+    hosts_flag = "" if args.profiles is None else f" --hosts-file {hosts_path}"
+    print(f"next: naavik run <config.yaml>{hosts_flag}")
+    return 0
+
+
+def _confirmed(question: str, yes: bool) -> bool:
+    """`--yes`, or the user's answer; never asks without a terminal."""
+    if yes:
+        return True
+    if not sys.stdin.isatty():
+        print("not asked (no terminal); pass --yes to add it")
+        return False
+    try:
+        return input(question).strip().lower() in ("y", "yes")
+    except EOFError:
+        return False
+
+
+def _backup(path: Path) -> Path:
+    """A copy of `path` next to it, under the first free `.bak` name."""
+    backup = path.with_name(path.name + ".bak")
+    number = 1
+    while backup.exists():
+        backup = path.with_name(f"{path.name}.bak.{number}")
+        number += 1
+    shutil.copy2(path, backup)
+    return backup
+
+
+def _write_new(path: Path, text: str, *, replace: bool = False) -> None:
+    """Write `path` whole (a temporary file renamed into place); never over
+    an existing file unless `replace`."""
+    if path.exists() and not replace:
+        raise HpcError(f"{path} exists; naavik init never overwrites it")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.naavik-init")
+    temporary.write_text(text)
+    os.replace(temporary, path)
+
+
 def _run(args) -> int:
     """`naavik run`: see the `run` parser's description."""
     from naavik.launcher.compile.compiler import compile_plan
@@ -1167,6 +1297,8 @@ def main(argv: list[str] | None = None, prog: str | None = None) -> int:
             return _logs(args)
         if args.command == "run":
             return _run(args)
+        if args.command == "init":
+            return _init(args)
         profile = _profile(args)
         if args.command == "show-site-interpreter":
             from naavik.launcher.ports.targets import target_of_profile

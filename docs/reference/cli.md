@@ -14,6 +14,7 @@ You can also use `navik` or `python -m naavik.cli`:
 
 | Command | Does | Guide |
 |---|---|---|
+| `naavik init [--host NAME] [--hosts-file PATH] [--gpus all\|none\|N\|0,1] [--python-paths P] [--dry-run] [--yes]` | write the project file and a host for this machine, for `naavik run` (never overwrites; asks before adding to an existing hosts file) | [Your first run](../guide/00-naavik-first-run.md#describe-the-project-and-this-machine) |
 | `naavik validate / render / launch MISSION_FILE` | check, preview, or launch a mission | [Running missions](../guide/08-missions.md) |
 | `naavik run CONFIG [--override PATH=VALUE] [--note TEXT] [--gpus N] [--walltime T] [--detach]` | one config as a mission of one experiment, followed to its end | [`naavik run`](../guide/08-missions.md#one-config-followed-naavik-run) |
 | `naavik validate / render / launch MISSION_FILE --job J --recipe J/R` | only part of a mission file | [Running missions](../guide/08-missions.md#5-checking-a-mission-validate-and-render) |

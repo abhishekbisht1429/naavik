@@ -33,54 +33,44 @@ The example's `components_package: my_project.components` tells the framework
 where to find the counter, increment step, and progress hook. Its configuration
 runs five CPU iterations and writes a checkpoint.
 
-## Describe the project and local host
+## Describe the project and this machine
 
-Create `naavik-project.yaml` at the root of your new project repository:
-
-```yaml
-code:
-  framework_from: installed
-  python_paths: ["."]
-quick_run_defaults:
-  per_experiment: {gpus: 0}
-```
-
-This tells Naavik to use the installed framework and make your project package
-importable. The resource settings describe one experiment: here, no GPUs. On
-this machine's built-in scheduler, an experiment has no time, CPU, or memory
-limit unless you set `walltime` (CPUs and memory are never limited there).
-
-Create a host file outside the project. These commands use absolute paths
-under your home directory for the local mission files and data:
+From your new project repository root:
 
 ```bash
-mkdir -p "$HOME/naavik"
-cat > "$HOME/naavik/hosts.yaml" <<EOF_HOSTS
-default_host: here
-hosts:
-  here:
-    connection: local
-    scheduler: {kind: builtin}         # gpus: all, the default
-    run_code_from: working_tree
-    python_environment: {use_existing: current}
-    directories:
-      missions: $HOME/naavik/missions
-      python_environments: $HOME/naavik/envs
-      datasets: $HOME/naavik/datasets
-EOF_HOSTS
+naavik init
 ```
 
-This example uses a separate hosts file so it does not change your existing
-Naavik host configuration. `working_tree` takes a snapshot of your current project, so you do
-not need to commit each edit. The current environment must remain available
-for the local worker.
+It prints what it detected and writes two files:
+
+- `naavik-project.yaml` at the repository root (commit it): the installed
+  framework (`code.framework_from: installed`), your package on the path
+  (`code.python_paths: ["."]`), and the host `naavik run` uses
+  (`quick_run_defaults.host: here`). With no `per_experiment`, an
+  experiment gets no GPUs and has no time, CPU, or memory limit on this
+  machine.
+- A host named `here` in `~/.config/naavik/hosts.yaml`: this machine
+  (`connection: local`), naavik's builtin scheduler with every GPU of the
+  machine as its pool (`gpus: all`), your working tree as it is
+  (`run_code_from: working_tree`: no commit needed for each edit; a snapshot
+  keeps what ran), the environment running `naavik`
+  (`use_existing: current`, which must stay available), and absolute
+  directories under `~/.local/share/naavik/`.
+
+`naavik init` never overwrites a file. If you already have a hosts file, it
+shows the host and asks before adding it (keeping your comments and a
+`.bak` copy); without a terminal it only prints the host to add. `--dry-run`
+prints both files and writes nothing; `--host`, `--hosts-file`, `--gpus`,
+and `--python-paths` change what it writes. Every key is described in the
+references for [the hosts file](../reference/hosts-file.md) and
+[mission files](../reference/mission-files.md).
 
 ## Run the experiment
 
 From your new project repository root:
 
 ```bash
-naavik run my_project/config.yaml --hosts-file "$HOME/naavik/hosts.yaml" --note "first local run"
+naavik run my_project/config.yaml --note "first local run"
 ```
 
 Naavik creates a **mission** containing one **experiment**, checks and stages

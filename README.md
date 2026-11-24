@@ -92,7 +92,6 @@ This example defines a stateful resource, a training step, and a lifecycle hook.
 my_project/
 ├── __init__.py
 ├── config.yaml
-├── train.py
 └── components/
     ├── __init__.py
     └── demo.py
@@ -218,11 +217,39 @@ implementation, and configuration belongs under that implementation name (see
 inherit `Component.__init__` are activated without an entry; required
 components with a custom constructor must have one.
 
-### 4. Create the entry point
+### 4. Set up naavik for this machine (once)
 
-Create `my_project/train.py`:
+From the directory containing `my_project`, make it a Git repository with a
+first commit (naavik runs your working tree as a snapshot on top of it),
+then let `naavik init` write the project file and a host for this machine:
+
+```bash
+git init && git add my_project && git commit -m "first commit"
+naavik init
+```
+
+`naavik init` writes `naavik-project.yaml` (commit it) and a host named
+`here` in `~/.config/naavik/hosts.yaml`, and prints what it chose. It never
+overwrites a file; with an existing hosts file, it asks before adding the
+host. See [your first run](docs/guide/00-naavik-first-run.md) for what the
+two files hold.
+
+### 5. Run it
+
+```bash
+naavik run my_project/config.yaml
+```
+
+`naavik run` checks the config with your code, runs it as a mission of one
+experiment on this machine, and follows its log until it ends. The run is
+recorded (`naavik runs list`), uncommitted edits included.
+
+### Running the engine from your own program
+
+The engine also runs inside a program of your own, without the launcher:
 
 ```python
+# my_project/train.py
 from naavik.engine import Configurator
 from naavik.engine import TrainingEngine
 
@@ -238,25 +265,16 @@ if __name__ == "__main__":
     main()
 ```
 
-The `if __name__ == "__main__"` guard is required for safe process spawning.
-
-### 5. Run training
-
-From the directory containing `my_project`:
-
 ```bash
 python -m my_project.train --config my_project/config.yaml
 ```
 
-The parent process creates the session and worker configuration. The worker process reconstructs the session and executes the configured components.
-
-For debugger-managed worker processes, pass `--debug`. Workers are spawned
+The `if __name__ == "__main__"` guard is required for safe process spawning.
+The parent process creates the session and worker configuration. The worker
+process reconstructs the session and executes the configured components.
+For debugger-managed worker processes, pass `--debug`: workers are spawned
 normally, and the parent waits for them using plain process joins without
-heartbeat, failure, timeout, or termination monitoring:
-
-```bash
-python -m my_project.train --config my_project/config.yaml --debug
-```
+heartbeat, failure, timeout, or termination monitoring.
 
 ## Training a real model
 
