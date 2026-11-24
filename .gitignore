@@ -1,6 +1,5 @@
 .idea
 src/tests/outputs
-.codex/handoff
 .context
 
 .claude/.cc-writes

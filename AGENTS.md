@@ -1,44 +1,46 @@
-# Codex project instructions
+# Agent instructions
 
-## Hand-off files
-- Hand off files are at `.codex/handoff`
-- Check the files here to get context.
-- When writing new handoff file always include a time stamp in it.
+These guidelines apply to every agent (Codex, Claude Code, and any other),
+including subagents and other parallel agents. Claude Code loads this file
+through `.claude/CLAUDE.md`.
 
-## Intermediate results instructions
-- These instructions apply even for subagents or any other parallel agents.
-- If the detailed output log of any command is not required then always suppress it.
+# Getting session context
+## STATE.md
+ - Read .context/STATE.md to get the context. Do not read the project files unless explicitly asked to do so.
+ - If you have to read the project files to get something done. Ask for permission.
+ - After making changes, update STATE.md so that next session can pickup from there if needed.
+ - Keep STATE.md as concise as possible. You can do this by removing past state information actively from it and only keeping info that is relevant currently in it.
 
-## New test cases instructions
-- Do not add very implementation speciifc test cases. 
-- Wherever possible add future agnostic tests that test the intended functionality rather than testing whether the component behaves in a implementation specific way.
+## Planning
+- When planning a new feature or making a change, always try to re-use existing code. 
+- When you have to write new code always try to ensure that it is modular and generic so fits well with existing framework.
+
+## HANDOFF.md
+ - Use .context/HANDOFF.md to save some context for unfinished tasks. Keep this file as concise as possible.
+ - Always include the date of each update in it.
+
+## Making Local changes
+- Whenever any change in the codebase is requested, even if a small change, do not implement it immediately unless explicitly asked to do so. First create a plan as ask to review it before implementing it.
+- Unless explicitly told not to do so, you can make changes in the current checkout branch. You don't have to create some background worktree for that.
+- Never commit changes by yourself. Always ask permission to do so.
+- Individual test cases should not be modified unless absolutely necessary. When you have to modify an existing test, always ask for permission.
+
+### Writing new tests
+- Make sure that the test cases use only the public api wherever possible. Do not use internal members if there is an alternative.
+- Do not add very implementation specific test cases. Wherever possible add future agnostic tests that test the intended functionality rather than whether the component behaves in an implementation specific way.
 - Every builtin component must have some serialization and deserialization tests.
 
-## Parallel test guardian
+## Running tests
+- After a major change, run the focused tests, then the full parallel suite:
+  `python -m pytest -n 8 --dist loadfile`.
+- Before every commit the full parallel suite must pass; run the serial
+  suite only before merging to dev.
+- Report failures with their output. Diagnose before changing anything;
+  never weaken, skip or delete a test to make the suite pass.
 
-- After every completed major change, the primary agent must spawn the project-scoped
-  `test_guardian` agent as a parallel subagent. A major change includes a feature,
-  behavior-affecting bug fix, meaningful refactor, dependency or configuration change,
-  or a change to the registry, component lifecycle, session execution, or persistence.
-- After every commit created during an active Codex workflow, immediately spawn
-  `test_guardian` against the committed `HEAD`, even if tests ran before the commit.
-- Give the subagent the completed change's scope, relevant files, and whether it is
-  validating a working-tree checkpoint or a commit. Do not start a duplicate guardian
-  for the same revision.
-- The primary agent may continue independent, non-overlapping work while the guardian
-  runs, but must wait for its result before making another commit, modifying overlapping
-  files, or reporting the task complete.
-- The guardian owns test execution and failure diagnosis. It must not modify production
-  code. It may modify tests only under the strict necessity rules in its custom-agent
-  instructions; otherwise it reports the production defect to the primary agent.
-- A failed guardian run blocks completion unless the failure is clearly pre-existing or
-  environmental and is reported with evidence. Test changes made by the guardian must
-  remain visible for primary-agent review and must never be silently folded into an
-  existing commit.
-- Use the IDE-configured Python interpreter as required by the `python-tools` skill.
-  Prefer focused tests while iterating; after a major change run the full suite, and
-  after every commit always run the full suite.
+## Running commands
+- Unless required, run all commands in silent mode without any verbose, wherever possible. If the detailed output log of a command is not needed, suppress it.
+- If a command requires GPU, then prioritize using one which has no processes.
 
-This policy applies to Codex workflows while they are active. Commits made externally
-while Codex is not running cannot start a subagent; CI remains the repository-wide
-fallback for those commits.
+## Learning
+- When you learn something generic from your sessions, add it to .context/LEARNING.md.
