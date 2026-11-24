@@ -238,4 +238,5 @@ session config.
   (`["optimizer", "kwargs", "lr"]`); use the list form when a key contains a
   dot.
 - `session_config.sessions_dir` is owned by naavik (each experiment gets its
-  own) and cannot be addressed.
+  own, `<mission dir>/tasks/<experiment>/sessions`) and cannot be addressed;
+  the session file's value is not used, and `launch` says so in a note.

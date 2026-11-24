@@ -204,6 +204,16 @@ def test_detach_returns_once_launched(tmp_path, here, capsys):
     assert re.search(r"^follow: naavik logs \S+ run/base/000 --follow$", out, re.M)
 
 
+def test_launch_says_where_the_sessions_are_instead_of_sessions_dir(tmp_path, here, capsys):
+    root = project(tmp_path)
+    assert run(root, here, "--yes", "--detach") == 0
+    out = capsys.readouterr().out
+    batch_dir = batch_dir_of(out)
+    assert (f"note: each experiment's sessions are in {batch_dir}/tasks/<experiment>/sessions: "
+            "a mission sets session_config.sessions_dir; the session file's value is not "
+            "used") in out
+
+
 def test_run_defaults_choose_the_target(tmp_path, here, capsys):
     targets = yaml.safe_load(here.read_text())
     targets["profiles"]["elsewhere"] = targets["profiles"]["cluster"]

@@ -628,6 +628,11 @@ def _launch(profile, compiled, repository, *, manifest_label: str, review):
     print(f"{receipt.status}: {plan.batch_dir}")
     for node_id, job_ref in receipt.submitted_jobs():
         print(f"  {node_id}: job {job_ref}")
+    # Said where it matters, once per launch: every session file sets
+    # sessions_dir, and a mission puts each experiment's sessions elsewhere.
+    print(f"note: each experiment's sessions are in {plan.batch_dir}/tasks/<experiment>/"
+          "sessions: a mission sets session_config.sessions_dir; the session file's "
+          "value is not used")
     print(f"receipt: {receipt.path}")
     return (0 if receipt.status == "submitted" else 1), receipt
 
