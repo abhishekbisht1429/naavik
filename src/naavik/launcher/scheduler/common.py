@@ -34,10 +34,17 @@ def task_body(batch_dir: str, group: str, command: list[str], index_variable: st
         'log() { echo "[hpc $(date -u +%Y-%m-%dT%H:%M:%SZ)] $*"; }',
         'on_signal() { interrupted=1; log "received the scheduler advance signal; stopping the task cooperatively"; '
         '[ -n "$child" ] && kill -INT "$child" 2>/dev/null || true; }',
+        # The task starts with SIGINT at its default, not ignored as a shell
+        # starts background jobs: a stop arriving while the task is still
+        # starting (before it installs its own handler) ends it instead of
+        # being lost.
+        'with_default_sigint() { trap - INT; exec "$@"; }',
         "trap on_signal USR1",
         "set +e",
-        f"{run} &",
+        f"with_default_sigint {run} &",
         "child=$!",
+        # A stop that arrived before the task was started is sent now.
+        '[ "$interrupted" -eq 1 ] && kill -INT "$child" 2>/dev/null',
         'while true; do wait "$child"; status=$?; kill -0 "$child" 2>/dev/null || break; done',
         'log "task process exited with status $status"',
         'if [ "$interrupted" -eq 1 ]; then exit 75; fi',
