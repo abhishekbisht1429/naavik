@@ -33,19 +33,28 @@ else:
 
 
 def _target_names(args) -> tuple[Path, list[str]]:
+    """The hosts file and the hosts to sync: `--all-hosts`, the `--host`s,
+    else `default_host`. A file in the earlier names (`targets` /
+    `profiles`, `default`) is read as the current one, as `parse_profiles`
+    reads it."""
     from naavik.launcher.__main__ import default_profiles_path
+    from naavik.launcher.config.names import hosts_file_from_earlier
 
     path = args.profiles or default_profiles_path()
     if not path.exists():
         raise _error(f"hosts file {path} does not exist")
-    raw = yaml.safe_load(path.read_text()) or {}
-    entries = raw.get("targets") or raw.get("profiles") or {}
+    raw, _, problems = hosts_file_from_earlier(yaml.safe_load(path.read_text()) or {}, str(path))
+    if problems:
+        raise _error("; ".join(problems))
+    entries = raw.get("hosts") if isinstance(raw, dict) else None
+    if not isinstance(entries, dict) or not entries:
+        raise _error(f"{path} has no hosts")
     if args.all_targets:
         return path, sorted(entries)
     if args.profile:
         return path, list(args.profile)
-    if raw.get("default"):
-        return path, [raw["default"]]
+    if raw.get("default_host"):
+        return path, [raw["default_host"]]
     raise _error(f"{path} has no default_host; pass --host or --all-hosts")
 
 

@@ -249,6 +249,42 @@ def test_sync_from_a_target_without_runs_says_so(two_machines, capsys):
     assert "no runs recorded on gpubox yet" in capsys.readouterr().out
 
 
+def _current_names(targets: Path) -> Path:
+    """The same hosts in a file with the current top-level names."""
+    data = yaml.safe_load(targets.read_text())
+    hosts = targets.with_name("hosts.yaml")
+    hosts.write_text(yaml.safe_dump({"default_host": data["default"], "hosts": data["targets"]}))
+    return hosts
+
+
+def test_sync_reads_a_hosts_file_with_the_current_names(two_machines, capsys):
+    remote, local, targets = two_machines
+    _remote_run(remote, finished=True)
+    hosts = _current_names(targets)
+    assert naavik_cli(["runs", "sync", "--all-hosts", "--hosts-file", str(hosts),
+                       "--registry", str(local)]) == 0
+    output = capsys.readouterr().out
+    assert "here: this machine" in output and "gpubox: " in output   # both hosts, not none
+    assert len(list_runs(local)[0]) == 1
+
+
+def test_sync_without_a_host_uses_default_host(two_machines, capsys):
+    remote, local, targets = two_machines
+    _remote_run(remote, finished=True)
+    hosts = _current_names(targets)
+    assert naavik_cli(["runs", "sync", "--hosts-file", str(hosts), "--registry", str(local)]) == 0
+    assert "file(s) copied from gpubox:" in capsys.readouterr().out
+    assert len(list_runs(local)[0]) == 1
+
+
+def test_sync_with_no_default_host_says_to_pass_one(two_machines, capsys):
+    _, local, targets = two_machines
+    hosts = _current_names(targets)
+    hosts.write_text(yaml.safe_dump({"hosts": yaml.safe_load(hosts.read_text())["hosts"]}))
+    assert naavik_cli(["runs", "sync", "--hosts-file", str(hosts), "--registry", str(local)]) != 0
+    assert "has no default_host; pass --host or --all-hosts" in capsys.readouterr().err
+
+
 # summarize --runs ---------------------------------------------------------------------------------
 
 

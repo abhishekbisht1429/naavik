@@ -2,14 +2,16 @@
 
 [← Docs](../README.md) · [Project README](../../README.md)
 
-Every launch of the engine leaves a record: a direct run from your entry
-point or your IDE, a mission's experiment on any host, a resume, an extension, and a
-launch that fails while its config is being built. The record says what ran
+Every launch of the engine leaves a record: `naavik run` and a mission's
+experiment on any host, a resume, an extension, a run of the engine from a
+program of your own or your IDE, and a launch that fails while its config is
+being built. The record says what ran
 (the config, the code, the environment), where (the host, every rank's
 device), and how it ended. `naavik runs` lists, shows, and compares them.
 
 ```text
-$ python -m my_project.train --config configs/vit.yaml
+$ naavik run configs/vit.yaml
+...
 run 01M7KMT4A2T9AK0R89QKNFF9NG (naavik runs show 01M7KMT4A2T9AK0R89QKNFF9NG)
 ...
 ```
@@ -143,12 +145,13 @@ runs on; copy those runs here with:
 
 ```bash
 naavik runs sync --host gpubox     # repeatable
+naavik runs sync --all-hosts       # every host of the hosts file
+naavik runs sync                   # the hosts file's default_host
 ```
 
-Pass each host explicitly. Currently `runs sync` reads legacy `default` and
-`targets`/`profiles` keys for default and `--all-hosts` selection; it does
-not use `default_host` or `hosts` for those selections. With a current hosts
-file, omitting `--host` fails and `--all-hosts` can silently select no hosts.
+The hosts come from [the hosts file](../reference/hosts-file.md)
+(`--hosts-file` for another one); a file written with the earlier names is
+read too.
 
 `sync` copies over SSH (rsync) what is new or changed (a run's events keep
 arriving until it ends) and deletes nothing. A host on this machine
