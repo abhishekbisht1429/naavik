@@ -1,4 +1,8 @@
 import collections
+import contextlib
+import signal
+import threading
+import time
 from collections.abc import Mapping, Sequence
 from copy import deepcopy
 
@@ -328,6 +332,28 @@ class TrainingEngine:
         ]
         join_or_terminate(selected, timeout)
 
+    def _stop_survivors(self, grace: float = 2.0) -> None:
+        """Terminate every started worker still alive, then kill what is left
+        after `grace` seconds; further interrupts wait until it is done."""
+        survivors = [wrapper for wrapper in self._session_process_wrappers
+                     if wrapper.started and wrapper.process.is_alive()]
+        if not survivors:
+            return
+        with _interrupts_deferred():
+            print(f"Interrupted while stopping: terminating {len(survivors)} worker "
+                  "process(es) now.", flush=True)
+            for wrapper in survivors:
+                wrapper.process.terminate()
+            deadline = time.monotonic() + grace
+            for wrapper in survivors:
+                wrapper.process.join(timeout=max(0.0, deadline - time.monotonic()))
+            for wrapper in survivors:
+                if wrapper.process.is_alive():
+                    print(f"Killing rank={wrapper.rank}, pid={wrapper.process.pid}.",
+                          flush=True)
+                    wrapper.process.kill()
+                    wrapper.process.join(timeout=grace)
+
     def _close_resources(self) -> None:
         for wrapper in self._session_process_wrappers:
             process = wrapper.process
@@ -451,6 +477,9 @@ class TrainingEngine:
                 interrupted = bool(self._monitor_processes())
         except BaseException as raised:
             error = raised
+            # A second Ctrl-C (or any error) while the workers were being
+            # stopped: stop them now, never leave them running.
+            self._stop_survivors()
             raise
         finally:
             self._close_resources()
@@ -458,6 +487,21 @@ class TrainingEngine:
                 "interrupted" if interrupted and error is None else _run_status(error),
                 _describe(error), workers=self._session_process_wrappers)
         return False
+
+
+@contextlib.contextmanager
+def _interrupts_deferred():
+    """Ignore SIGINT while the block runs (main thread only): stopping the
+    workers must not itself be interrupted, and an interrupt then has
+    nothing left to stop."""
+    if threading.current_thread() is not threading.main_thread():
+        yield
+        return
+    previous = signal.signal(signal.SIGINT, signal.SIG_IGN)
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGINT, previous)
 
 
 def _run_status(error: BaseException | None) -> str:
