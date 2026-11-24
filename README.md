@@ -207,7 +207,7 @@ Create `my_project/config.yaml`:
 ```yaml
 session_config:
   rng_seed: 42
-  sessions_dir: ./runs
+  sessions_dir: ./sessions
   max_iterations: 5
   components_package: my_project.components
   device: cpu
@@ -252,7 +252,7 @@ naavik run my_project/config.yaml
 `naavik run` runs the session with the engine, here: one run, recorded in
 the run registry (`naavik runs list`). It prints the session directory, so
 an interrupted session continues with
-`naavik run --resume-session ./runs/session_<time>`.
+`naavik run --resume-session ./sessions/session_<time>`.
 
 ### 5. Launch it as a mission (optional)
 

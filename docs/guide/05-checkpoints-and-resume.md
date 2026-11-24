@@ -141,7 +141,7 @@ was.
 A restore rebuilds each component from its recorded constructor arguments and
 hands it the instances it was wired to, then gives it its saved state. Every
 checkpointed component is checked before any is built -- still registered,
-still the same kind, every prerequisite present, its state version one this
+still the same kind, every dependency present, its state version one this
 code can take -- and every problem found is reported in one error, not only
 the first. When several components' `set_state` fail, those are reported
 together too.
@@ -183,7 +183,7 @@ session = Checkpointer.load_checkpoint(path, on_mismatch={"encoder"})
 arguments -- brought forward by `migrate_init_args` when the constructor
 changed -- and a collection of instance names does that for those only; both
 warn with the names and reasons. Nothing that cannot be *built* -- an
-unregistered component, a missing prerequisite, constructor arguments
+unregistered component, a missing dependency, constructor arguments
 `migrate_init_args` cannot bring forward -- is ever skipped.
 
 ## What a checkpoint does not record
@@ -208,14 +208,14 @@ A resume continues a session, unchanged, as a new run. Name the session
 name the checkpoint:
 
 ```bash
-naavik run --resume-session ./runs/session_20261124_012629
-naavik run --resume-session-from-checkpoint ./runs/session_20261124_012629/checkpoints/<checkpoint-name>
+naavik run --resume-session ./sessions/session_20261124_012629
+naavik run --resume-session-from-checkpoint ./sessions/session_20261124_012629/checkpoints/<checkpoint-name>
 ```
 
 The log says which checkpoint it took, before anything is built:
 
 ```text
-resuming session ./runs/session_20261124_012629 from its latest checkpoint: ./runs/session_20261124_012629/checkpoints/20261124_012635_454345652 (iteration 20000)
+resuming session ./sessions/session_20261124_012629 from its latest checkpoint: ./sessions/session_20261124_012629/checkpoints/20261124_012635_454345652 (iteration 20000)
 ```
 
 `naavik run` prints the session directory when it starts and when it ends,
@@ -238,7 +238,7 @@ Nothing but the launch topology may change in a resume, which is how a
 session continues on a different number of GPUs:
 
 ```bash
-naavik run --resume-session ./runs/session_20261124_012629 --override ddp.world_size=4
+naavik run --resume-session ./sessions/session_20261124_012629 --override ddp.world_size=4
 ```
 
 The only overrides `--resume-session` accepts are the launch topology —
@@ -294,7 +294,7 @@ mission, so `naavik status` does not show it (the
 
 ```bash
 python -m my_project.train \
-  --extend-session ./runs/session_20261124_012629 \
+  --extend-session ./sessions/session_20261124_012629 \
   --override \
   session_config.max_iterations=5000 \
   optimizer.optimizer.kwargs.lr=0.0001 \
@@ -340,7 +340,7 @@ learning rate, set it to `null`:
 
 ```bash
 python -m my_project.train \
-  --extend-session ./runs/session_20261124_012629 \
+  --extend-session ./sessions/session_20261124_012629 \
   --override \
   session_config.max_iterations=5000 \
   optimizer.lr_scheduler=null

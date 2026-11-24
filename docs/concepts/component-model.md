@@ -3,7 +3,7 @@
 [← Docs](../README.md) · [Project README](../../README.md)
 
 What the framework guarantees about a component while it is being built: that
-its prerequisites already exist, that it may keep hold of them, and what it may
+its dependencies already exist, that it may keep hold of them, and what it may
 not do. This page also covers declaring a configuration schema, reading a
 missing-dependency error, and opting a component into `--extend-session`.
 
@@ -52,7 +52,7 @@ the class, so a consumer rewired between two instances of one component is
 caught when its state is restored rather than silently loading the other
 instance's weights.
 
-## Taking a prerequisite
+## Taking a dependency
 
 A component declares what it needs with `@requires_resource(name)` and takes it
 with `self.get_dependency(name)`. That is the only way, and it works at every
@@ -75,7 +75,7 @@ class DataManager(Resource):
         ...
 ```
 
-Components are constructed prerequisite-first on every path -- fresh
+Components are constructed dependency-first on every path -- fresh
 configuration, checkpoint restore and worker start-up -- so by the time a
 constructor runs, everything it declared already exists. A component that
 needs to *hold* another component takes it there, so that a reference captured
@@ -96,16 +96,16 @@ What `get_dependency` hands out is recorded, so the framework knows the two
 components are wired together wherever the reference ends up -- an attribute, a
 container module, or nowhere at all.
 
-Prerequisites belong to the session, not to the component. The one thing the
+Dependencies belong to the session, not to the component. The one thing the
 framework promises about a component pickled or copied on its own (`pickle`,
 `copy.copy`, `copy.deepcopy`) is that **what the session injected never
-travels**: the injected prerequisites and the record of those it asked for
+travels**: the injected dependencies and the record of those it asked for
 stay behind, whatever pickle protocol the component uses, and it is given the
 new session's when it is registered there (the record starts over).
 Everything else follows the ordinary Python / PyTorch rules for the
 component's class. To persist a component, use a checkpoint
 (`Checkpointer.save_checkpoint` / `load_component`), which saves `get_state()`
-and rebuilds the component with its prerequisites.
+and rebuilds the component with its dependencies.
 
 What the ordinary rules mean here:
 
@@ -118,20 +118,20 @@ What the ordinary rules mean here:
   0.5.0 or earlier still loads.
 - Any other stateful component is rebuilt: its constructor runs again,
   outside any session, then `set_state(get_state())`. So one whose
-  constructor consulted a prerequisite -- `get_dependency`, or only
+  constructor consulted a dependency -- `get_dependency`, or only
   `has_dependency` -- cannot be rebuilt, and pickling or copying it on its
   own (`copy.copy` and `copy.deepcopy` rebuild it too) raises, naming the
-  prerequisite. Consult prerequisites in `setup` instead. A
+  dependency. Consult dependencies in `setup` instead. A
   `__new__` that requires arguments cannot be rebuilt from a pickle.
-- A prerequisite that a component keeps for itself (in an attribute, rather
+- A dependency that a component keeps for itself (in an attribute, rather
   than taking it from `get_dependency` when needed) is ordinary state: it is
   pickled or copied along with the component, like any other attribute.
 
-Lookup is restricted to declared prerequisites. Asking for a resource the
+Lookup is restricted to declared dependencies. Asking for a resource the
 class did not declare raises `ComponentDependencyError` naming the
 `@requires_resource` to add, and `self.has_dependency(name)` reports whether a
 name was declared. The declaration is not a formality: it is the edge in the
-graph that orders setup before the consumer and keeps the prerequisite on
+graph that orders setup before the consumer and keeps the dependency on
 every rank that builds the consumer.
 
 Construction is deliberately weaker than `setup`:
@@ -146,7 +146,7 @@ Configuration is the usual way for a component to join a session, and
 `session.activate_component(name, config)` is the programmatic one; both
 resolve bindings and activate the dependency closure. A component you
 construct yourself and hand to `session.register_resource()` /
-`register_hook()` / `add_step()` is given its prerequisites when it is
+`register_hook()` / `add_step()` is given its dependencies when it is
 registered, so they are available from `setup` onwards. Only a component that
 calls `get_dependency` in its own `__init__` must be built by the session;
 constructing one by hand raises `ComponentDependencyError` pointing at
@@ -162,7 +162,7 @@ registering a replacement gives consumers the new instance.
 cannot know which component is asking, so it could only resolve session-wide,
 and a component wired to one instance of a component configured twice would
 be given whichever instance the session-wide binding picks. Declare the
-prerequisite and use `self.get_dependency(name)`.
+dependency and use `self.get_dependency(name)`.
 
 That is stricter than the old lookup, not a rename of it: `get_dependency`
 serves only declared names, so a step or hook that fetched something it never
@@ -239,7 +239,7 @@ distinguishes:
   declared only for another session type.
 
 ```text
-unmet prerequisite! Resource 'ddp' resolves to 'ddp', which is not registered as a Resource.
+unmet dependency! Resource 'ddp' resolves to 'ddp', which is not registered as a Resource.
   Required by: Step 'embed_batches' (EmbedBatches)
   Reason: 'ddp' is not in the shared registry or the 'analysis' registry; it is registered only for session type(s) 'training' (as Resource), so it is unavailable to 'analysis' sessions.
   Fix: Use it from a 'training' session, register a Resource for this session type with @resource('ddp', session_type='analysis'), or register it as shared with @resource('ddp').

@@ -3,7 +3,12 @@
 [← Docs](../README.md) · [Project README](../../README.md)
 
 Workflow code in this framework is written as **components**: resources, hooks,
-and steps. This page introduces the three kinds, how to give one state that
+and steps. A resource holds state the session shares (a model, a dataset);
+a step is the iteration's own work, ordered by the values it reads and
+writes; a hook runs around the steps: before or after an iteration (every
+`call_every` iterations) or at the session's start and end. Use a step for
+anything that computes the iteration's values, a hook for work around them,
+such as logging, checkpointing, or preparing each iteration. This page introduces the three kinds, how to give one state that
 survives a checkpoint, and how the framework finds your classes. It picks up
 where the quick start in the project README leaves off, and assumes you have
 run that example once.
@@ -164,7 +169,7 @@ def set_state(self, state) -> None:
 
 The framework captures each component's constructor arguments and uses them to
 reconstruct the component before calling `set_state()`. Reconstruction happens
-prerequisite-first, so a component that took hold of another one while it was
+dependency-first, so a component that took hold of another one while it was
 being built holds it again, and state is restored only after every component
 exists.
 

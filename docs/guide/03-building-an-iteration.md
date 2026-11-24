@@ -92,7 +92,7 @@ The rest is configuration:
 ```yaml
 session_config:
   rng_seed: 42
-  sessions_dir: ./runs
+  sessions_dir: ./sessions
   max_iterations: 20
   components_package: my_project.components
   device: cpu

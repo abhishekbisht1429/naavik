@@ -814,7 +814,7 @@ def test_a_bind_target_is_resolved_like_a_dependency(tmp_path):
 def test_a_bind_target_that_is_not_a_resource_is_refused(tmp_path):
     path, _ = composite_run(tmp_path)
 
-    with pytest.raises(ValueError, match="import_components.pretrained.overwritten_dependencies.block names 'logger', which cannot serve as a prerequisite"):
+    with pytest.raises(ValueError, match="import_components.pretrained.overwritten_dependencies.block names 'logger', which cannot serve as a dependency"):
         importing(tmp_path, imported_as_model(path, overwritten_dependencies={"block": "logger"}))
 
 

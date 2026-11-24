@@ -560,7 +560,7 @@ def test_conditioned_query_rejects_encoders_with_the_wrong_output_size():
                 "PooledPatchTransformer"
             )}},
             TypeError,
-            "declares prerequisites or a lifecycle the session drives",
+            "declares dependencies or a lifecycle the session drives",
         ),
         ({"x": {"module": "torch.nn.Linear"}}, TypeError, "Invalid .*inputs.x config"),
         ({"bad name": {"module": "torch.nn.Identity"}}, ValueError, "identifiers"),

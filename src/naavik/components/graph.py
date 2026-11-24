@@ -210,7 +210,7 @@ def topological_sort_components(
                         f"to '{resolved_name}', which is not registered as a "
                         "Hook."
                         if is_wrap else
-                        f"unmet prerequisite! {required_type.__name__} "
+                        f"unmet dependency! {required_type.__name__} "
                         f"'{edge.asked}' resolves to '{resolved_name}', which "
                         f"is not registered as a {required_type.__name__}."
                     ),
@@ -243,7 +243,7 @@ def topological_sort_components(
                         f"to '{resolved_name}', which is not configured in "
                         "this session."
                         if is_wrap else
-                        f"unmet prerequisite! {required_type.__name__} "
+                        f"unmet dependency! {required_type.__name__} "
                         f"'{edge.asked}' resolves to '{resolved_name}', which "
                         "is not configured in this session."
                     ),

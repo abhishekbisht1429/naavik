@@ -18,8 +18,8 @@ in `__init__`, like any other PyTorch module, and ask for the resources they
 declared with `self.get_dependency(name)` once `super().__init__()` has run.
 The reference is theirs to place: an attribute, a container module, or nowhere
 at all if the constructor only needed to read a width off it. Components are
-constructed [prerequisite-first on every
-path](component-model.md#taking-a-prerequisite), so a restored model is usable
+constructed [dependency-first on every
+path](component-model.md#taking-a-dependency), so a restored model is usable
 without `setup()` -- which is what `trained_model` relies on.
 
 ```python
@@ -45,13 +45,13 @@ class CaptionedImageModel(ModuleResource):
 `@requires_resource` is the whole declaration: it orders construction, and a
 component may only ask for what it declared. Holding a child conditionally is
 an ordinary `if` in the constructor, and `has_dependency(name)` reports whether
-`name` is a declared prerequisite.
+`name` is a declared dependency.
 
 ## Members
 
 | Member | Purpose |
 |---|---|
-| `get_dependency(name)` | The live prerequisite, resolved for this component, in `__init__` or later; records that this component was wired to it |
+| `get_dependency(name)` | The live dependency, resolved for this component, in `__init__` or later; records that this component was wired to it |
 | `linked_components` | The asked name -> instance name map; recorded in the checkpoint and checked on restore |
 | `captured_tensors()` | The live tensors this component checkpoints, by state key |
 | `config_schema` | Optional dataclass; parsed into `self._cfg` (see [declaring a configuration schema](component-model.md#declaring-a-configuration-schema)) |
@@ -63,11 +63,11 @@ an ordinary `if` in the constructor, and `has_dependency(name)` reports whether
 A child held in the module tree is a real submodule, so `model.parameters()`
 covers it and `ddp`, the optimizer and `layer_inspector` see one module tree,
 with each tensor appearing once. State is split the other way: a parent
-excludes everything reachable from a prerequisite it was handed, so each
+excludes everything reachable from a dependency it was handed, so each
 component checkpoints only the weights it created. `set_state` loads in place,
 which is what keeps a parent's references valid.
 
-Prerequisites are recognised by identity rather than by attribute, so a child
+Dependencies are recognised by identity rather than by attribute, so a child
 may sit anywhere in the tree -- under its own attribute, inside an
 `nn.Sequential`, or in a `ModuleList` -- and is still excluded correctly.
 
@@ -95,9 +95,9 @@ consumer between two instances of one component is caught as well.
 The map does three jobs: it says which tensors belong to someone else, it tells
 the ownership walk which subtrees to skip, and it is saved in the checkpoint
 under `linked`, alongside `version: 2`. `set_state` checks every saved link
-against the prerequisites this instance was *given* -- not the ones it has
+against the dependencies this instance was *given* -- not the ones it has
 asked for so far, since `set_state` runs before `setup` and a component may
-take its prerequisite there -- and refuses state captured from a differently
+take its dependency there -- and refuses state captured from a differently
 wired instance, such as state moved between instances by hand. A `version: 1` state is keyed by the attribute a child was attached
 under, which no longer exists, so only its stored names are compared, each against
 the instance names this component was given. It is not a
@@ -111,7 +111,7 @@ matches a registered name.
 A component class may also be used as an
 ordinary submodule -- constructed and owned by another component, never
 registered, its weights checkpointed inside its owner. That is allowed as long
-as the session drives nothing about it: it must declare no prerequisites with
+as the session drives nothing about it: it must declare no dependencies with
 `@requires_resource` and override none of `plain_module_api` (`get_state`,
 `set_state`, `rollback_setup`, `setup`, `teardown`). One that does is rejected
 with an explanation, because the session never calls those for a module it

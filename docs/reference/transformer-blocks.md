@@ -75,7 +75,7 @@ conditioned_pooling_query:
 `module` is a dotted path to any `nn.Module` subclass, including your own and
 including a block component the session does not need to drive -- a component
 encoder takes its keys as its configuration, and its weights are checkpointed
-inside the query that owns it. A component that declares prerequisites or a
+inside the query that owns it. A component that declares dependencies or a
 lifecycle is rejected, since neither would run here; bind that one to a role
 instead. `reduce` wraps the module in `TokenReduction`,
 which turns `(B, N, D)` tokens into one `(B, D)` vector -- that is how a patch

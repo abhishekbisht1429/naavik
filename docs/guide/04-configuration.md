@@ -19,7 +19,7 @@ components, and optionally `includes`, `role_bindings`, `session_type`, and
 ```yaml
 session_config:
   rng_seed: 42
-  sessions_dir: ./runs
+  sessions_dir: ./sessions
   max_iterations: 1000
   components_package: my_project.components
   device: cuda:0
@@ -60,7 +60,7 @@ stores both.
 ```yaml
 session_config:
   rng_seed: 42
-  sessions_dir: ./runs
+  sessions_dir: ./sessions
   epochs: 90
   components_package: my_project.components
 ```
@@ -160,8 +160,8 @@ project.
 An empty value (`classifier:`) configures a component with no settings, the
 same as `classifier: {}`, at the top level or in a group.
 
-`component_bindings` and `aliases` are deprecated names for `role_bindings`;
-see [role bindings](02-wiring-components.md#role-bindings).
+`role_bindings` had earlier names (`component_bindings`, `aliases`) that are
+still read; see [Earlier names](../reference/earlier-names.md#components-and-session-files).
 
 A file is one session. The earlier form, a `sessions` list holding one
 entry, is still read, with a warning to move the entry's keys to the top of
@@ -180,7 +180,7 @@ of) a session, such as a model, an optimizer recipe, or data settings.
 includes: [common/vit_s16.yaml, common/dino_optimizer.yaml]
 session_config:
   rng_seed: 0
-  sessions_dir: ./runs/dino
+  sessions_dir: ./sessions/dino
   max_iterations: 1000
   components_package: my_project.components
 optimizer:

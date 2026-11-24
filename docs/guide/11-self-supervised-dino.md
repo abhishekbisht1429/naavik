@@ -71,7 +71,7 @@ with a package of your own, import
 ```yaml
 session_config:
   rng_seed: 0
-  sessions_dir: ./runs/dino     # a mission gives each experiment its own instead
+  sessions_dir: ./sessions/dino     # a mission gives each experiment its own instead
   max_iterations: 125100      # 100 epochs of 1251 steps at batch 1024
   device: cuda
   components_package: naavik.components.builtin.datasets
@@ -509,7 +509,7 @@ teacher temperature warms up per step rather than per epoch. See
 ```yaml
 session_config:
   rng_seed: 0
-  sessions_dir: ./runs/dino     # a mission gives each experiment its own instead
+  sessions_dir: ./sessions/dino     # a mission gives each experiment its own instead
   max_iterations: 125100
   device: cuda
   components_package: naavik.components.builtin.datasets

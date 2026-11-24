@@ -133,7 +133,7 @@ def test_undeclared_missing_dependency_still_uses_generic_message():
         topological_sort_of_components()
 
     message = str(exc_info.value)
-    assert "unmet prerequisite!" in message
+    assert "unmet dependency!" in message
     assert "not registered as a Resource" in message
     assert "Implement a" not in message
     assert "declared as" not in message

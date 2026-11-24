@@ -171,16 +171,14 @@ The engine monitors workers while leaving the context.
 | `session_context` | Session-lifetime shared dictionary |
 | `send_heartbeat(stage)` | Mark worker progress with a stage label; call periodically inside long-running components (no-op outside a spawned worker) |
 | `role_bindings` | Copy of the session's session-wide role-to-implementation bindings |
-| `component_bindings` | Deprecated name for `role_bindings` |
-| `component_aliases` | Deprecated name for `role_bindings` |
 | `resolve_component_name(name)` | Resolve an expected or actual component name to its registered name |
 | `get_all_resources()` | Return configured resources |
 | `get_all_hooks()` | Return configured hooks |
 | `get_all_steps()` | Return configured steps |
-| `activate_component(name, config)` | Activate a registered component and its prerequisites; only before setup, and the way to add one that declares dependencies |
-| `register_resource(resource)` | Add a registered resource instance built by hand; its declared prerequisites are given to it on registration, from `setup` onwards |
-| `register_hook(hook)` | Add a registered hook instance built by hand; its declared prerequisites are given to it on registration, from `setup` onwards |
-| `add_step(step)` | Add a registered step instance built by hand; its declared prerequisites are given to it on registration, from `setup` onwards |
+| `activate_component(name, config)` | Activate a registered component and its dependencies; only before setup, and the way to add one that declares dependencies |
+| `register_resource(resource)` | Add a registered resource instance built by hand; its declared dependencies are given to it on registration, from `setup` onwards |
+| `register_hook(hook)` | Add a registered hook instance built by hand; its declared dependencies are given to it on registration, from `setup` onwards |
+| `add_step(step)` | Add a registered step instance built by hand; its declared dependencies are given to it on registration, from `setup` onwards |
 | `unregister_resource(name)` | Remove a resource from the session |
 | `unregister_hook(name)` | Remove a hook from the session |
 | `remove_step(name)` | Remove a step from the session |
@@ -193,9 +191,9 @@ The engine monitors workers while leaving the context.
 
 | Member | Purpose |
 |---|---|
-| `Component.get_dependency(name)` | Return a declared prerequisite, resolved for this component's own wiring and recorded; valid at any point in the component's life |
-| `Component.has_dependency(name)` | Whether `name` is a declared prerequisite of this component |
-| `Component.linked_components` | The asked name -> instance name map of prerequisites handed to this component |
+| `Component.get_dependency(name)` | Return a declared dependency, resolved for this component's own wiring and recorded; valid at any point in the component's life |
+| `Component.has_dependency(name)` | Whether `name` is a declared dependency of this component |
+| `Component.linked_components` | The asked name -> instance name map of dependencies handed to this component |
 | `Component.name` / `Component.id` | This instance's name (`logger#validation`) and its category-qualified id (`Hook.logger#validation`) |
 | `Component.implementation_name` | The name this component's class was registered under, shared by every instance of it |
 | `Component.instance_suffix` | The part after `#`, or `None` for the only instance of a component; use it to keep two instances' output apart |
@@ -213,18 +211,18 @@ The engine monitors workers while leaving the context.
 | `Component.state_version` / `migrate_state(from_version, state)` / `migrate_init_args(from_version, init_args)` | Version what a component checkpoints, and bring an older checkpoint forward |
 | `Stateful.rename_instances(state, names)` | Rename the component instances a (migrated) state names, when [imported](import-components.md#instance-names-inside-a-saved-state) under other names; `ModuleResource` renames `linked` |
 
-`get_dependency` is the one way a component takes a prerequisite, whether in
+`get_dependency` is the one way a component takes a dependency, whether in
 `__init__` or at run time; see
-[the component model](../concepts/component-model.md#taking-a-prerequisite).
+[the component model](../concepts/component-model.md#taking-a-dependency).
 
 **Removed:** `Session.get_resource` and `Session.has_resource` -- a component
-takes its prerequisites with `get_dependency` (see
+takes its dependencies with `get_dependency` (see
 [the component model](../concepts/component-model.md#there-is-no-session-wide-lookup)).
 `ComponentView`, `constructing_component` and `active_component_view` are no
-longer exported from `naavik.components`. Prerequisites are handed to a component
+longer exported from `naavik.components`. Dependencies are handed to a component
 directly rather than through a bound view, so there is nothing left for them to
 do. A test that built a component against a stub view can construct it and
-then register it into a session, which gives it its prerequisites.
+then register it into a session, which gives it its dependencies.
 
 ## `ModuleResource`
 
@@ -239,9 +237,9 @@ documented in [`ModuleResource`](../concepts/module-resource.md#members).
 | `@resource(name, overwrite=False, *, session_type=None)` | Register a shared Resource, or scope it to one session type; `overwrite=True` replaces a Resource already registered under that name in that scope (one of another kind is still refused) |
 | `@hook(name, overwrite=False, *, session_type=None)` | Register a shared Hook, or scope it to one session type |
 | `@step(name, overwrite=False, *, session_type=None)` | Register a shared Step, or scope it to one session type |
-| `@requires_resource(name, *, local=False, description=None)` | Declare a resource prerequisite; `local=True` makes it a [local dependency](../guide/02-wiring-components.md#global-roles-and-local-dependencies), wired only in the component's own `dependency_bindings`; `description` is shown when nothing implements it |
-| `@requires_hook(name, *, local=False, description=None)` | Declare a Hook prerequisite for a Step |
-| `@requires_step(name, *, local=False, description=None)` | Declare a Step prerequisite for a Step |
+| `@requires_resource(name, *, local=False, description=None)` | Declare a resource dependency; `local=True` makes it a [local dependency](../guide/02-wiring-components.md#global-roles-and-local-dependencies), wired only in the component's own `dependency_bindings`; `description` is shown when nothing implements it |
+| `@requires_hook(name, *, local=False, description=None)` | Declare a Hook dependency for a Step |
+| `@requires_step(name, *, local=False, description=None)` | Declare a Step dependency for a Step |
 | `dependency_declaration(component, name, category=Resource)` | The `DependencyDeclaration` (`name`, `category`, `local`, `description`) a component's decorator recorded; a name it did not declare that way reads as a global dependency with no description |
 | `local_dependencies(component)` | The names a component declares local |
 | `role(name, category, *, description=None, session_type=None, overwrite=False, deprecated=None)` | Declare an abstract role; `deprecated` keeps it only for compatibility, and reading it from `role_registry()` warns with that text |

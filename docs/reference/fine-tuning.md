@@ -11,8 +11,9 @@ it:
   pretrained model, say -- and calls one of its methods.
 - **`backbone_with_head`** composes its `backbone` and `head`, freezes part
   of the backbone, and computes `head(backbone(x))`. Bind it as `model` and
-  `ddp`, `forward` and `optimizer` use it like any other model. It was called
-  `fine_tuned_model`; see [the former name](#fine_tuned_model-the-former-name).
+  `ddp`, `forward` and `optimizer` use it like any other model. Its earlier
+  name, `fine_tuned_model`, is still read; see
+  [Earlier names](earlier-names.md#components-and-session-files).
 
 The head is always yours: a `ModuleResource` wired as the `head`. The
 backbone is usually the imported model, or a `module_part` of it, but any
@@ -240,14 +241,3 @@ backbone_with_head:
   dependency_bindings: {backbone: timm_backbone, head: cifar_head}
   frozen: ["net.patch_embed.*", "net.blocks.[0-5].*"]
 ```
-
-## `fine_tuned_model`, the former name
-
-`fine_tuned_model` is `backbone_with_head` under its former name, kept so
-configurations and checkpoints that use it still build and restore: same
-roles, same keys (without `pool`), same parameter names and saved state.
-Building it raises a `DeprecationWarning`. A run saved as `fine_tuned_model`
-resumes under that name -- the name is part of every instance's checkpoint
-entry -- so moving an existing run to `backbone_with_head` means starting a
-new one (or [importing](import-components.md) its parts into one). New
-configurations use `backbone_with_head`.

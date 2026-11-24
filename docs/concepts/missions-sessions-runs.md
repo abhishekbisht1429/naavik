@@ -10,13 +10,13 @@ it. The guides use these words only in these senses.
 
 ```text
 mission                one `naavik launch`, on one host
- └─ job                experiments with the same resources: one scheduler job
+ └─ job                experiments that share an allocation (GPUs, time): one scheduler job
      └─ recipe         makes experiments: overrides, vary, config files, from_mission
          └─ experiment one session file with its values: <job>/<recipe>/<NNN>
-             └─ attempt   1, then 2, 3, ... with each `naavik resume`
-                 └─ run      the session in progress: a run id and a run record
-                     └─ session   training or analysis, in its session directory
-                          └─ checkpoints
+             └─ session    training or analysis, in its session directory
+                 ├─ runs   one per start or continuation: a run id and a run record
+                 │         (in a mission, attempt 1, then 2, 3, ... with each `naavik resume`)
+                 └─ checkpoints
 ```
 
 **A session and its runs are a program and its processes.** The session is
@@ -45,10 +45,13 @@ its logs and TensorBoard events, and its checkpoints. Its **session type**
 (`training`, `analysis`) decides which components it may use.
 
 **Component.** A piece of a session: a **resource** (state shared by the
-session: a model, a dataset, the optimizer), a **step** (work done every
-iteration), or a **hook** (work at fixed points of the lifecycle). Components
-are registered from your **components package** and wired by **role**
-(`model`, `dataset`, ...). See
+session: a model, a dataset, the optimizer), a **step** (the iteration's
+work, run in the order of the values the steps read and write), or a
+**hook** (work around the steps: before or after an iteration, every
+`call_every` iterations, or at the session's start and end). Components
+are registered from your **components package**. A component asks for others
+as **dependencies**; a dependency the whole session shares, such as `model` or
+`dataset`, is a **role**. See
 [Resources, hooks, and steps](../guide/01-resources-hooks-steps.md).
 
 **Checkpoint.** A session's saved state at one iteration, in its session
@@ -76,7 +79,7 @@ checkpoint as attempt 2, 3, .... Each attempt is one run, of the same
 session.
 
 **Recipe** and **job.** A mission file groups experiments into **jobs**:
-experiments that need the same resources (GPUs, time) and run as one
+experiments that need the same allocation (GPUs, time) and run as one
 scheduler job. A job's **recipes** say which experiments to make: values to
 set (`overrides`), values to sweep (`vary`: one experiment per combination),
 other session files (`config_file`, `config_files`), or another mission's
@@ -124,18 +127,18 @@ starts the session as one run:
 | Term | Here |
 |---|---|
 | run | `01M85JJPEMVQKQ75WZD31G4K78` |
-| session directory | `./runs/session_20261124_012629/` |
-| checkpoints | `./runs/session_20261124_012629/checkpoints/<time>/` |
+| session directory | `./sessions/session_20261124_012629/` |
+| checkpoints | `./sessions/session_20261124_012629/checkpoints/<time>/` |
 
 Stopped with Ctrl-C, the session is still there, with its checkpoints. Then
 
 ```bash
-naavik run --resume-session ./runs/session_20261124_012629
+naavik run --resume-session ./sessions/session_20261124_012629
 ```
 
 is a new run, `01M85JK36DR7B0DZ54E4M4G397`, of the same session: the log
-says `resuming session ./runs/session_20261124_012629 from its latest
-checkpoint: ./runs/session_20261124_012629/checkpoints/20261124_012635_454345652
+says `resuming session ./sessions/session_20261124_012629 from its latest
+checkpoint: ./sessions/session_20261124_012629/checkpoints/20261124_012635_454345652
 (iteration 20000)`, and its record says it continues
 `01M85JJPEMVQKQ75WZD31G4K78`.
 

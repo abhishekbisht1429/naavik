@@ -980,7 +980,7 @@ class SessionComponents:
                 )
                 raise RuntimeError(with_explanation(described, reason))
             raise RuntimeError(with_explanation(
-                f"unmet prerequisite! {expected_type.__name__} '{name}' "
+                f"unmet dependency! {expected_type.__name__} '{name}' "
                 f"resolves to '{resolved_name}', which is not registered as a "
                 f"{expected_type.__name__}.",
                 explanation(),
@@ -990,7 +990,7 @@ class SessionComponents:
                 expected_type,
         ):
             raise RuntimeError(with_explanation(
-                f"unmet prerequisite! {expected_type.__name__} '{name}' "
+                f"unmet dependency! {expected_type.__name__} '{name}' "
                 f"resolves to '{resolved_name}', which is not registered as a "
                 f"{expected_type.__name__}.",
                 explanation(),
@@ -1422,7 +1422,7 @@ class SessionComponents:
                     raise ValueError(
                         f"{planned.spec.key}.overwritten_dependencies.{key} "
                         f"names '{target}', which cannot serve as a "
-                        f"prerequisite: {error}"
+                        f"dependency: {error}"
                     ) from None
 
     @staticmethod

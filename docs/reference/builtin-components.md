@@ -15,8 +15,8 @@ which registers all built-ins. Their classes are also importable from
 
 | Name | Kind | Purpose and dependencies |
 |---|---|---|
-| `logger` | Hook | Prints `Iteration <current>/<maximum>`, followed by ` \| lr: <lr>` (one value per param group) when `optimizer` is active, ` \| grad_norm: <norm>` once one has been measured, and ` \| loss: <loss>` once `backward` has run; enabled by default. Printed before each iteration, so the gradient norm and loss are the previous iteration's |
-| `checkpointer` | Hook | Saves complete session checkpoints; enabled by default |
+| `logger` | Lifecycle hook | Prints `Iteration <current>/<maximum>`, followed by ` \| lr: <lr>` (one value per param group) when `optimizer` is active, ` \| grad_norm: <norm>` once one has been measured, and ` \| loss: <loss>` once `backward` has run; enabled by default. Printed before each iteration, so the gradient norm and loss are the previous iteration's |
+| `checkpointer` | Lifecycle hook | Saves complete session checkpoints; enabled by default |
 | `ddp` | Resource | Initializes distributed execution and wraps the required `model` resource |
 | `data_manager` | Stateful resource | Creates a resumable distributed `DataLoader`; requires `dataset` and `ddp` (analysis sessions use a [separate implementation](#analysis-data_manager)) |
 | `optimizer` | Stateful resource | Owns the PyTorch optimizer, its learning-rate schedule and the fp16 gradient scaler; requires `ddp` and activates the rest of the [optimization chain](optimization.md) |
@@ -30,7 +30,6 @@ which registers all built-ins. Their classes are also importable from
 | `optimizer_step` | Step | Steps the optimizer and its schedule on iterations that end an accumulation group; [chain](optimization.md#the-chain) |
 | `module_part` | Resource | A part of the module resource bound to `source` (e.g. an imported model), and one method of it, optionally partly frozen (`frozen`, `frozen_eval`); owns no weights; [fine-tuning](fine-tuning.md#module_part) |
 | `backbone_with_head` | Resource | `head(pool(backbone(x)))` with part of the backbone frozen; requires `backbone` and `head`; [fine-tuning](fine-tuning.md#backbone_with_head) |
-| `fine_tuned_model` | Resource | Deprecated former name of `backbone_with_head`, kept for old configurations and checkpoints; [fine-tuning](fine-tuning.md#fine_tuned_model-the-former-name) |
 | `projection_head` | Resource | MLP head on pooled features, optionally ending in DINO's weight-normalized prototypes; [self-supervised](self-supervised.md#projection_head) |
 | `multi_view` | Resource | Runs a list of view batches through the network bound to `network`, one call per resolution; [self-supervised](self-supervised.md#multi_view) |
 | `ema_teacher` | Resource | A student (trained through DDP) and a teacher kept as its moving average; requires `student` and `teacher`; [self-supervised](self-supervised.md#ema_teacher) |
@@ -38,7 +37,7 @@ which registers all built-ins. Their classes are also importable from
 | `dino_distillation_loss` | Stateful step | DINO's loss over student and teacher views, with its centre; [self-supervised](self-supervised.md#dino_distillation_loss) |
 | `timer` | Lifecycle hook | Reports iteration and elapsed durations |
 | `tensorboard` | Resource | Exposes a `SummaryWriter`; starts a TensorBoard server unless `serve: false` |
-| `tensorboard_summaries` | Hook | Writes chosen iteration values (and optimizer values) to the `tensorboard` writer; rank 0 only; see [`tensorboard_summaries`](#tensorboard_summaries) |
+| `tensorboard_summaries` | Lifecycle hook | Writes chosen iteration values (and optimizer values) to the `tensorboard` writer; rank 0 only; see [`tensorboard_summaries`](#tensorboard_summaries) |
 | `model_diagram` | Session hook | Draws model data flow and component wiring into the session directory; rank 0; [below](#model_diagram) |
 | `profiler` | Lifecycle hook | Records `torch.profiler` traces and operator summaries of chosen iterations, on chosen ranks; `activities` is required; [Profiler](profiler.md); also in analysis sessions |
 
@@ -57,7 +56,7 @@ The training defaults are equivalent to:
 ```yaml
 logger:
   log_every: 10
-  # log_file: ./runs/train.log  # optional; stdout when omitted. Its directory
+  # log_file: ./logs/train.log  # optional; stdout when omitted. Its directory
   #   is created; a resumed or extended run appends to it.
 
 checkpointer:
@@ -103,7 +102,7 @@ timer:
 tensorboard:
   host: "127.0.0.1"
   port: 6006
-  logdir: ./runs/tensorboard  # optional TensorBoard server log directory
+  logdir: ./logs/tensorboard  # optional TensorBoard server log directory
   # serve: false              # write events only; start no server (then omit host/port/logdir)
 ```
 
@@ -205,7 +204,7 @@ Add the built-in `checkpointer` hook to YAML:
 ```yaml
 checkpointer:
   checkpoint_every: 100
-  checkpoints_dir: ./runs/checkpoints  # optional
+  checkpoints_dir: ./checkpoints  # optional
   checkpoint_first: false              # optional; defaults to false
 ```
 
@@ -380,7 +379,7 @@ seen.
 | Name | Kind | Purpose |
 |---|---|---|
 | `trained_model` | Resource | Loads the `model` role from the source training checkpoint; enabled by default |
-| `logger` | Hook | Prints `Analysis iteration <current>/<maximum>`; enabled by default |
+| `logger` | Lifecycle hook | Prints `Analysis iteration <current>/<maximum>`; enabled by default |
 | `layer_inspector` | Resource | Captures forward-pass input/output of selected `trained_model` layers via forward hooks; requires `trained_model`; not enabled by default |
 | `data_manager` | Resource | Iterates the `dataset` role once, in order, with a plain `DataLoader`; requires `dataset` (no `ddp`); not enabled by default |
 | `load_batch` | Step | Takes the next batch from the analysis `data_manager` and names its parts; [generic step](generic-steps.md#load_batch) |
@@ -389,7 +388,7 @@ seen.
 | `profiler` | Lifecycle hook | Shared with training; [Profiler](profiler.md) |
 
 Analysis also provides `model_diagram`, `module_part`, `backbone_with_head`,
-the deprecated `fine_tuned_model`, `multi_view`, `ema_teacher`,
+`multi_view`, `ema_teacher`,
 `projection_head`, and the [transformer resources](transformer-blocks.md).
 To use `model_diagram` in analysis, bind its `model` dependency to a suitable
 `nn.Module` resource using `dependency_bindings`; the training `model` role
@@ -402,7 +401,7 @@ default, so an unbound analysis session must provide:
 
 ```yaml
 trained_model:
-  model_checkpoint_path: ./runs/session_.../checkpoints/<checkpoint-name>
+  model_checkpoint_path: ./sessions/session_.../checkpoints/<checkpoint-name>
 ```
 
 The path must reference an existing, trusted framework `TrainingSession`

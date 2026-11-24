@@ -3,10 +3,10 @@
 The launcher (`naavik`) turns one session config into a **mission**: a set
 of experiments, launched on a **host**: this machine, a machine you reach
 over SSH, or a Slurm cluster. A mission file groups its experiments into
-**jobs** (experiments that need the same resources run as one scheduler job:
+**jobs** (experiments that need the same allocation, GPUs and time, run as one scheduler job:
 one runner of naavik's builtin scheduler, or a Slurm job array); a job's **recipes** say which
-experiments to make; each **experiment** is a single-node run of the engine
-(with DDP inside the node if configured). Everything is decided on your
+experiments to make; each **experiment** is one session, run by the engine
+on a single node (with DDP inside the node if configured). Everything is decided on your
 workstation; the host only checks and executes. The same mission file runs
 on every host -- pick one with `--host` -- unless a job gives
 `scheduler_options`, which tie it to that scheduler (see

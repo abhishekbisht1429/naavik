@@ -134,7 +134,7 @@ class ModuleResource(nn.Module, StatefulResource, ABC):
                             f"{self._component_name()} holds component "
                             f"'{path}' as a private submodule, but "
                             f"{type(child).__name__} is driven by the "
-                            "session: it declares prerequisites or overrides "
+                            "session: it declares dependencies or overrides "
                             f"one of {list(self.plain_module_api)}, which "
                             "would never run here. Bind it to a role, declare "
                             "it with @requires_resource, and take it from "

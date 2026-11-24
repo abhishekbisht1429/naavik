@@ -65,7 +65,7 @@ TrainingEngine
 
 Even a non-DDP run is executed in one spawned worker process. Child processes ignore `SIGINT`; the parent process handles interruption and coordinates shutdown.
 
-Components are constructed prerequisite-first, so each one can take hold of
+Components are constructed dependency-first, so each one can take hold of
 whatever it declared while it is being built. That happens on every path --
 fresh configuration, checkpoint restore and worker start-up -- which is what
 lets one component keep a live reference to another across a checkpoint or a

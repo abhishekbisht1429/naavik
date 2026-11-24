@@ -82,11 +82,8 @@ The top-level `role_bindings` holds session-wide bindings only; wiring for
 one component goes in that component's own `dependency_bindings`
 ([below](#naming-the-instance-a-component-should-use)).
 
-`component_bindings` and the older `aliases` are deprecated names for the
-top-level entry. Both are still accepted, with a `DeprecationWarning` when a
-session is built from them (a checkpoint that stored one restores without
-it), and `component_bindings` keeps its nested per-component form. Only one of
-the three may be configured.
+Earlier names of this entry (`component_bindings`, `aliases`) are still
+read; see [Earlier names](../reference/earlier-names.md#components-and-session-files).
 
 ## Configuring a component more than once
 
@@ -162,12 +159,8 @@ wiring. For that component its own wiring wins over a session-wide
 A component's `dependency_bindings` cannot be changed by
 `--extend-session`.
 
-`dependency_bindings` was called `dependencies_role_bindings`. The old name
-still works, with a `DeprecationWarning` when a session is built from it; a
-checkpoint that stored it restores without one, and an extension that writes
-the same wiring under the new name changes nothing. One entry may not use
-both. Since the key never reaches the component, no `config_schema` may
-declare a field named `dependency_bindings` (or the old name): the
+Since the key never reaches the component, no `config_schema` may
+declare a field named `dependency_bindings` (or its [earlier name](../reference/earlier-names.md#components-and-session-files)): the
 component's construction refuses it.
 
 A component that is usually only pulled in as another's dependency -- such
@@ -183,13 +176,9 @@ Such a component can be activated without an entry only because it needs no
 settings, so building it with `{}` changes nothing about how it is built. The
 entry does make it a configured root: it stays active even if nothing needs
 it any more, and it is built in the order the entries are listed
-(prerequisites first). That order matters only when a constructor draws
+(dependencies first). That order matters only when a constructor draws
 random numbers, such as one that creates layers; then listing it can change
 the seeded initial values of components built after it.
-
-The deprecated nested form of the top-level entry
-(`component_bindings: {evaluator: {data_manager: data_manager#validation}}`)
-is still accepted; wiring one component in both places is an error.
 
 The consumer must be a component the session holds: wiring for
 `evaluater`, or for a component nothing activates, would do nothing, so it is
@@ -201,11 +190,11 @@ meantime counts. `session.check_role_bindings()` runs the check earlier.
 A session restored from a checkpoint is not checked again -- including one
 saved before it was ever entered, which therefore skips the check.
 
-The wiring holds wherever the consumer takes its prerequisite with
+The wiring holds wherever the consumer takes its dependency with
 `self.get_dependency(name)` -- in its constructor, in `setup`, or while an
 iteration runs -- because the session resolves it for that consumer and hands
 it over before the consumer is constructed. See
-[taking a prerequisite](../concepts/component-model.md#taking-a-prerequisite).
+[taking a dependency](../concepts/component-model.md#taking-a-dependency).
 
 ### Components that must stay unique
 
@@ -431,7 +420,7 @@ class OptimizerStep(Step):
     ...
 ```
 
-A companion only says what must be active. It is not a prerequisite -- it is
+A companion only says what must be active. It is not a dependency -- it is
 not constructed first, not handed over by `get_dependency`, and adds no
 ordering edge -- so it may require the component that activates it, as
 `optimizer_step` requires `optimizer`, without forming a cycle. Two components

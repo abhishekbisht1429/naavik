@@ -62,6 +62,20 @@ file](hosts-file.md) and [mission files](mission-files.md).
 | experiment `config`, `matrix` | recipe `config_file`, `vary` |
 | `run_defaults {resources, max_parallel, target}` | `quick_run_defaults {per_experiment, max_parallel_experiments, host}` |
 
+## Components and session files
+
+Each is read with a `DeprecationWarning`. A checkpoint that stored one of
+the binding keys restores without one.
+
+| Earlier | Current | What still works |
+|---|---|---|
+| top-level `component_bindings`, `aliases` | `role_bindings` | read; only one of the three may be configured |
+| nested `component_bindings: {consumer: {role: target}}` | that component's own `dependency_bindings` | read; wiring one component in both places is an error |
+| `dependencies_role_bindings` (in a component's entry) | `dependency_bindings` | read; one entry may not use both; an extension that writes the same wiring under the new name changes nothing |
+| `fine_tuned_model` | `backbone_with_head` | builds and restores: same roles, same keys (without `pool`), same parameter names and saved state. A session saved as `fine_tuned_model` resumes under that name (the name is in every instance's checkpoint entry); moving it to `backbone_with_head` means a new session, or [importing](import-components.md) its parts into one |
+| `Session.component_bindings`, `Session.component_aliases` | `Session.role_bindings` | deprecated properties |
+| labelled `import_components` entries (with `resource`, `role` or `suffix`) | the keyed form | accepted; see [labelled imports](import-components.md#deprecated-labelled-imports) |
+
 ## The framework's own names
 
 The framework was called `training-framework` (imported as

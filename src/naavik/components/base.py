@@ -347,7 +347,7 @@ class Component(ABC, metaclass=ComponentMeta):
         if injected is None:
             raise ComponentDependencyError(
                 f"{self._component_name()} requested resource '{name}' but "
-                "was given no prerequisites. A component that declares "
+                "was given no dependencies. A component that declares "
                 "dependencies must be activated by the session -- through "
                 "configuration or Session.activate_component() -- rather than "
                 "constructed directly."
@@ -471,13 +471,13 @@ class Stateful(ABC):
             name = self.__dict__.get("name", type(self).__name__)
             raise TypeError(
                 f"{name} cannot be pickled or copied on its own: its "
-                f"constructor consults the prerequisites {list(asked)} "
+                f"constructor consults the dependencies {list(asked)} "
                 "(get_dependency or has_dependency in __init__), and a pickle "
                 "or copy is rebuilt by running the constructor outside any "
                 "session, where there are none. Consult them in setup instead, or save it with "
                 "Checkpointer.save_checkpoint and read it back "
                 "with Checkpointer.load_component, which rebuild it with its "
-                "prerequisites."
+                "dependencies."
             )
 
     def __setstate__(self, state: Any) -> None:

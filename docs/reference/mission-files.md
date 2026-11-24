@@ -154,7 +154,7 @@ jobs:
 
 A mapping of job name to job. Each job becomes one scheduler job (one runner
 of the [builtin scheduler](hosts-file.md#scheduler-builtin), or a [Slurm](hosts-file.md#scheduler-slurm)
-job array); all its experiments get the same resources.
+job array); all its experiments get the same allocation (`per_experiment`: GPUs, time, ...).
 
 | Key | Required | Default | Meaning |
 |---|---|---|---|

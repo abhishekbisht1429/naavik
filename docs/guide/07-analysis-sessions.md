@@ -66,7 +66,7 @@ session_config:
   show_execution_graph: true
 
 trained_model:
-  model_checkpoint_path: ./runs/session_.../checkpoints/<checkpoint-name>
+  model_checkpoint_path: ./sessions/session_.../checkpoints/<checkpoint-name>
 
 report:
   output_path: ./analysis-runs/report.json

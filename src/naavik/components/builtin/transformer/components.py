@@ -681,7 +681,7 @@ class ConditionedPoolingQuery(ModuleResource):
             # be bound to a role instead.
             raise TypeError(
                 f"{context}.module cannot be {module_class.__name__}: it "
-                "declares prerequisites or a lifecycle the session drives, "
+                "declares dependencies or a lifecycle the session drives, "
                 "which would never run for an encoder owned here. Bind it to "
                 "a role, or use a plain nn.Module."
             )

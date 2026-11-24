@@ -49,7 +49,7 @@ load_batch -> forward#student -> forward#teacher -> dino_distillation_loss | com
 
 The teacher is configured, not copied: the same blocks again under another
 suffix (`#teacher`), wired as `ema_teacher`'s `teacher`. A component that declares
-prerequisites cannot be copied privately, because every tensor is saved by
+dependencies cannot be copied privately, because every tensor is saved by
 the component that created it ([`ModuleResource`](../concepts/module-resource.md)).
 YAML anchors keep the two configurations from drifting apart, and
 `ema_teacher` refuses a teacher whose parameter names or shapes differ from

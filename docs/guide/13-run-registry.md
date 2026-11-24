@@ -69,10 +69,10 @@ code     9e041015717d2f0d331d67f57359eff86b0e4248 | /home/me/my-project
 env      python 3.13.14, torch 2.13.0+cu130, CUDA 13.0, packages 86a9ba0db444
 framework (no installed version) | /home/me/naavik/src/naavik | git 9e04101571 (dirty)
 rank 0   cpu | gloo world 1 | CUDA_VISIBLE_DEVICES=2
-session  0: training | runs/session_20261117_021910 | config c45d78bab46b (~/.local/share/naavik/runs/configs/c45d78...yaml)
+session  0: training | sessions/session_20261117_021910 | config c45d78bab46b (~/.local/share/naavik/runs/configs/c45d78...yaml)
            from configs/lr0.2.yaml
-checkpoint iteration 2: runs/session_20261117_021910/checkpoints/20261117_021912_234657749
-checkpoint iteration 4: runs/session_20261117_021910/checkpoints/20261117_021912_256008841
+checkpoint iteration 2: sessions/session_20261117_021910/checkpoints/20261117_021912_234657749
+checkpoint iteration 4: sessions/session_20261117_021910/checkpoints/20261117_021912_256008841
 finished 2026-11-17T02:19:13.025363+00:00 | ok | last iteration [4]
 ```
 

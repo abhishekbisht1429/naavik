@@ -126,7 +126,7 @@ import_components:
     overwritten_dependencies: {dataset: dataset}
 ```
 
-A key names a prerequisite of the source run (an instance name, a role of its
+A key names a dependency of the source run (an instance name, a role of its
 `role_bindings`, a name one of its components asked for, or the only instance
 of an implementation -- not an `#imported` one, which the source itself
 imported: name it); its value names a resource of this session, resolved
@@ -165,7 +165,7 @@ current version cannot migrate (`migrate_state`, `migrate_init_args`).
 And, for the wiring:
 
 - an imported component is given exactly the wiring its checkpoint recorded.
-  A prerequisite its class declares now that the source run never wired is
+  A dependency its class declares now that the source run never wired is
   refused: the class has changed since the checkpoint was saved, and an import
   restores only what was recorded -- import from a checkpoint saved with this
   class;
@@ -180,7 +180,7 @@ When `overwritten_dependencies` or `instance_name` changes an instance's name,
 every saved state is passed to its class's
 `Stateful.rename_instances(state, names)` after it is migrated, with `names`
 mapping the source's instance names to this session's. `ModuleResource`
-renames the prerequisites its state records (`linked`); the default returns
+renames the dependencies its state records (`linked`); the default returns
 the state unchanged. A component whose own state names other instances
 overrides it. Names inside constructor arguments -- a config value naming
 another instance -- are not renamed.

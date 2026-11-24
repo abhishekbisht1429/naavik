@@ -15,7 +15,7 @@ Adding a top-level `ddp` resource makes the engine create `world_size` worker pr
 ```yaml
 session_config:
   rng_seed: 42
-  sessions_dir: ./runs
+  sessions_dir: ./sessions
   max_iterations: 1000
   components_package: my_project.components
   device: cuda
@@ -130,7 +130,7 @@ without being told to.
 The two declarations are not treated alike. A class-level mark is its author's
 settled decision and is taken at face value — a reporter may reach `ddp`
 through what it requires and still be rank-zero-only on purpose. A name in `rank_zero_components`
-is a per-run override, so naming a component whose prerequisites include `ddp`
+is a per-run override, so naming a component whose dependencies include `ddp`
 warns: that is the shape of a component that takes part in the collectives,
 and excluding one leaves the other ranks waiting. Every name is resolved
 through the bindings and checked against the session before any worker is

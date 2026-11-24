@@ -38,9 +38,9 @@ naavik prints the run id and the session directory:
 
 ```text
 run 01M85JJBA6X3CFG24YZYBPJDTM (naavik runs show 01M85JJBA6X3CFG24YZYBPJDTM)
-session: ./runs/session_20261124_012617
+session: ./sessions/session_20261124_012617
 ...
-session: ./runs/session_20261124_012617 (to continue it: naavik run --resume-session ./runs/session_20261124_012617)
+session: ./sessions/session_20261124_012617 (to continue it: naavik run --resume-session ./sessions/session_20261124_012617)
 ```
 
 The **session** is what stays: its directory holds its `config.yaml`, its
@@ -52,13 +52,13 @@ A session stopped before its end (Ctrl-C, a crash) continues from its
 latest checkpoint as a new run of the same session:
 
 ```bash
-naavik run --resume-session ./runs/session_20261124_012617
+naavik run --resume-session ./sessions/session_20261124_012617
 ```
 
 The log names the checkpoint it took, before anything is built:
 
 ```text
-resuming session ./runs/session_20261124_012617 from its latest checkpoint: ./runs/session_20261124_012617/checkpoints/<time> (iteration 5)
+resuming session ./sessions/session_20261124_012617 from its latest checkpoint: ./sessions/session_20261124_012617/checkpoints/<time> (iteration 5)
 ```
 
 `--resume-session-from-checkpoint CHECKPOINT` continues from another

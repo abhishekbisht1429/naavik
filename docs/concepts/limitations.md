@@ -48,7 +48,7 @@ The `model` role must resolve to a module accepted by PyTorch DDP. Distributed f
 
 ### Rank-zero-only work is opt-out
 
-Ranks greater than zero build every configured component except those marked `@rank_zero_only` or named in `ddp.rank_zero_components`, so a component that should run once per run rather than once per rank has to say so. Nothing is inferred from the dependency graph: a component that takes part in the collectives without declaring `ddp` as a prerequisite is still built everywhere, and one that writes a file per run is duplicated across ranks until it is declared.
+Ranks greater than zero build every configured component except those marked `@rank_zero_only` or named in `ddp.rank_zero_components`, so a component that should run once per run rather than once per rank has to say so. Nothing is inferred from the dependency graph: a component that takes part in the collectives without declaring `ddp` as a dependency is still built everywhere, and one that writes a file per run is duplicated across ranks until it is declared.
 
 ## Components and registration
 
@@ -62,7 +62,7 @@ The engine builds one session per rank in the parent before spawning workers, so
 
 ### A component that uses a dependency in its constructor cannot be constructed by hand
 
-The session hands a component its prerequisites. One built by hand and registered with `register_resource()`, `register_hook()` or `add_step()` receives them on registration, so it can use them from `setup` onwards -- but not in its own `__init__`, which has already run. A component whose constructor calls `get_dependency` must be activated by the session, through configuration or `session.activate_component(name, config)`. A registered component cannot be removed or replaced once a consumer has been handed it -- in its constructor, in `setup`, or later -- because a reference the consumer stored for itself cannot be updated. Replace it before anything takes it, or build a new session.
+The session hands a component its dependencies. One built by hand and registered with `register_resource()`, `register_hook()` or `add_step()` receives them on registration, so it can use them from `setup` onwards -- but not in its own `__init__`, which has already run. A component whose constructor calls `get_dependency` must be activated by the session, through configuration or `session.activate_component(name, config)`. A registered component cannot be removed or replaced once a consumer has been handed it -- in its constructor, in `setup`, or later -- because a reference the consumer stored for itself cannot be updated. Replace it before anything takes it, or build a new session.
 
 ### An ambiguous dependency is an error, not a choice
 

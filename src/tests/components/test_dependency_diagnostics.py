@@ -76,7 +76,7 @@ def test_unknown_dependency_reports_all_registries_and_suggests_names(tmp_path):
 
     message = _error(RuntimeError, lambda: build_session(tmp_path, {"diag_consumer": {}}))
 
-    assert message.startswith("unmet prerequisite! Resource 'diag_tensorbord'")
+    assert message.startswith("unmet dependency! Resource 'diag_tensorbord'")
     assert "Required by: Step 'diag_consumer' (DiagConsumer)" in message
     assert (
         "No component named 'diag_tensorbord' is registered in the shared "
@@ -319,6 +319,6 @@ def test_requiring_an_optional_dataset_that_was_not_imported(tmp_path):
 
     message = _error(RuntimeError, lambda: build_session(tmp_path, {"diag_consumer": {}}))
 
-    assert message.startswith("unmet prerequisite! Resource 'cifar10'")
+    assert message.startswith("unmet dependency! Resource 'cifar10'")
     assert "Required by: Step 'diag_consumer' (DiagConsumer)" in message
     assert f"Add 'import {_DATASETS}'" in message

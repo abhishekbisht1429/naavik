@@ -15,7 +15,7 @@ Both `TrainingSession` and `AnalysisSession` are context managers and iterators.
 Construct session
     |
     +-- import component package
-    +-- construct configured components, prerequisite-first,
+    +-- construct configured components, dependency-first,
     |   each one taking hold of what it declared
     |
 Enter session

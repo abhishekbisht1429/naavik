@@ -74,7 +74,7 @@ engine yourself; see [Running the engine from Python](engine.md)):
 
 ```bash
 python -m my_project.train \
-  --extend-session ./runs/session_<time> \
+  --extend-session ./sessions/session_<time> \
   --override \
   session_config.max_iterations=6000 \
   profiler.start_iteration=5000
