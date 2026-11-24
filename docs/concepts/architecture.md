@@ -7,6 +7,17 @@ spawned worker does, and how the parent notices a worker that has stopped
 making progress. Read this when you need to reason about failures,
 shutdown, or why a component is built where it is.
 
+## The engine's parts
+
+Workflow code is organized into reusable resources, hooks, and steps.
+`TrainingSession` and `AnalysisSession` share the lifecycle implemented by the
+abstract `Session` base, while using separate component registries and
+defaults. `TrainingEngine` constructs or restores the appropriate session in
+the parent process, serializes its state, launches one or more spawned
+workers, and monitors them for completion, errors, interrupts, and missed
+heartbeats. One such launch is a run
+([the terms](missions-sessions-runs.md)).
+
 ## Two layers
 
 `naavik run` and `naavik launch` are the launcher: they compile a mission,

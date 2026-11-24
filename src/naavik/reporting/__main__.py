@@ -7,11 +7,11 @@ import os
 import sys
 
 from naavik.reporting.render import TABLES, render_csv, render_json, render_markdown
-from naavik.reporting.runs import ReportError, discover_runs
+from naavik.reporting.sessions import ReportError, discover_sessions
 from naavik.reporting.summary import (
     DEFAULT_IGNORED_KEYS,
     DEFAULT_SEED_KEYS,
-    summarize_runs,
+    summarize_sessions,
 )
 
 #: Exit status when the report was written but has problems and --strict
@@ -26,17 +26,17 @@ def _parser(prog: str = "python -m naavik.reporting") -> argparse.ArgumentParser
     commands = parser.add_subparsers(dest="command", required=True)
     summarize = commands.add_parser(
         "summarize", allow_abbrev=False,
-        help="compare runs: their differing hyperparameters and TensorBoard scalars",
+        help="compare sessions: their differing hyperparameters and TensorBoard scalars",
         description=(
-            "Find every run (session_* directory) under the given directories -- "
+            "Find every session (session_* directory) under the given directories -- "
             "local sessions_dirs, mission directories, or `naavik fetch` results -- "
-            "and write one report comparing them: a row per run with the "
-            "hyperparameters that differ and each metric, and runs that differ "
+            "and write one report comparing them: a row per session with the "
+            "hyperparameters that differ and each metric, and sessions that differ "
             "only in their seed grouped into mean ± std."
         ),
     )
     summarize.add_argument("roots", nargs="*", metavar="ROOT",
-                           help="a directory to look for runs in")
+                           help="a directory to look for sessions in")
     summarize.add_argument("--runs", action="append", default=[], metavar="RUN",
                            help="also the session directories of this recorded run (a run id "
                                 "or a unique beginning of one, see `naavik runs`; repeatable)")
@@ -56,13 +56,13 @@ def _parser(prog: str = "python -m naavik.reporting") -> argparse.ArgumentParser
     summarize.add_argument("--last-n", type=int, metavar="N",
                            help="also report the mean of each tag's last N points")
     summarize.add_argument("--sort", metavar="TAG",
-                           help="order runs and groups by the best value of this --metric")
+                           help="order sessions and groups by the best value of this --metric")
     summarize.add_argument("--include", action="append", default=[], metavar="GLOB",
-                           help="only runs whose id matches GLOB (repeatable)")
+                           help="only sessions whose id matches GLOB (repeatable)")
     summarize.add_argument("--exclude", action="append", default=[], metavar="GLOB",
-                           help="leave out runs whose id matches GLOB (repeatable)")
+                           help="leave out sessions whose id matches GLOB (repeatable)")
     summarize.add_argument("--no-seed-groups", action="store_true",
-                           help="do not group runs that differ only in their seed")
+                           help="do not group sessions that differ only in their seed")
     summarize.add_argument("--seed-key", action="append", metavar="KEY",
                            help="a seed: a config path, or component:path inside that "
                                 "component's entry (repeatable; default: "
@@ -74,7 +74,7 @@ def _parser(prog: str = "python -m naavik.reporting") -> argparse.ArgumentParser
                            help="compare the default ignored keys too")
     summarize.add_argument("--format", choices=("markdown", "csv", "json"), default="markdown")
     summarize.add_argument("--table", choices=TABLES,
-                           help="with --format csv: which table (default: groups, or runs "
+                           help="with --format csv: which table (default: groups, or sessions "
                                 "with --no-seed-groups)")
     summarize.add_argument("--output", "-o", metavar="PATH",
                            help="write the report here (default: standard output)")
@@ -160,17 +160,17 @@ def _summarize(args) -> int:
              + _batch_roots(args.batch, args.fetched))
     if not roots:
         raise ReportError("give a ROOT directory or --runs RUN (or --mission MISSION)")
-    discovery = discover_runs(*roots, include=args.include, exclude=args.exclude)
+    discovery = discover_sessions(*roots, include=args.include, exclude=args.exclude)
     if args.output is not None:
         output = os.path.abspath(args.output)
-        for run in discovery.runs:
-            if os.path.commonpath([output, run.session_dir]) == run.session_dir:
+        for session in discovery.sessions:
+            if os.path.commonpath([output, session.session_dir]) == session.session_dir:
                 raise ReportError(
-                    f"--output {args.output} is inside run {run.run_id}; write the "
-                    "report outside the run directories"
+                    f"--output {args.output} is inside session {session.session_id}; write the "
+                    "report outside the session directories"
                 )
     ignored = [] if args.no_default_ignores else list(DEFAULT_IGNORED_KEYS)
-    summary = summarize_runs(
+    summary = summarize_sessions(
         discovery,
         args.metric,
         tags=args.tags,
@@ -185,7 +185,7 @@ def _summarize(args) -> int:
     elif args.format == "json":
         text = render_json(summary)
     else:
-        table = args.table or ("runs" if args.no_seed_groups else "groups")
+        table = args.table or ("sessions" if args.no_seed_groups else "groups")
         text = render_csv(summary, table=table)
     if args.output is None:
         sys.stdout.write(text)
@@ -194,7 +194,7 @@ def _summarize(args) -> int:
         os.makedirs(directory, exist_ok=True)
         with open(args.output, "w", encoding="utf-8") as handle:
             handle.write(text)
-        print(f"wrote {args.output}: {len(summary.runs)} run(s), "
+        print(f"wrote {args.output}: {len(summary.sessions)} session(s), "
               f"{len(summary.problems)} problem(s)", file=sys.stderr)
     if summary.problems and args.strict:
         print(f"{len(summary.problems)} problem(s):", file=sys.stderr)

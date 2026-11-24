@@ -1,13 +1,13 @@
-"""Finding runs under one or more directories and loading each one: its
+"""Finding sessions under one or more directories and loading each one: its
 TensorBoard scalars, its dumped config, and (for an HPC task) its matrix
 values.
 
-A run is a session directory, `<sessions_dir>/session_<timestamp>/`, the
+A session is found by its directory, `<sessions_dir>/session_<timestamp>/`, the
 directory a session writes `config.yaml` and its TensorBoard writers'
-directories into. A resumed run keeps writing into the same one, adding one
+directories into. A resumed session keeps writing into the same one, adding one
 event file per attempt to each writer directory. Nothing here needs HPC
 files: an HPC task (`.../tasks/<group>/<experiment>/<NNN>/` holding
-`variant.json` and `sessions/session_<timestamp>/`) is a run that also has
+`variant.json` and `sessions/session_<timestamp>/`) is a session that also has
 a task name and matrix values.
 """
 
@@ -41,7 +41,7 @@ class ReportError(Exception):
 
 @dataclass
 class Attempt:
-    """One event file of a writer: one launch of the run (a fresh start or a
+    """One event file of a writer: one launch of the session (a fresh start or a
     resume)."""
 
     path: str            # relative to the session directory
@@ -51,19 +51,19 @@ class Attempt:
 
 
 @dataclass
-class RunRecord:
-    run_id: str
+class SessionRecord:
+    session_id: str
     session_dir: str
     task: str | None
     config: dict | None
     #: Matrix values of an HPC task, by label (`component:path` or `path`).
     variant: dict[str, Any]
-    #: The same labels, mapped to where the value is in this run's
+    #: The same labels, mapped to where the value is in this session's
     #: `config.yaml`: the address's path, under its component's entry (top
     #: level or in a component group) when it names one; None when the
     #: component is not in the config.
     variant_paths: dict[str, str | None]
-    #: How many times the run was extended (`config_extension_*.yaml`).
+    #: How many times the session was extended (`config_extension_*.yaml`).
     extensions: int
     #: Writer directories, relative to the session directory.
     writers: list[str]
@@ -74,8 +74,8 @@ class RunRecord:
     #: resume started from), per tag; the later attempt's value is kept.
     rewritten: dict[str, int]
     problems: list[str] = field(default_factory=list)
-    #: The code the run ran (`code_text`), from its HPC task record or its
-    #: run record; None when unknown (runs older than these records).
+    #: The code the session ran (`code_text`), from its HPC task record or its
+    #: run record; None when unknown (sessions older than these records).
     code: str | None = None
     #: The training config file a batch task was made from, when its batch
     #: used more than one (from its record); None otherwise.
@@ -92,8 +92,8 @@ class RunRecord:
 @dataclass
 class Discovery:
     roots: list[str]
-    runs: list[RunRecord]
-    #: Problems that belong to no run (event files outside any session
+    sessions: list[SessionRecord]
+    #: Problems that belong to no session (event files outside any session
     #: directory).
     problems: list[str]
 
@@ -106,21 +106,21 @@ class _Located:
     task_dir: str | None = None
 
 
-def discover_runs(
+def discover_sessions(
         *roots: str | os.PathLike,
         include: Sequence[str] = (),
         exclude: Sequence[str] = (),
 ) -> Discovery:
-    """Every run under `roots`, loaded.
+    """Every session under `roots`, loaded.
 
     A root may be a directory of session directories (a `sessions_dir`),
     any directory above them (a batch, `hpc-results/<batch-id>`), or one
-    session directory. Run ids are paths relative to the root (an HPC
+    session directory. Session ids are paths relative to the root (an HPC
     task's id is its task name); with more than one root they start with
-    the root's directory name. `include`/`exclude` are globs on run ids.
+    the root's directory name. `include`/`exclude` are globs on session ids.
     """
     if not roots:
-        raise ReportError("give at least one directory to look for runs in")
+        raise ReportError("give at least one directory to look for sessions in")
     resolved = []
     for root in roots:
         path = os.path.abspath(os.fspath(root))
@@ -136,38 +136,38 @@ def discover_runs(
         for session_dir, entry in _locate(root, problems).items():
             if session_dir in located:
                 raise ReportError(
-                    f"run {session_dir} is under two of the given directories "
+                    f"session {session_dir} is under two of the given directories "
                     f"({located[session_dir].root} and {root}); give "
                     "directories that do not contain one another"
                 )
             located[session_dir] = entry
 
     recorded_code = _recorded_code()
-    ids, notes = _run_ids(located, len(resolved) > 1)
-    run_problems: dict[str, list[str]] = {}
+    ids, notes = _session_ids(located, len(resolved) > 1)
+    session_problems: dict[str, list[str]] = {}
     for message, session_dir in notes:
-        run_problems.setdefault(session_dir, []).append(message)
+        session_problems.setdefault(session_dir, []).append(message)
     for pattern in (*include, *exclude):
         if not isinstance(pattern, str) or not pattern:
             raise ReportError(f"--include/--exclude need a glob; got {pattern!r}")
 
-    runs = []
-    for session_dir, run_id in sorted(ids.items(), key=lambda item: item[1]):
-        if include and not any(fnmatch.fnmatchcase(run_id, p) for p in include):
+    sessions = []
+    for session_dir, session_id in sorted(ids.items(), key=lambda item: item[1]):
+        if include and not any(fnmatch.fnmatchcase(session_id, p) for p in include):
             continue
-        if any(fnmatch.fnmatchcase(run_id, p) for p in exclude):
+        if any(fnmatch.fnmatchcase(session_id, p) for p in exclude):
             continue
-        run = _load(run_id, located[session_dir])
-        run.problems[:0] = run_problems.get(session_dir, [])
-        run.code, run.config_file, run.note, run.source = _task_facts(
-            located[session_dir].task_dir, run.problems)
+        session = _load(session_id, located[session_dir])
+        session.problems[:0] = session_problems.get(session_dir, [])
+        session.code, session.config_file, session.note, session.source = _task_facts(
+            located[session_dir].task_dir, session.problems)
         recorded = recorded_code.get(os.path.realpath(session_dir)) or {}
-        if run.code is None:
-            run.code = code_text(recorded.get("code"))
-        if run.note is None:
-            run.note = recorded.get("note")
-        runs.append(run)
-    return Discovery(roots=resolved, runs=runs, problems=problems)
+        if session.code is None:
+            session.code = code_text(recorded.get("code"))
+        if session.note is None:
+            session.note = recorded.get("note")
+        sessions.append(session)
+    return Discovery(roots=resolved, sessions=sessions, problems=problems)
 
 
 def _locate(root: str, problems: list[str]) -> dict[str, _Located]:
@@ -230,11 +230,11 @@ def _task_name(task_dir: str, root: str) -> str:
     return os.path.basename(task_dir) if relative.startswith("..") else relative.replace(os.sep, "/")
 
 
-def _run_ids(
+def _session_ids(
         located: dict[str, _Located],
         prefix_roots: bool,
 ) -> tuple[dict[str, str], list[tuple[str, str]]]:
-    """Run id by session directory, and (problem, session directory) pairs
+    """Session id by session directory, and (problem, session directory) pairs
     found while naming them."""
     by_task: dict[tuple[str, str], list[str]] = {}
     for session_dir, entry in located.items():
@@ -247,31 +247,31 @@ def _run_ids(
         if entry.task_dir is not None:
             task = _task_name(entry.task_dir, entry.root)
             siblings = by_task[(entry.root, task)]
-            run_id = task
+            session_id = task
             if len(siblings) > 1:
-                run_id = f"{task}/{os.path.basename(session_dir)}"
+                session_id = f"{task}/{os.path.basename(session_dir)}"
                 notes.append((
                     f"experiment {task} has {len(siblings)} session directories; "
-                    "each is reported as its own run",
+                    "each is reported as its own session",
                     session_dir,
                 ))
         elif session_dir == entry.root:
-            run_id = os.path.basename(session_dir)
+            session_id = os.path.basename(session_dir)
         else:
-            run_id = os.path.relpath(session_dir, entry.root).replace(os.sep, "/")
+            session_id = os.path.relpath(session_dir, entry.root).replace(os.sep, "/")
         if prefix_roots:
-            run_id = f"{os.path.basename(entry.root)}/{run_id}"
-        ids[session_dir] = run_id
+            session_id = f"{os.path.basename(entry.root)}/{session_id}"
+        ids[session_dir] = session_id
 
     seen: dict[str, str] = {}
-    for session_dir, run_id in ids.items():
-        if run_id in seen:
+    for session_dir, session_id in ids.items():
+        if session_id in seen:
             raise ReportError(
-                f"two runs would both be called {run_id!r}: {seen[run_id]} and "
+                f"two sessions would both be called {session_id!r}: {seen[session_id]} and "
                 f"{session_dir}; give the directories separately or under "
                 "parents with different names"
             )
-        seen[run_id] = session_dir
+        seen[session_id] = session_dir
     return ids, notes
 
 
@@ -280,7 +280,7 @@ TASK_RECORD_FILE = "record.json"
 
 
 def code_text(code: dict | None) -> str | None:
-    """A run's code as compared in summaries: the commit, marked when it is a
+    """A session's code as compared in summaries: the commit, marked when it is a
     snapshot of a working tree or a dirty checkout; None when unknown."""
     if not isinstance(code, dict) or not isinstance(code.get("sha"), str) or not code["sha"]:
         return None
@@ -332,7 +332,7 @@ def _recorded_code() -> dict[str, dict]:
     return found
 
 
-def _load(run_id: str, entry: _Located) -> RunRecord:
+def _load(session_id: str, entry: _Located) -> SessionRecord:
     session_dir = entry.session_dir
     problems: list[str] = []
     config = _load_config(session_dir, problems)
@@ -365,8 +365,8 @@ def _load(run_id: str, entry: _Located) -> RunRecord:
         bad = sum(1 for point in points if not math.isfinite(point.value))
         if bad:
             problems.append(f"{tag}: {bad} non-finite value(s) (nan/inf)")
-    return RunRecord(
-        run_id=run_id,
+    return SessionRecord(
+        session_id=session_id,
         session_dir=session_dir,
         task=task,
         config=config,

@@ -99,4 +99,4 @@ mission and its experiments, use `naavik missions` and
 `naavik status MISSION_ID`.
 
 Next, learn how to [run missions on other hosts](08-missions.md),
-[compare results](12-comparing-runs.md), or [build your own components](01-resources-hooks-steps.md).
+[compare results](12-comparing-sessions.md), or [build your own components](01-resources-hooks-steps.md).

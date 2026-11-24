@@ -296,7 +296,7 @@ ok: 6 experiment(s) in 1 job(s); commit ...
   iteration, and what the source experiment varied). `summarize` compares
   the results by those training settings, so analyses of training runs
   that differ only in their seed are one group
-  ([Comparing runs](12-comparing-runs.md#analysis-missions-compared-by-their-training)).
+  ([Comparing sessions](12-comparing-sessions.md#analysis-missions-compared-by-their-training)).
 
 ### Sharing settings: the project file
 
@@ -1023,7 +1023,7 @@ scalars, with runs that differ only in their seed grouped into mean ± std:
 naavik summarize --mission <mission-id> --metric train/loss:min
 ```
 
-See [Comparing runs](12-comparing-runs.md).
+See [Comparing sessions](12-comparing-sessions.md).
 
 ## Limitations
 

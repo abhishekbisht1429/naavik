@@ -9,7 +9,30 @@ Naavik is a component-based framework for training and analysing PyTorch models.
 
 Start with [your first Naavik run](docs/guide/00-naavik-first-run.md), or follow the component example below if you want to build a training workflow.
 
-Workflow code is organized into reusable **resources**, **hooks**, and **steps**. `TrainingSession` and `AnalysisSession` share the lifecycle implemented by the abstract `Session` base, while using separate component registries and defaults. `TrainingEngine` constructs or restores the appropriate session in the parent process, serializes its state, launches one or more spawned workers, and monitors them for completion, errors, interrupts, and missed heartbeats.
+## Key terms
+
+- **Session**: one training or analysis workflow, described by a
+  **session file** (YAML) and kept in its **session directory**, with its
+  logs and checkpoints.
+- **Component**: a piece of a session: a **resource** (a model, a dataset,
+  the optimizer), a **step** (work every iteration), or a **hook** (work at
+  fixed points).
+- **Run**: one launch of the engine, with a **run id** and a **run record**
+  in the run registry. A resume is a new run of the same session.
+- **Experiment**: one session file with its values, run on a host; an
+  **attempt** is one try at it (`naavik resume` makes the next).
+- **Mission**: experiments launched together on one host, by `naavik run`
+  (one experiment) or `naavik launch` (a **mission file** of **jobs** and
+  **recipes**).
+- **Host**: a machine you run on (this one, over SSH, or a Slurm cluster),
+  in your **hosts file**; its **scheduler** runs the jobs (naavik's
+  **builtin** one, or Slurm).
+- **Project file** (`naavik-project.yaml`): what your project's missions
+  share; `naavik init` writes it and a host for this machine.
+
+A mission holds experiments; each attempt of an experiment is a run; a run
+builds or continues a session. See
+[Missions, experiments, sessions, and runs](docs/concepts/missions-sessions-runs.md).
 
 > **Project status:** This project is under active development. The current API is suitable for experimentation and framework development, but review [Current behavior and limitations](docs/concepts/limitations.md) before using it for long-running or production workloads.
 
@@ -324,7 +347,7 @@ The [documentation index](docs/README.md) helps you find a path for running
 experiments or building components, along with the command and API references.
 To launch a sweep or use another machine, see [running missions](docs/guide/08-missions.md).
 To inspect and compare results, see [run records](docs/guide/13-run-registry.md)
-and [comparing runs](docs/guide/12-comparing-runs.md).
+and [comparing runs](docs/guide/12-comparing-sessions.md).
 
 Working on the framework itself? See
 [development and testing](docs/development.md).

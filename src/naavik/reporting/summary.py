@@ -1,5 +1,5 @@
-"""Turning loaded runs into a comparison: the hyperparameters that differ,
-each chosen metric per run, and runs that differ only in their seed grouped
+"""Turning loaded sessions into a comparison: the hyperparameters that differ,
+each chosen metric per session, and sessions that differ only in their seed grouped
 into mean ± std."""
 
 from __future__ import annotations
@@ -20,17 +20,17 @@ from naavik.reporting.config_paths import (
 import re
 
 from naavik.reporting.config_paths import format_path, parse_path
-from naavik.reporting.runs import (
+from naavik.reporting.sessions import (
     Discovery,
     ReportError,
-    RunRecord,
+    SessionRecord,
     component_entry,
     variant_label,
 )
 
 DIRECTIONS = ("min", "max")
 DEFAULT_SEED_KEYS = ("session_config.rng_seed",)
-#: Differ between runs by construction, so they say nothing about a run's
+#: Differ between sessions by construction, so they say nothing about a session's
 #: hyperparameters: every HPC task has its own `sessions_dir`, and the engine
 #: picks a free rendezvous port (and fills in the address) at each launch,
 #: wherever the `ddp` entry is listed. `ddp.world_size` is compared: it
@@ -42,9 +42,9 @@ DEFAULT_IGNORED_KEYS = (
     "resources.ddp.master_addr",
     "resources.ddp.master_port",
 )
-#: A cell for a hyperparameter a run's config does not have.
+#: A cell for a hyperparameter a session's config does not have.
 ABSENT = "absent"
-#: A cell for a run whose config could not be read.
+#: A cell for a session whose config could not be read.
 UNKNOWN = "unknown"
 FIELDS = ("last", "best", "mean_last_n")
 
@@ -113,15 +113,15 @@ class Stats:
 
 
 @dataclass
-class RunSummary:
-    run: RunRecord
+class SessionSummary:
+    record: SessionRecord
     hyperparameters: dict[str, Any]
     metrics: dict[str, MetricSummary]
     group: str | None = None
 
     @property
-    def run_id(self) -> str:
-        return self.run.run_id
+    def session_id(self) -> str:
+        return self.record.session_id
 
 
 @dataclass
@@ -139,14 +139,14 @@ class Summary:
     metrics: list[Metric]
     last_n: int | None
     columns: list[Column]
-    runs: list[RunSummary]
-    #: None when runs are not grouped by seed.
+    sessions: list[SessionSummary]
+    #: None when sessions are not grouped by seed.
     groups: list[GroupSummary] | None
     seed_keys: list[str]
-    #: Config paths (and matrix labels) equal in every run with a config.
+    #: Config paths (and matrix labels) equal in every session with a config.
     shared: dict[str, Any]
-    #: Runs whose config could not be read: `shared` says nothing about them.
-    unknown_config_runs: list[str]
+    #: Sessions whose config could not be read: `shared` says nothing about them.
+    unknown_config_sessions: list[str]
     ignored_keys: list[str]
     sort: Metric | None
     problems: list[str] = field(default_factory=list)
@@ -162,7 +162,7 @@ class Summary:
         return fields
 
 
-def summarize_runs(
+def summarize_sessions(
         discovery: Discovery,
         metrics: Sequence[Metric | str] = (),
         *,
@@ -173,22 +173,22 @@ def summarize_runs(
         ignored_keys: Sequence[str] = DEFAULT_IGNORED_KEYS,
         sort: str | None = None,
 ) -> Summary:
-    """Compare the runs `discover_runs` found.
+    """Compare the sessions `discover_sessions` found.
 
     `metrics` are the tags to report (`Metric` or `"tag[:min|:max]"`);
     `tags` adds every tag matching these globs; with neither, every scalar
     tag is reported. `last_n` adds the mean of each tag's last N points.
-    `sort` names a metric with a direction to order runs and groups by.
+    `sort` names a metric with a direction to order sessions and groups by.
     """
-    runs = discovery.runs
-    if not runs:
+    sessions = discovery.sessions
+    if not sessions:
         raise ReportError(
-            "no runs found under " + ", ".join(discovery.roots)
+            "no sessions found under " + ", ".join(discovery.roots)
             + (" (" + "; ".join(discovery.problems) + ")" if discovery.problems else "")
         )
     if last_n is not None and (isinstance(last_n, bool) or not isinstance(last_n, int) or last_n <= 0):
         raise ReportError(f"last_n must be a positive integer; got {last_n!r}")
-    chosen = _choose_metrics(runs, metrics, tags)
+    chosen = _choose_metrics(sessions, metrics, tags)
     sort_metric = _sort_metric(sort, chosen)
     # A source setting (`source iteration`) is named as written: no config
     # path starts with `source ` (a top-level key with a space is quoted).
@@ -197,44 +197,44 @@ def summarize_runs(
     seeds = [_seed_key(key) for key in seed_keys] if group_by_seed else []
 
     problems = list(discovery.problems)
-    flat = {run.run_id: _flat_config(run, ignored) for run in runs}
-    _add_run_fact(CODE_KEY, "code", {run.run_id: run.code for run in runs}, runs, flat, ignored,
+    flat = {session.session_id: _flat_config(session, ignored) for session in sessions}
+    _add_session_fact(CODE_KEY, "code", {session.session_id: session.code for session in sessions}, sessions, flat, ignored,
                   problems)
-    _add_run_fact(CONFIG_KEY, "config file",
-                  {run.run_id: run.config_file for run in runs}, runs, flat, ignored, problems)
-    _add_source(runs, flat, ignored, problems)
-    # Each run's seeds as config paths: a `component:path` key resolves to
-    # where that component's entry is in the run's own config.
-    run_seeds = {run.run_id: _config_seeds(run, seeds) + _source_seeds(run, seeds) for run in runs}
-    columns, shared = _columns(runs, flat, seeds, run_seeds)
+    _add_session_fact(CONFIG_KEY, "config file",
+                  {session.session_id: session.config_file for session in sessions}, sessions, flat, ignored, problems)
+    _add_source(sessions, flat, ignored, problems)
+    # Each session's seeds as config paths: a `component:path` key resolves to
+    # where that component's entry is in the session's own config.
+    session_seeds = {session.session_id: _config_seeds(session, seeds) + _source_seeds(session, seeds) for session in sessions}
+    columns, shared = _columns(sessions, flat, seeds, session_seeds)
     if group_by_seed:
-        unmatched = [key for key in seeds if not _found_anywhere(key, runs, flat)]
+        unmatched = [key for key in seeds if not _found_anywhere(key, sessions, flat)]
         if unmatched:
             raise ReportError(
-                "seed key(s) " + ", ".join(unmatched) + " are in no run's config "
+                "seed key(s) " + ", ".join(unmatched) + " are in no session's config "
                 "or matrix; give the path of the seed with --seed-key, or "
                 "turn grouping off with --no-seed-groups"
             )
 
     summaries = []
-    for run in runs:
-        for message in run.problems:
-            problems.append(f"{run.run_id}: {message}")
+    for session in sessions:
+        for message in session.problems:
+            problems.append(f"{session.session_id}: {message}")
         values = {}
         for column in columns:
-            values[column.name] = _cell(run, flat[run.run_id], column)
+            values[column.name] = _cell(session, flat[session.session_id], column)
         metric_summaries = {}
         for metric in chosen:
-            points = run.scalars.get(metric.tag)
+            points = session.scalars.get(metric.tag)
             if not points:
-                problems.append(f"{run.run_id}: {metric.tag} is not written by this run")
+                problems.append(f"{session.session_id}: {metric.tag} is not written by this session")
                 continue
-            metric_summaries[metric.tag] = _metric_summary(metric, points, last_n, run.rewritten.get(metric.tag, 0))
-        summaries.append(RunSummary(run, values, metric_summaries))
+            metric_summaries[metric.tag] = _metric_summary(metric, points, last_n, session.rewritten.get(metric.tag, 0))
+        summaries.append(SessionSummary(session, values, metric_summaries))
 
     groups = None
     if group_by_seed:
-        groups = _groups(summaries, flat, columns, seeds, run_seeds, chosen, last_n, problems)
+        groups = _groups(summaries, flat, columns, seeds, session_seeds, chosen, last_n, problems)
     if sort_metric is not None:
         summaries.sort(key=lambda summary: _order(
             summary.metrics.get(sort_metric.tag) and summary.metrics[sort_metric.tag].best,
@@ -257,11 +257,11 @@ def summarize_runs(
         metrics=chosen,
         last_n=last_n,
         columns=columns,
-        runs=summaries,
+        sessions=summaries,
         groups=groups,
         seed_keys=seeds,
         shared=shared,
-        unknown_config_runs=[run.run_id for run in runs if run.config is None],
+        unknown_config_sessions=[session.session_id for session in sessions if session.config is None],
         ignored_keys=ignored,
         sort=sort_metric,
         problems=problems,
@@ -271,8 +271,8 @@ def summarize_runs(
 # -- choosing ------------------------------------------------------------------
 
 
-def _choose_metrics(runs, metrics, tags) -> list[Metric]:
-    available = sorted({tag for run in runs for tag in run.scalars})
+def _choose_metrics(sessions, metrics, tags) -> list[Metric]:
+    available = sorted({tag for session in sessions for tag in session.scalars})
     chosen: dict[str, Metric] = {}
     for item in metrics:
         metric = Metric.parse(item) if isinstance(item, str) else item
@@ -280,7 +280,7 @@ def _choose_metrics(runs, metrics, tags) -> list[Metric]:
             raise ReportError(f"a metric is a Metric or 'tag[:min|:max]'; got {item!r}")
         if metric.tag not in available:
             raise ReportError(
-                f"no run writes the tag {metric.tag!r}; the tags written are: "
+                f"no session writes the tag {metric.tag!r}; the tags written are: "
                 + (", ".join(available) or "(none)")
             )
         if metric.tag in chosen and chosen[metric.tag] != metric:
@@ -300,7 +300,7 @@ def _choose_metrics(runs, metrics, tags) -> list[Metric]:
     if not metrics and not tags:
         chosen = {tag: Metric(tag) for tag in available}
     if not chosen:
-        raise ReportError("the runs found write no scalars")
+        raise ReportError("the sessions found write no scalars")
     return list(chosen.values())
 
 
@@ -328,48 +328,48 @@ def _path(text, what) -> str:
 # -- hyperparameters -------------------------------------------------------------
 
 
-#: The settings a run's code and training config file are compared as.
+#: The settings a session's code and training config file are compared as.
 CODE_KEY = "code"
 CONFIG_KEY = "config"
 
 
-def _add_run_fact(key, what, values, runs, flat, ignored, problems) -> None:
-    """Compare a fact of each run (its code, its config file) like a setting
-    named `key`, so runs that differ in it are never one seed group. Only
-    when some run's value is known (reports of older runs are unchanged); an
+def _add_session_fact(key, what, values, sessions, flat, ignored, problems) -> None:
+    """Compare a fact of each session (its code, its config file) like a setting
+    named `key`, so sessions that differ in it are never one seed group. Only
+    when some session's value is known (reports of older sessions are unchanged); an
     unknown value is `unknown`."""
     if not any(values.values()) or any(covers(name, key) for name in ignored):
         return
     clashing = sorted({path for config in flat.values() if config
                        for path in config if covers(key, path)})
     if clashing:
-        problems.append(f"the runs' {what} is not compared: their configs have "
+        problems.append(f"the sessions' {what} is not compared: their configs have "
                         f"{', '.join(clashing)} (pass --ignore-key {key} to silence)")
         return
-    for run in runs:
-        if flat[run.run_id] is not None:
-            flat[run.run_id][key] = values[run.run_id] or "unknown"
+    for session in sessions:
+        if flat[session.session_id] is not None:
+            flat[session.session_id][key] = values[session.session_id] or "unknown"
 
 
-#: How the facts of the checkpoint an analysis run analysed are named among
+#: How the facts of the checkpoint an analysis session analysed are named among
 #: its settings (`source iteration`, `source <label>`): never a config path.
 SOURCE_PREFIX = "source "
 
 
-def _add_source(runs, flat, ignored, problems) -> None:
-    """For a run of a recipe with `from_mission`: compare what trained the
+def _add_source(sessions, flat, ignored, problems) -> None:
+    """For a session of a recipe with `from_mission`: compare what trained the
     checkpoint it analysed, in place of the checkpoint's path (which differs
-    between every two runs): the source experiment's varied values
+    between every two sessions): the source experiment's varied values
     (`source <label>`) and the checkpoint's iteration (`source iteration`).
-    The source's seed is a seed (`_source_seeds`), so analyses of runs that
+    The source's seed is a seed (`_source_seeds`), so analyses of sessions that
     differ only in their training seed are one group."""
-    for run in runs:
-        source, config = run.source, flat[run.run_id]
+    for session in sessions:
+        source, config = session.source, flat[session.session_id]
         if source is None or config is None:
             continue
-        path = _into_path(run.config, source.get("into"))
+        path = _into_path(session.config, source.get("into"))
         if path is None:
-            problems.append(f"{run.run_id}: its record does not say where its checkpoint was "
+            problems.append(f"{session.session_id}: its record does not say where its checkpoint was "
                             "written (from_mission into); it is compared by the checkpoint's path")
         else:
             for key in [key for key in config if covers(path, key)]:
@@ -383,7 +383,7 @@ def _add_source(runs, flat, ignored, problems) -> None:
 
 
 def _into_path(config, into) -> str | None:
-    """Where `into` ({component?, path}) is in a run's config, or None."""
+    """Where `into` ({component?, path}) is in a session's config, or None."""
     if not isinstance(into, dict) or not isinstance(into.get("path"), list):
         return None
     segments = tuple(into["path"])
@@ -393,24 +393,24 @@ def _into_path(config, into) -> str | None:
     return None if entry is None else format_path(entry + segments)
 
 
-def _source_seeds(run: RunRecord, seeds: list[str]) -> list[str]:
+def _source_seeds(session: SessionRecord, seeds: list[str]) -> list[str]:
     """The source's varied values that are seeds, as `source <label>`: a
     seed key names its label (`data_manager:seed`) or covers its path."""
-    if run.source is None:
+    if session.source is None:
         return []
     found = []
-    for item in run.source.get("variant") or ():
+    for item in session.source.get("variant") or ():
         label = variant_label(item["address"])
         if any(key == label or covers(key, label) for key in seeds):
             found.append(SOURCE_PREFIX + label)
     return found
 
 
-def _flat_config(run: RunRecord, ignored: list[str]) -> dict[str, Any] | None:
-    if run.config is None:
+def _flat_config(session: SessionRecord, ignored: list[str]) -> dict[str, Any] | None:
+    if session.config is None:
         return None
     return {
-        path: value for path, value in flatten(run.config).items()
+        path: value for path, value in flatten(session.config).items()
         if not any(covers(key, path) for key in ignored)
     }
 
@@ -427,48 +427,48 @@ def _seed_key(text) -> str:
     return f"{match.group('component')}:{_path(match.group('path'), 'seed key')}"
 
 
-def _config_seeds(run: RunRecord, seeds: list[str]) -> list[str]:
-    """`seeds` as config paths of this run; a `component:path` key whose
-    component the run's config does not have names nothing in it."""
+def _config_seeds(session: SessionRecord, seeds: list[str]) -> list[str]:
+    """`seeds` as config paths of this session; a `component:path` key whose
+    component the session's config does not have names nothing in it."""
     paths = []
     for key in seeds:
         match = _LABEL_KEY.match(key)
         if match is None:
             paths.append(key)
             continue
-        entry = component_entry(run.config, match.group("component"))
+        entry = component_entry(session.config, match.group("component"))
         if entry is not None:
             paths.append(format_path(entry + parse_path(match.group("path"))))
     return paths
 
 
-def _is_seed(name: str, source: str, run_paths: dict[str, str | None], seeds: list[str]) -> bool:
+def _is_seed(name: str, source: str, session_paths: dict[str, str | None], seeds: list[str]) -> bool:
     """Whether a config path, or a matrix label, is a seed: a seed key
     covers the config path; for a matrix value, it is the label itself
-    (`data_manager:seed`) or covers where the value is in the run's config
+    (`data_manager:seed`) or covers where the value is in the session's config
     (`data_manager.seed`, `resources.data_manager.seed`)."""
     if source == "config":
         return any(covers(key, name) for key in seeds)
-    path = run_paths.get(name)
+    path = session_paths.get(name)
     return any(key == name or (path is not None and covers(key, path)) for key in seeds)
 
 
-def _columns(runs, flat, seeds, run_seeds) -> tuple[list[Column], dict[str, Any]]:
+def _columns(sessions, flat, seeds, session_seeds) -> tuple[list[Column], dict[str, Any]]:
     columns: list[Column] = []
     shared: dict[str, Any] = {}
     # Matrix values first: they are the hyperparameters a batch varies.
     labels: dict[str, None] = {}
-    for run in runs:
-        labels.update(dict.fromkeys(run.variant))
-    tasks = [run for run in runs if run.task is not None]
+    for session in sessions:
+        labels.update(dict.fromkeys(session.variant))
+    tasks = [session for session in sessions if session.task is not None]
     for label in labels:
-        values = {canonical(run.variant.get(label, ABSENT)) for run in tasks}
-        # Where the value is can differ between runs (top level or a group).
+        values = {canonical(session.variant.get(label, ABSENT)) for session in tasks}
+        # Where the value is can differ between sessions (top level or a group).
         seed = any(
-            _is_seed(label, "matrix", run.variant_paths, seeds)
-            for run in tasks if label in run.variant
+            _is_seed(label, "matrix", session.variant_paths, seeds)
+            for session in tasks if label in session.variant
         )
-        if len(values) > 1 or len(tasks) < len(runs):
+        if len(values) > 1 or len(tasks) < len(sessions):
             columns.append(Column(label, "matrix", seed))
         else:
             shared[f"matrix {label}"] = tasks[0].variant[label]
@@ -480,8 +480,8 @@ def _columns(runs, flat, seeds, run_seeds) -> tuple[list[Column], dict[str, Any]
         values = {canonical(config.get(path, ABSENT)) for config in configs}
         if len(values) > 1:
             seed = any(
-                _is_seed(path, "config", {}, run_seeds[run.run_id])
-                for run in runs if flat[run.run_id] is not None and path in flat[run.run_id]
+                _is_seed(path, "config", {}, session_seeds[session.session_id])
+                for session in sessions if flat[session.session_id] is not None and path in flat[session.session_id]
             )
             columns.append(Column(path, "config", seed))
         else:
@@ -489,21 +489,21 @@ def _columns(runs, flat, seeds, run_seeds) -> tuple[list[Column], dict[str, Any]
     return columns, shared
 
 
-def _found_anywhere(key, runs, flat) -> bool:
-    """Whether some run has the seed key (a seed equal in every run is a
+def _found_anywhere(key, sessions, flat) -> bool:
+    """Whether some session has the seed key (a seed equal in every session is a
     shared setting, not a column, and still a seed key that exists)."""
-    for run in runs:
-        config = flat[run.run_id] or {}
-        if any(covers(seed, path) for seed in _config_seeds(run, [key]) for path in config):
+    for session in sessions:
+        config = flat[session.session_id] or {}
+        if any(covers(seed, path) for seed in _config_seeds(session, [key]) for path in config):
             return True
-        if any(_is_seed(label, "matrix", run.variant_paths, [key]) for label in run.variant):
+        if any(_is_seed(label, "matrix", session.variant_paths, [key]) for label in session.variant):
             return True
     return False
 
 
-def _cell(run: RunRecord, config: dict | None, column: Column) -> Any:
+def _cell(session: SessionRecord, config: dict | None, column: Column) -> Any:
     if column.source == "matrix":
-        return run.variant.get(column.name, ABSENT)
+        return session.variant.get(column.name, ABSENT)
     if config is None:
         return UNKNOWN
     return config.get(column.name, ABSENT)
@@ -538,7 +538,7 @@ def _metric_summary(metric, points, last_n, rewritten) -> MetricSummary:
 
 
 def _order(value, direction):
-    """Sort key: best first, runs without a value last."""
+    """Sort key: best first, sessions without a value last."""
     if value is None or not math.isfinite(value):
         return (1, 0.0)
     return (0, value if direction == "min" else -value)
@@ -547,23 +547,23 @@ def _order(value, direction):
 # -- seed groups -----------------------------------------------------------------
 
 
-def _groups(summaries, flat, columns, seeds, run_seeds, chosen, last_n, problems) -> list[GroupSummary]:
-    keyed: dict[Any, list[RunSummary]] = {}
+def _groups(summaries, flat, columns, seeds, session_seeds, chosen, last_n, problems) -> list[GroupSummary]:
+    keyed: dict[Any, list[SessionSummary]] = {}
     for summary in summaries:
-        run = summary.run
-        config = flat[run.run_id]
+        session = summary.record
+        config = flat[session.session_id]
         if config is None:
-            # Unknown hyperparameters match no other run.
-            key = ("unknown config", run.run_id)
+            # Unknown hyperparameters match no other session.
+            key = ("unknown config", session.session_id)
         else:
             key = (
                 tuple(sorted(
                     (path, canonical(value)) for path, value in config.items()
-                    if not any(covers(seed, path) for seed in run_seeds[run.run_id])
+                    if not any(covers(seed, path) for seed in session_seeds[session.session_id])
                 )),
                 tuple(sorted(
-                    (label, canonical(value)) for label, value in run.variant.items()
-                    if not _is_seed(label, "matrix", run.variant_paths, seeds)
+                    (label, canonical(value)) for label, value in session.variant.items()
+                    if not _is_seed(label, "matrix", session.variant_paths, seeds)
                 )),
             )
         keyed.setdefault(key, []).append(summary)
@@ -575,21 +575,21 @@ def _groups(summaries, flat, columns, seeds, run_seeds, chosen, last_n, problems
         seed_texts = []
         for member in members:
             member.group = name
-            seed_texts.append(_seed_text(member.run, flat[member.run_id], seeds, run_seeds[member.run_id]))
+            seed_texts.append(_seed_text(member.record, flat[member.session_id], seeds, session_seeds[member.session_id]))
         repeated = sorted({text for text in seed_texts if seed_texts.count(text) > 1})
         for text in repeated:
-            runs = [m.run_id for m, s in zip(members, seed_texts) if s == text]
+            sessions = [m.session_id for m, s in zip(members, seed_texts) if s == text]
             problems.append(
-                f"group {name}: runs {', '.join(runs)} have the same seed ({text}); "
-                "a repeated run is counted twice in the group's statistics"
+                f"group {name}: sessions {', '.join(sessions)} have the same seed ({text}); "
+                "a repeated session is counted twice in the group's statistics"
             )
         stats = {}
         for metric in chosen:
-            ends = {m.run_id: m.metrics[metric.tag].last_step for m in members if metric.tag in m.metrics}
+            ends = {m.session_id: m.metrics[metric.tag].last_step for m in members if metric.tag in m.metrics}
             if len(set(ends.values())) > 1:
                 problems.append(
                     f"group {name}: {metric.tag} ends at different steps ("
-                    + ", ".join(f"{run_id}: {step}" for run_id, step in ends.items())
+                    + ", ".join(f"{session_id}: {step}" for session_id, step in ends.items())
                     + "); its last values are not from the same iteration"
                 )
             for name_field in FIELDS:
@@ -601,23 +601,23 @@ def _groups(summaries, flat, columns, seeds, run_seeds, chosen, last_n, problems
         groups.append(GroupSummary(
             name=name,
             hyperparameters={column.name: members[0].hyperparameters[column.name] for column in plain_columns},
-            members=[member.run_id for member in members],
+            members=[member.session_id for member in members],
             seeds=seed_texts,
             stats=stats,
         ))
     return groups
 
 
-def _seed_text(run: RunRecord, config: dict | None, seeds: list[str], config_seeds: list[str]) -> str:
-    """The run's seed values, `path=value` for each, from its config and its
+def _seed_text(session: SessionRecord, config: dict | None, seeds: list[str], config_seeds: list[str]) -> str:
+    """The session's seed values, `path=value` for each, from its config and its
     matrix values."""
     parts = {}
     for path, value in (config or {}).items():
         if any(covers(seed, path) for seed in config_seeds):
             parts[path] = value
-    for label, value in run.variant.items():
-        if _is_seed(label, "matrix", run.variant_paths, seeds):
-            parts.setdefault(run.variant_paths[label] or label, value)
+    for label, value in session.variant.items():
+        if _is_seed(label, "matrix", session.variant_paths, seeds):
+            parts.setdefault(session.variant_paths[label] or label, value)
     if len(parts) == 1:
         return canonical(next(iter(parts.values())))
     return ", ".join(f"{path}={canonical(value)}" for path, value in sorted(parts.items())) or "none"

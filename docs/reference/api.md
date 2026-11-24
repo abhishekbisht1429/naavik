@@ -92,15 +92,17 @@ are the readers; problems, including a file with several sessions, raise
 `unescape` are the `${` rules; see
 [Sharing configuration between files](../guide/04-configuration.md#sharing-configuration-between-files).
 
-`naavik.reporting` compares finished runs (see
-[Comparing runs](../guide/12-comparing-runs.md)): `discover_runs(*roots,
-include=(), exclude=())` returns a `Discovery` (`roots`, `runs`: `RunRecord`s,
-`problems`); `summarize_runs(discovery, metrics=(), *, tags=(), last_n=None,
+`naavik.reporting` compares sessions (see
+[Comparing sessions](../guide/12-comparing-sessions.md)): `discover_sessions(*roots,
+include=(), exclude=())` returns a `Discovery` (`roots`, `sessions`:
+`SessionRecord`s with `session_id`, `session_dir`, `attempts`, ...,
+`problems`); `summarize_sessions(discovery, metrics=(), *, tags=(), last_n=None,
 group_by_seed=True, seed_keys=DEFAULT_SEED_KEYS,
 ignored_keys=DEFAULT_IGNORED_KEYS, sort=None)` returns a `Summary`
-(`columns`, `runs`: `RunSummary`s with `metrics`: `MetricSummary`s,
+(`columns`, `sessions`: `SessionSummary`s with `record` (its `SessionRecord`),
+`session_id`, `hyperparameters`, `metrics`: `MetricSummary`s, `group`;
 `groups`: `GroupSummary`s with `stats[(tag, field)]`: `Stats`, `shared`,
-`unknown_config_runs`, `problems`); `render_markdown`, `render_csv(summary, table=...)` and
+`unknown_config_sessions`, `problems`); `render_markdown`, `render_csv(summary, table=...)` and
 `render_json` write it. A metric is a `Metric(tag, direction=None)` or the
 text `"tag[:min|:max]"`. Options that cannot be met raise `ReportError`.
 

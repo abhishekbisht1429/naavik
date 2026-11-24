@@ -104,11 +104,12 @@ config  optimizer.optimizer.kwargs.lr: 0.1 | 0.2
 
 Code (with the `git diff` to run when the commits differ), every differing
 config key, the environment, and each rank's device. Like
-[`summarize`](12-comparing-runs.md#which-settings-are-compared), it leaves
+[`summarize`](12-comparing-sessions.md#which-settings-are-compared), it leaves
 out the keys that differ between runs by construction (`sessions_dir`, the
 rendezvous address and port); `--all-keys` compares them too.
 
-To compare runs' metrics, give their ids to `summarize`:
+To compare the metrics of the sessions these runs wrote, give their run ids to
+`summarize` (it compares sessions: a resumed session's runs are one row):
 
 ```bash
 naavik summarize --runs 01M7KMT17KHK --runs 01M7KMT4A2T9 --metric train/loss:min
@@ -132,8 +133,8 @@ With `NAAVIK_RUNS_SNAPSHOT=0`, or when untracked files exceed
 the limit, no snapshot is kept: the record says the tree was dirty and why.
 A mission's experiment records its mission's commit (and snapshot base) instead.
 
-`naavik summarize` uses these records to tell runs on different code apart
-(see [Comparing runs](12-comparing-runs.md#which-settings-are-compared)).
+`naavik summarize` uses these records to tell sessions on different code apart
+(see [Comparing sessions](12-comparing-sessions.md#which-settings-are-compared)).
 A mission launched with a note (`naavik run --note TEXT`, or the mission
 file's `note`) keeps it in each experiment's record; `naavik runs
 show` prints it as `note`.
@@ -181,4 +182,4 @@ directory; stored configs shared with other runs stay.
 ---
 
 **See also:** [Running missions](08-missions.md) for missions and
-hosts; [Comparing runs](12-comparing-runs.md) for metrics.
+hosts; [Comparing sessions](12-comparing-sessions.md) for metrics.

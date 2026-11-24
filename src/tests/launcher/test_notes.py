@@ -12,13 +12,13 @@ from types import SimpleNamespace
 import pytest
 
 from naavik.launcher.services.batches import BatchView, as_json, format_views
-from naavik.reporting import discover_runs, summarize_runs
+from naavik.reporting import discover_sessions, summarize_sessions
 from naavik.reporting.render import render_json, render_markdown
 from naavik.runs.ids import new_run_id
 from naavik.runs.registry import RunWriter
 from naavik.runs.views import table
 
-from tests.reporting.helpers import config, losses, write_run
+from tests.reporting.helpers import config, losses, write_session
 
 
 def view(batch_id, description=None):
@@ -72,7 +72,7 @@ def test_runs_list_shows_notes_only_when_some_run_has_one():
 
 def task(root, index, *, seed, note=None):
     task_dir = root / "tasks" / "g" / "e" / f"{index:03d}"
-    write_run(task_dir / "sessions", losses(2.0, 1.0),
+    write_session(task_dir / "sessions", losses(2.0, 1.0),
               config(seed=seed, sessions_dir=str(task_dir / "sessions")))
     (task_dir / "variant.json").write_text("[]")
     (task_dir / "record.json").write_text(json.dumps({"exit_status": 0, **({"note": note} if note else {})}))
@@ -81,9 +81,9 @@ def task(root, index, *, seed, note=None):
 def test_summaries_show_notes_without_comparing_them(tmp_path):
     task(tmp_path, 0, seed=1, note="first try")
     task(tmp_path, 1, seed=2, note="second try")
-    result = summarize_runs(discover_runs(tmp_path), ["loss"])
+    result = summarize_sessions(discover_sessions(tmp_path), ["loss"])
     assert len(result.groups) == 1                         # not a setting
-    runs_table = render_markdown(result).split("## Runs")[1]
+    runs_table = render_markdown(result).split("## Sessions")[1]
     header = [cell.strip() for cell in runs_table.strip().splitlines()[0].split("|")]
     assert header[header.index("attempts") + 1] == "note"
     assert "first try" in runs_table and "second try" in runs_table
@@ -92,19 +92,19 @@ def test_summaries_show_notes_without_comparing_them(tmp_path):
 
 def test_summaries_without_notes_are_unchanged(tmp_path):
     task(tmp_path, 0, seed=1)
-    result = summarize_runs(discover_runs(tmp_path), ["loss"])
-    assert "note" not in render_markdown(result).split("## Runs")[1].splitlines()[2]
+    result = summarize_sessions(discover_sessions(tmp_path), ["loss"])
+    assert "note" not in render_markdown(result).split("## Sessions")[1].splitlines()[2]
     assert "note" not in json.loads(render_json(result))["runs"][0]
 
 
 def test_a_direct_runs_note_comes_from_its_run_record(tmp_path, monkeypatch):
     registry = tmp_path / "registry"
     monkeypatch.setenv("TRAINING_FRAMEWORK_RUNS", str(registry))
-    session_dir = write_run(tmp_path / "runs", losses(1.0), config())
+    session_dir = write_session(tmp_path / "runs", losses(1.0), config())
     writer = RunWriter.create(registry, {"run_id": new_run_id(), "code": None,
                                          "launch": {"note": "from the registry"}})
     writer.event("session", index=0, session_dir=str(session_dir))
-    assert discover_runs(tmp_path / "runs").runs[0].note == "from the registry"
+    assert discover_sessions(tmp_path / "runs").sessions[0].note == "from the registry"
 
 
 # End to end -----------------------------------------------------------------------------------
@@ -131,7 +131,7 @@ def test_a_note_is_seen_everywhere(tmp_path, here, capsys):
     assert "note" in listing.splitlines()[0] and "attention pooling" in listing
     assert naavik_cli(["runs", "list"]) == 0
     assert "attention pooling" in capsys.readouterr().out
-    (run,) = discover_runs(batch_dir / "tasks").runs
+    (run,) = discover_sessions(batch_dir / "tasks").sessions
     assert run.note == "attention pooling"
 
 

@@ -110,7 +110,7 @@ from tests.launcher.test_host_end_to_end import here, launch, record, wait_for  
 
 def test_each_task_records_its_config_file_and_summaries_compare_it(tmp_path, here, capsys):
     from tests.launcher.test_code_check import project
-    from naavik.reporting import discover_runs
+    from naavik.reporting import discover_sessions
 
     longer = dict(session(max_iterations=4))
     root = project(tmp_path / "p", session(), extra={
@@ -130,5 +130,5 @@ def test_each_task_records_its_config_file_and_summaries_compare_it(tmp_path, he
         assert record(batch_dir, name)["exit_status"] == 0
         assert record(batch_dir, name)["config_file"] == file
     # (These runs write no scalars to summarize; what summaries compare is read.)
-    runs = discover_runs(batch_dir / "tasks").runs
+    runs = discover_sessions(batch_dir / "tasks").sessions
     assert sorted(run.config_file for run in runs) == ["configs/c0.yaml", "configs/longer.yaml"]

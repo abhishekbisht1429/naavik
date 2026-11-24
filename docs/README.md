@@ -18,12 +18,11 @@ you can return to the reference and concepts pages whenever you need them.
    [resume unfinished experiments](guide/08-missions.md#10-resuming-unfinished-experiments),
    and [fetch results](guide/08-missions.md#11-getting-results-back).
 4. Find and inspect recorded runs with the [run registry](guide/13-run-registry.md),
-   then [compare their results](guide/12-comparing-runs.md).
+   then [compare their sessions' results](guide/12-comparing-sessions.md).
 
-A **mission** is a collection of experiments launched on a host. Each
-experiment runs a training or analysis session; a **run record** captures
-what launched, where it ran, and how it ended. The mission guide explains
-how jobs and recipes group and generate experiments.
+A **mission** holds experiments; each attempt of an experiment is a **run**;
+a run builds or continues a **session**. These and the other terms are
+defined in [Missions, experiments, sessions, and runs](concepts/missions-sessions-runs.md).
 
 For a new project, see [setting up a project for missions](guide/10-mission-projects.md).
 For IU's cluster, follow the [Big Red 200 checklist](guide/09-big-red-200.md).
@@ -66,9 +65,9 @@ task you need.
 11. [Self-supervised training with DINO](guide/11-self-supervised-dino.md) —
     a ViT-S/16 DINO run built part by part, checked on a small scale,
     resumed, and evaluated with a linear probe; what changes for BYOL.
-12. [Comparing runs](guide/12-comparing-runs.md) — one report over a sweep's
-    runs, local or from a mission: the hyperparameters that differ, each metric, and
-    runs that differ only in their seed as mean ± std.
+12. [Comparing sessions](guide/12-comparing-sessions.md) — one report over a sweep's
+    sessions, local or from a mission: the hyperparameters that differ, each metric, and
+    sessions that differ only in their seed as mean ± std.
 13. [Every run is recorded](guide/13-run-registry.md) — the record each
     launch leaves (config, code, environment, devices, outcome), and
     `naavik runs` to list, show, compare (`diff`), and sync them.
@@ -109,7 +108,7 @@ task you need.
 - [Profiler](reference/profiler.md) — `profiler`: `torch.profiler` traces
   of chosen iterations and ranks, and what they show.
 - [CLI reference](reference/cli.md) — every `naavik` command and flag, and the
-  `summarize` command for comparing runs.
+  `summarize` command for comparing sessions.
 - [Running the engine from Python](reference/engine.md) — the engine without
   the launcher: your own entry point, its flags (`--resume-session`,
   `--extend-session`, `--debug`, ...), and how its overrides are read.
@@ -117,6 +116,9 @@ task you need.
 
 ## Understand it
 
+- [Missions, experiments, sessions, and runs](concepts/missions-sessions-runs.md)
+  — every naavik term, how they nest, where each lives, and which command
+  shows it.
 - [Architecture and process model](concepts/architecture.md) — parent and
   worker responsibilities, spawning, supervision, heartbeats.
 - [Session lifecycle](concepts/session-lifecycle.md) — exact phase ordering,

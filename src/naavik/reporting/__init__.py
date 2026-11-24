@@ -1,16 +1,16 @@
-"""Summaries of finished runs, to compare hyperparameters.
+"""Summaries of finished sessions, to compare hyperparameters.
 
-`discover_runs` finds the runs under one or more directories (local
+`discover_sessions` finds the sessions under one or more directories (local
 `sessions_dir`s, HPC batches, `hpc fetch` results) and reads their
-TensorBoard scalars and configs; `summarize_runs` compares them (the
-hyperparameters that differ, each metric per run, runs that differ only in
+TensorBoard scalars and configs; `summarize_sessions` compares them (the
+hyperparameters that differ, each metric per session, sessions that differ only in
 their seed grouped into mean ± std); `render_markdown` / `render_csv` /
 `render_json` write the result. From the shell:
 `python -m naavik.reporting summarize ROOT [ROOT ...]`.
 """
 
 from naavik.reporting.render import render_csv, render_json, render_markdown
-from naavik.reporting.runs import Attempt, Discovery, ReportError, RunRecord, discover_runs
+from naavik.reporting.sessions import Attempt, Discovery, ReportError, SessionRecord, discover_sessions
 from naavik.reporting.summary import (
     DEFAULT_IGNORED_KEYS,
     DEFAULT_SEED_KEYS,
@@ -18,10 +18,10 @@ from naavik.reporting.summary import (
     GroupSummary,
     Metric,
     MetricSummary,
-    RunSummary,
+    SessionSummary,
     Stats,
     Summary,
-    summarize_runs,
+    summarize_sessions,
 )
 
 __all__ = [
@@ -38,9 +38,9 @@ __all__ = [
     "RunSummary",
     "Stats",
     "Summary",
-    "discover_runs",
+    "discover_sessions",
     "render_csv",
     "render_json",
     "render_markdown",
-    "summarize_runs",
+    "summarize_sessions",
 ]

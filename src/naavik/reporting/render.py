@@ -13,20 +13,20 @@ from typing import Any
 
 from naavik.reporting.summary import (
     GroupSummary,
-    RunSummary,
+    SessionSummary,
     Stats,
     Summary,
 )
 
-TABLES = ("groups", "runs")
+TABLES = ("groups", "sessions")
 
 
 def render_markdown(summary: Summary, *, generated: datetime | None = None) -> str:
     generated = generated or datetime.now(timezone.utc)
-    lines = ["# Run summary", ""]
+    lines = ["# Session summary", ""]
     lines.append("- Roots: " + ", ".join(f"`{root}`" for root in summary.roots))
     lines.append(f"- Generated: {generated.strftime('%Y-%m-%d %H:%M %Z').strip()}")
-    count = f"- Runs: {len(summary.runs)}"
+    count = f"- Sessions: {len(summary.sessions)}"
     if summary.groups is not None:
         count += (
             f"; seed groups: {len(summary.groups)} (seed keys: "
@@ -41,20 +41,20 @@ def render_markdown(summary: Summary, *, generated: datetime | None = None) -> s
     if summary.sort is not None:
         lines.append(f"- Sorted by: best `{summary.sort.tag}` ({summary.sort.direction})")
     lines.append(
-        "- `last` is the value at the run's last logged step, `best` the "
+        "- `last` is the value at the session's last logged step, `best` the "
         "lowest/highest finite value"
         + (f", `mean{summary.last_n}` the mean of the last {summary.last_n} points" if summary.last_n else "")
         + "; `value @ step`."
     )
     lines.append(
-        "- Hyperparameters are from each run's `config.yaml` (its latest "
-        "settings: an extended run's changed partway, see `extended`) and, "
+        "- Hyperparameters are from each session's `config.yaml` (its latest "
+        "settings: an extended session's changed partway, see `extended`) and, "
         "for mission experiments, `variant.json` (`component:path` columns)."
     )
     if "code" in summary.shared or any(column.name == "code" for column in summary.columns):
         lines.append(
-            "- `code` is the commit each run ran (a mission experiment's from its `record.json`, "
-            "a direct run's from the run registry); `unknown`: not recorded."
+            "- `code` is the commit each session ran (a mission experiment's from its `record.json`, "
+            "a session run outside naavik from the run registry); `unknown`: not recorded."
         )
     if "config" in summary.shared or any(column.name == "config" for column in summary.columns):
         lines.append(
@@ -67,16 +67,16 @@ def render_markdown(summary: Summary, *, generated: datetime | None = None) -> s
         lines += ["## Seed groups", ""]
         lines += _markdown_table(*_group_rows(summary))
         lines.append("")
-    lines += ["## Runs", ""]
-    lines += _markdown_table(*_run_rows(summary))
+    lines += ["## Sessions", ""]
+    lines += _markdown_table(*_session_rows(summary))
     lines.append("")
 
     lines += ["## Shared settings", ""]
-    if summary.unknown_config_runs:
-        known = len(summary.runs) - len(summary.unknown_config_runs)
+    if summary.unknown_config_sessions:
+        known = len(summary.sessions) - len(summary.unknown_config_sessions)
         lines += [
-            f"Equal in the {known} run(s) with a config; unknown for "
-            + ", ".join(f"`{run_id}`" for run_id in summary.unknown_config_runs)
+            f"Equal in the {known} session(s) with a config; unknown for "
+            + ", ".join(f"`{session_id}`" for session_id in summary.unknown_config_sessions)
             + " (no readable `config.yaml`).",
             "",
         ]
@@ -85,7 +85,7 @@ def render_markdown(summary: Summary, *, generated: datetime | None = None) -> s
         lines += [f"{path} = {_text(value)}" for path, value in summary.shared.items()]
         lines.append("```")
     else:
-        lines.append("None: every setting differs in some run.")
+        lines.append("None: every setting differs in some session.")
     if summary.ignored_keys:
         lines += ["", "Not compared (ignored keys): " + ", ".join(f"`{key}`" for key in summary.ignored_keys)]
     lines += ["", "## Problems", ""]
@@ -101,10 +101,10 @@ def render_csv(summary: Summary, *, table: str = "groups") -> str:
         raise ValueError(f"table must be one of {', '.join(TABLES)}; got {table!r}")
     if table == "groups":
         if summary.groups is None:
-            raise ValueError("the runs are not grouped by seed; there is no groups table")
+            raise ValueError("the sessions are not grouped by seed; there is no groups table")
         header, rows = _group_rows(summary, plain=True)
     else:
-        header, rows = _run_rows(summary, plain=True)
+        header, rows = _session_rows(summary, plain=True)
     buffer = io.StringIO()
     writer = csv.writer(buffer, lineterminator="\n")
     writer.writerow(header)
@@ -113,18 +113,20 @@ def render_csv(summary: Summary, *, table: str = "groups") -> str:
 
 
 def render_json(summary: Summary) -> str:
-    def run_json(run: RunSummary) -> dict[str, Any]:
-        record = run.run
+    def session_json(session: SessionSummary) -> dict[str, Any]:
+        record = session.record
         return {
-            "run": run.run_id,
-            "group": run.group,
+            "session": session.session_id,
+            # The earlier key, kept for one release: the same id.
+            "run": session.session_id,
+            "group": session.group,
             "task": record.task,
             "session_dir": record.session_dir,
-            "hyperparameters": run.hyperparameters,
+            "hyperparameters": session.hyperparameters,
             "extensions": record.extensions,
             "writers": record.writers,
             "attempts": [asdict(attempt) for attempt in record.attempts],
-            "metrics": {tag: asdict(metric) for tag, metric in run.metrics.items()},
+            "metrics": {tag: asdict(metric) for tag, metric in session.metrics.items()},
             **({"note": record.note} if record.note else {}),
             **({"source": record.source} if record.source else {}),
         }
@@ -149,9 +151,12 @@ def render_json(summary: Summary) -> str:
         "seed_keys": summary.seed_keys,
         "columns": [asdict(column) for column in summary.columns],
         "groups": None if summary.groups is None else [group_json(g) for g in summary.groups],
-        "runs": [run_json(run) for run in summary.runs],
+        "sessions": [session_json(session) for session in summary.sessions],
+        # The earlier key, kept for one release: the same list.
+        "runs": [session_json(session) for session in summary.sessions],
         "shared": summary.shared,
-        "unknown_config_runs": summary.unknown_config_runs,
+        "unknown_config_sessions": summary.unknown_config_sessions,
+        "unknown_config_runs": summary.unknown_config_sessions,   # earlier key
         "ignored_keys": summary.ignored_keys,
         "problems": summary.problems,
     }
@@ -174,17 +179,17 @@ def _metric_fields(summary: Summary, metric) -> list[str]:
     return fields
 
 
-def _run_rows(summary: Summary, plain: bool = False):
-    header = ["run"]
+def _session_rows(summary: Summary, plain: bool = False):
+    header = ["session"]
     if summary.groups is not None:
         header.append("group")
-    # What an analysis run analysed: shown, not compared (its settings are).
-    sources = any(run.run.source for run in summary.runs)
+    # What an analysis session analysed: shown, not compared (its settings are).
+    sources = any(session.record.source for session in summary.sessions)
     if sources:
         header.append("source experiment")
     header += [column.name for column in summary.columns]
     header += ["extended", "attempts"]
-    notes = any(run.run.note for run in summary.runs)
+    notes = any(session.record.note for session in summary.sessions)
     if notes:
         header.append("note")
     for metric in summary.metrics:
@@ -199,23 +204,23 @@ def _run_rows(summary: Summary, plain: bool = False):
         if plain:
             header += [f"{metric.tag} points", f"{metric.tag} rewritten"]
     rows = []
-    for run in summary.runs:
-        row: list[Any] = [run.run_id]
+    for session in summary.sessions:
+        row: list[Any] = [session.session_id]
         if summary.groups is not None:
-            row.append(run.group)
+            row.append(session.group)
         if sources:
-            row.append((run.run.source or {}).get("experiment") or ("" if plain else "-"))
-        row += [_cell(run.hyperparameters[column.name], plain) for column in summary.columns]
-        row.append(run.run.extensions if plain else (run.run.extensions or "-"))
-        rewritten = max(run.run.rewritten.values(), default=0)
+            row.append((session.record.source or {}).get("experiment") or ("" if plain else "-"))
+        row += [_cell(session.hyperparameters[column.name], plain) for column in summary.columns]
+        row.append(session.record.extensions if plain else (session.record.extensions or "-"))
+        rewritten = max(session.record.rewritten.values(), default=0)
         if plain or not rewritten:
-            row.append(_attempts(run))
+            row.append(_attempts(session))
         else:
-            row.append(f"{_attempts(run)} ({rewritten} steps rewritten)")
+            row.append(f"{_attempts(session)} ({rewritten} steps rewritten)")
         if notes:
-            row.append(run.run.note or ("" if plain else "-"))
+            row.append(session.record.note or ("" if plain else "-"))
         for metric in summary.metrics:
-            values = run.metrics.get(metric.tag)
+            values = session.metrics.get(metric.tag)
             for field in _metric_fields(summary, metric):
                 if values is None:
                     row += ["", ""] if plain and field in ("last", "best") else ["" if plain else "missing"]
@@ -237,7 +242,7 @@ def _run_rows(summary: Summary, plain: bool = False):
 
 def _group_rows(summary: Summary, plain: bool = False):
     plain_columns = [column for column in summary.columns if not column.seed]
-    header = ["group"] + [column.name for column in plain_columns] + ["runs", "seeds"]
+    header = ["group"] + [column.name for column in plain_columns] + ["sessions", "seeds"]
     names = []
     for metric in summary.metrics:
         for field in _metric_fields(summary, metric):
@@ -267,11 +272,11 @@ def _group_rows(summary: Summary, plain: bool = False):
     return header, rows
 
 
-def _attempts(run: RunSummary) -> int:
-    """Launches of the run: event files per writer directory (one writer can
+def _attempts(session: SessionSummary) -> int:
+    """Launches of the session: event files per writer directory (one writer can
     be added by a resume, so the most any writer has)."""
     per_writer: dict[str, int] = {}
-    for attempt in run.run.attempts:
+    for attempt in session.record.attempts:
         writer = posixpath.dirname(attempt.path)
         per_writer[writer] = per_writer.get(writer, 0) + 1
     return max(per_writer.values(), default=0)

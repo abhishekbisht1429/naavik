@@ -10,7 +10,7 @@ import pytest
 from naavik.launcher.ports.targets import Target
 from naavik.reporting.__main__ import main
 
-from .helpers import config, losses, write_run
+from .helpers import config, losses, write_session
 
 
 @pytest.fixture
@@ -24,7 +24,7 @@ def receipts(tmp_path, monkeypatch):
 def batch(root, batch_id, seeds=(1, 2)):
     for index, seed in enumerate(seeds):
         task_dir = root / batch_id / "tasks" / "g" / "e" / f"{index:03d}"
-        write_run(task_dir / "sessions", losses(2.0, 1.0 + seed / 10),
+        write_session(task_dir / "sessions", losses(2.0, 1.0 + seed / 10),
                   config(seed=seed, sessions_dir=str(task_dir / "sessions")))
         (task_dir / "variant.json").write_text("[]")
     return root / batch_id

@@ -8,11 +8,11 @@ import json
 
 import pytest
 
-from naavik.reporting import DEFAULT_IGNORED_KEYS, discover_runs, summarize_runs
+from naavik.reporting import DEFAULT_IGNORED_KEYS, discover_sessions, summarize_sessions
 from naavik.runs.ids import new_run_id
 from naavik.runs.registry import RunWriter
 
-from .helpers import config, losses, write_run
+from .helpers import config, losses, write_session
 
 A, B = "a" * 40, "b" * 40
 
@@ -27,7 +27,7 @@ def registry(tmp_path, monkeypatch):
 def task(root, index, *, seed, sha=None, record=None, **extra):
     """An HPC task directory whose record names its batch's commit `sha`."""
     task_dir = root / "tasks" / "g" / "e" / f"{index:03d}"
-    write_run(task_dir / "sessions", losses(2.0, 1.0 + seed / 100),
+    write_session(task_dir / "sessions", losses(2.0, 1.0 + seed / 100),
               config(seed=seed, sessions_dir=str(task_dir / "sessions"), **extra))
     (task_dir / "variant.json").write_text("[]")
     if record is not None:
@@ -38,14 +38,14 @@ def task(root, index, *, seed, sha=None, record=None, **extra):
 
 
 def summary(*roots, **options):
-    return summarize_runs(discover_runs(*roots), ["loss"], **options)
+    return summarize_sessions(discover_sessions(*roots), ["loss"], **options)
 
 
 def code_of(result):
-    return {run.run_id: run.hyperparameters.get("code") for run in result.runs}
+    return {run.session_id: run.hyperparameters.get("code") for run in result.sessions}
 
 
-def test_runs_on_different_code_are_different_groups(tmp_path):
+def test_sessions_on_different_code_are_different_groups(tmp_path):
     for index, (seed, sha) in enumerate([(1, A), (2, A), (1, B), (2, B)]):
         task(tmp_path, index, seed=seed, sha=sha)
     result = summary(tmp_path)
@@ -56,7 +56,7 @@ def test_runs_on_different_code_are_different_groups(tmp_path):
         ["g/e/000", "g/e/001"], ["g/e/002", "g/e/003"]]
 
 
-def test_runs_on_the_same_code_share_a_group_and_show_it_once(tmp_path):
+def test_sessions_on_the_same_code_share_a_group_and_show_it_once(tmp_path):
     task(tmp_path, 0, seed=1, sha=A)
     task(tmp_path, 1, seed=2, sha=A)
     result = summary(tmp_path)
@@ -69,7 +69,7 @@ def test_without_code_records_the_report_is_unchanged(tmp_path):
     task(tmp_path, 1, seed=2)
     result = summary(tmp_path)
     assert "code" not in result.shared and "code" not in [c.name for c in result.columns]
-    assert all(run.run.code is None for run in result.runs)
+    assert all(run.record.code is None for run in result.sessions)
 
 
 def test_unknown_code_beside_known_code_is_its_own_value(tmp_path):
@@ -88,8 +88,8 @@ def test_a_snapshot_batch_is_marked(tmp_path):
 
 def test_a_direct_run_takes_its_code_from_the_registry(tmp_path, registry):
     sessions = tmp_path / "runs"
-    first = write_run(sessions, losses(1.0), config(seed=1), session="session_20261031_120000")
-    second = write_run(sessions, losses(1.0), config(seed=2), session="session_20261031_130000")
+    first = write_session(sessions, losses(1.0), config(seed=1), session="session_20261031_120000")
+    second = write_session(sessions, losses(1.0), config(seed=2), session="session_20261031_130000")
     for session_dir, code in ((first, {"sha": A, "dirty": True}), (second, {"sha": B})):
         writer = RunWriter.create(registry, {"run_id": new_run_id(), "code": code})
         writer.event("session", index=0, session_dir=str(session_dir))
@@ -99,11 +99,11 @@ def test_a_direct_run_takes_its_code_from_the_registry(tmp_path, registry):
 
 
 def test_the_registry_off_is_code_unknown(tmp_path, monkeypatch, registry):
-    session_dir = write_run(tmp_path / "runs", losses(1.0), config())
+    session_dir = write_session(tmp_path / "runs", losses(1.0), config())
     writer = RunWriter.create(registry, {"run_id": new_run_id(), "code": {"sha": A}})
     writer.event("session", index=0, session_dir=str(session_dir))
     monkeypatch.setenv("TRAINING_FRAMEWORK_RUNS", "off")
-    assert summary(tmp_path / "runs").runs[0].run.code is None
+    assert summary(tmp_path / "runs").sessions[0].record.code is None
 
 
 def test_ignoring_the_code_key_leaves_it_out(tmp_path):
@@ -117,7 +117,7 @@ def test_a_config_with_its_own_code_key_is_a_problem_not_a_merge(tmp_path):
     task(tmp_path, 0, seed=1, sha=A, code={"style": "x"})
     task(tmp_path, 1, seed=2, sha=B, code={"style": "x"})
     result = summary(tmp_path)
-    assert any("the runs' code is not compared: their configs have code.style" in p
+    assert any("the sessions' code is not compared: their configs have code.style" in p
                for p in result.problems)
     assert len(result.groups) == 1 and result.shared["code.style"] == "x"
 
@@ -135,5 +135,5 @@ def test_the_report_says_what_code_is_only_when_it_shows_it(tmp_path):
 
     task(tmp_path / "known", 0, seed=1, sha=A)
     task(tmp_path / "older", 0, seed=1)
-    assert "- `code` is the commit each run ran" in render_markdown(summary(tmp_path / "known"))
+    assert "- `code` is the commit each session ran" in render_markdown(summary(tmp_path / "known"))
     assert "`code`" not in render_markdown(summary(tmp_path / "older"))

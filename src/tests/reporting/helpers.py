@@ -27,21 +27,21 @@ def config(*, lr: float = 0.1, seed: int = 1, sessions_dir: str = "runs", **extr
     }
 
 
-def write_run(
+def write_session(
         sessions_dir: Path,
         scalars: dict[str, list[tuple[int, float]]],
-        run_config: dict | None = None,
+        session_config_data: dict | None = None,
         *,
         session: str = SESSION,
         writer: str = WRITER,
         wall_time: float = 1000.0,
 ) -> Path:
-    """A session directory under `sessions_dir` with `run_config` dumped
+    """A session directory under `sessions_dir` with `session_config_data` dumped
     and one attempt writing `scalars` ({tag: [(step, value)]})."""
     session_dir = sessions_dir / session
     session_dir.mkdir(parents=True, exist_ok=True)
-    if run_config is not None:
-        (session_dir / "config.yaml").write_text(yaml.safe_dump(run_config), encoding="utf-8")
+    if session_config_data is not None:
+        (session_dir / "config.yaml").write_text(yaml.safe_dump(session_config_data), encoding="utf-8")
     write_attempt(session_dir, scalars, writer=writer, wall_time=wall_time)
     return session_dir
 

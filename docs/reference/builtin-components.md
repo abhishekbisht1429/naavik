@@ -304,7 +304,7 @@ error. It runs on rank 0 only, like `tensorboard`, so a distributed run
 writes one set of events.
 
 To compare these values across the runs of a sweep, see
-[Comparing runs](../guide/12-comparing-runs.md).
+[Comparing sessions](../guide/12-comparing-sessions.md).
 
 Summaries are grouped by kind (`scalars`, and `optimizer`) so that other
 kinds -- images, histograms -- can be added as their own sections.
