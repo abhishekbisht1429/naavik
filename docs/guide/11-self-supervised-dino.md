@@ -52,19 +52,13 @@ Install the vision extra, which the datasets need:
 pip install "naavik[vision]"
 ```
 
-Write the entry point, `train.py`, as for every run:
+Put the configuration, `dino.yaml`, in a Git repository with a first
+commit, and set up naavik for the machine that trains it, once (the
+configuration needs no package of your own, so name the repository root as
+the python path):
 
-```python
-from naavik.engine import Configurator, TrainingEngine
-
-
-def main() -> None:
-    with TrainingEngine(Configurator()) as engine:
-        engine.start_session()
-
-
-if __name__ == "__main__":
-    main()
+```bash
+naavik init --python-paths .
 ```
 
 The datasets are optional components, so the session must import them. With
@@ -75,7 +69,7 @@ with a package of your own, import
 ```yaml
 session_config:
   rng_seed: 0
-  sessions_dir: ./runs/dino
+  sessions_dir: ./runs/dino     # naavik run gives each experiment its own instead
   max_iterations: 125100      # 100 epochs of 1251 steps at batch 1024
   device: cuda
   components_package: naavik.components.builtin.datasets
@@ -371,7 +365,8 @@ starts. A mapping such as `dino_metrics` becomes one plot per entry
 (`dino/teacher_temp`, ...); `optimizer: true` adds the learning rate of each
 parameter group, the gradient norm, the loss and the steps taken. Only rank 0
 writes. The events are in `<session_dir>/Tensorboard_tensorboard/`; with
-`serve: false`, view them with `tensorboard --logdir <sessions_dir>`.
+`serve: false`, view them with `tensorboard --logdir <session directory>` (under the mission
+directory, `tasks/run/dino/000/sessions/`).
 
 What to look at:
 
@@ -386,30 +381,37 @@ What to look at:
 ## 7. Run it
 
 ```bash
-python train.py --config dino.yaml
+naavik run dino.yaml --gpus 8
 ```
+
+`--gpus 8` gives the experiment the eight GPUs its `nccl` world size needs
+(on a host of the builtin scheduler, the runner takes eight free ones of the
+pool). naavik gives the experiment its own session directory, so
+`session_config.sessions_dir` is set for you; `naavik run` follows the log
+until the run ends.
 
 Before a 100-epoch run, run the same file on a small scale. On a machine
 without GPUs, with a few images in `imagenet/train/<class>/`:
 
 ```bash
-python train.py --config dino.yaml --override \
-  'imagenet.root=./imagenet' \
-  'session_config.sessions_dir=./runs/check' \
-  'session_config.max_iterations=3' \
-  'session_config.device=cpu' \
-  'ddp.backend=gloo' \
-  'ddp.world_size=2' \
-  'data_manager.batch_size=4' \
-  'data_manager.num_workers=0' \
-  'data_manager.pin_memory=false' \
-  'optimizer.precision=fp32' \
-  'optimizer.lr_scheduler.milestones=[1]' \
-  'logger.log_every=1' \
-  'checkpointer.checkpoint_every=2'
+naavik run dino.yaml \
+  --override imagenet.root="$PWD/imagenet" \
+  --override session_config.max_iterations=3 \
+  --override session_config.device=cpu \
+  --override ddp.backend=gloo \
+  --override ddp.world_size=2 \
+  --override data_manager.batch_size=4 \
+  --override data_manager.num_workers=0 \
+  --override data_manager.pin_memory=false \
+  --override optimizer.precision=fp32 \
+  --override 'optimizer.lr_scheduler.milestones=[1]' \
+  --override logger.log_every=1 \
+  --override checkpointer.checkpoint_every=2
 ```
 
-The milestone has to fit in the shortened run. Every rank builds the full
+The data path is absolute: the experiment runs in the mission's copy of your
+code, not in your working directory. The milestone has to fit in the
+shortened run. Every rank builds the full
 ViT-S and both heads, so this checks the whole configuration, the wiring and
 two-rank DDP in a few seconds:
 
@@ -425,14 +427,19 @@ iteration, so its gradient norm and loss are the previous iteration's.
 ## 8. Resume and extend
 
 A checkpoint holds the student, the teacher, the centre, the optimizer, and
-the length of every schedule, so a resumed run continues exactly:
+the length of every schedule, so a resumed run continues exactly. A run
+stopped before its end (its time limit, a cancel, a crash) continues from
+its latest checkpoint with:
 
 ```bash
-python train.py --resume-session ./runs/dino/session_<time>/checkpoints/<time>
+naavik resume <mission-id>
 ```
 
+`naavik run` printed the mission id; `naavik missions` lists it again.
+
 To train longer than planned, extend the session
-([checkpoints, resume, and extend](05-checkpoints-and-resume.md)). The lr,
+([checkpoints, resume, and extend](05-checkpoints-and-resume.md#extend));
+naavik has no `extend` yet, so this runs the engine yourself. The lr,
 momentum and temperature schedules keep the length they were built for and
 hold their final values past it, rather than stretching or restarting.
 
@@ -440,12 +447,14 @@ hold their final values past it, rather than stretching or restarting.
 
 DINO is judged by how well a linear classifier on the frozen teacher's
 class token does. Import the teacher's ViT from the run, freeze it, and
-train one linear layer:
+train one linear layer. The run's checkpoints are in its session directory
+under the mission directory; `naavik runs show <run-id>` (the id `naavik
+run` printed) lists them:
 
 ```yaml
 import_components:
   patch_transformer#teacher:
-    checkpoint: ./runs/dino/session_<time>/checkpoints/<time>
+    checkpoint: <mission-dir>/tasks/run/dino/000/sessions/session_<time>/checkpoints/<time>
 role_bindings:
   model: backbone_with_head
   dataset: imagenet
@@ -497,7 +506,7 @@ teacher temperature warms up per step rather than per epoch. See
 ```yaml
 session_config:
   rng_seed: 0
-  sessions_dir: ./runs/dino
+  sessions_dir: ./runs/dino     # naavik run gives each experiment its own instead
   max_iterations: 125100
   device: cuda
   components_package: naavik.components.builtin.datasets

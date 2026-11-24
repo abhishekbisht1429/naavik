@@ -7,6 +7,15 @@ spawned worker does, and how the parent notices a worker that has stopped
 making progress. Read this when you need to reason about failures,
 shutdown, or why a component is built where it is.
 
+## Two layers
+
+`naavik run` and `naavik launch` are the launcher: they compile a mission,
+stage it on a host, and start each experiment through the scheduler as
+`python -m naavik.launcher.task`, which builds a `Configurator` and a
+`TrainingEngine` for that experiment's config, as a program of your own does
+([Running the engine from Python](../reference/engine.md)). Everything below
+happens inside that one engine launch, whoever started it.
+
 ## Process layout
 
 ```text

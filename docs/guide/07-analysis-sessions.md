@@ -49,7 +49,7 @@ instead, declare `@reads("logits")` and accept `logits` in its `run` method.
 
 ## Configuring the source checkpoint
 
-An analysis configuration uses the same `sessions` structure. The shared
+An analysis configuration is a session file like a training one. The shared
 `trained_model` resource and analysis logger are default roots. Because the
 trained-model resource has no default checkpoint, configure its checkpoint
 path in the component mapping:
@@ -94,11 +94,15 @@ from naavik.session import AnalysisSession
 session = AnalysisSession(analysis_config)
 ```
 
-Run the analysis entry through the same generic config path:
+Run it like any config:
 
 ```bash
-python -m my_project.train --config my_project/analysis.yaml
+naavik run my_project/analysis.yaml
 ```
+
+To analyse every checkpoint of a mission's experiments at once, a mission
+file's recipe takes them with
+[`from_mission`](08-missions.md#analysing-another-missions-checkpoints-from_mission).
 
 The configured `trained_model.model_checkpoint_path` must identify a framework
 `TrainingSession` checkpoint, not a standalone model state dictionary. The

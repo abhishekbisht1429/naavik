@@ -589,7 +589,8 @@ naavik run configs/model/vit-attnpool.yaml \
 
 `naavik run CONFIG` runs one config as a mission of one experiment, built
 from the project file at the root of the repository holding `CONFIG` (it is
-required): job `run`, one recipe named after the file
+required; [`naavik init`](00-naavik-first-run.md#describe-the-project-and-this-machine)
+writes one, and a host for this machine): job `run`, one recipe named after the file
 (`run/vit-attnpool/000`), with `quick_run_defaults.per_experiment` (`--gpus`
 and `--walltime` override them). The host is `--host`, else
 `quick_run_defaults.host`, else the hosts file's `default_host`. Everything

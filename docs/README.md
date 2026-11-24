@@ -46,7 +46,7 @@ task you need.
    run from the built-in `load_batch`, `forward` and `compute` steps and the
    optimizer, configured in YAML; recipes for several losses, a second model
    and two views.
-4. [Configuration](guide/04-configuration.md) — the `sessions` structure,
+4. [Configuration](guide/04-configuration.md) — the session file,
    `session_config` fields, and command-line overrides.
 5. [Checkpoints, resume, and extend](guide/05-checkpoints-and-resume.md) — what
    a checkpoint holds, continuing a run, and changing hyperparameters safely.
@@ -108,8 +108,11 @@ task you need.
   `DistributedInfiniteSampler`.
 - [Profiler](reference/profiler.md) — `profiler`: `torch.profiler` traces
   of chosen iterations and ranks, and what they show.
-- [CLI reference](reference/cli.md) — every command-line flag, and the
+- [CLI reference](reference/cli.md) — every `naavik` command and flag, and the
   `summarize` command for comparing runs.
+- [Running the engine from Python](reference/engine.md) — the engine without
+  the launcher: your own entry point, its flags (`--resume-session`,
+  `--extend-session`, `--debug`, ...), and how its overrides are read.
 - [API summary](reference/api.md) — public imports and type members.
 
 ## Understand it

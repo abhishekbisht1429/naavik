@@ -2,9 +2,11 @@
 
 [← Docs](../README.md) · [Project README](../../README.md)
 
-Use `naavik` to launch missions and inspect their results. This page lists its
-commands and the options accepted by a custom Python training entry point. For
-a walkthrough, start with [Running missions](../guide/08-missions.md).
+Use `naavik` to run experiments and inspect their results. This page lists its
+commands; the engine's own options, for a program of your own, are on
+[Running the engine from Python](engine.md). For a walkthrough, start with
+[your first run](../guide/00-naavik-first-run.md), then
+[Running missions](../guide/08-missions.md).
 
 ## The `naavik` command
 
@@ -51,7 +53,7 @@ record. Also `python -m naavik.runs`.
 | `naavik runs list [--since AGE] [--state S] [--host H] [--mission TEXT] [--where KEY=VALUE] [--limit N] [--json]` | recorded runs, newest first (at most 50 by default; `--limit 0`: all) |
 | `naavik runs show RUN [--json]` | one run in detail: launch, code, environment, devices, sessions, checkpoints, outcome |
 | `naavik runs diff A B [--all-keys]` | what differs in code, config, environment, and devices (`--all-keys`: also `sessions_dir` and the rendezvous address and port) |
-| `naavik runs sync [--host H ... \| --all-hosts] [--hosts-file FILE]` | copy runs recorded on SSH hosts; pass `--host` explicitly with current hosts files (see [sync limitation](../guide/13-run-registry.md#across-machines)) |
+| `naavik runs sync [--host H ... \| --all-hosts] [--hosts-file FILE]` | copy runs recorded on SSH hosts (default: the hosts file's `default_host`); see [Across machines](../guide/13-run-registry.md#across-machines) |
 
 `RUN`, `A`, `B`: a run id or any unique beginning of one. Every command takes
 `--registry PATH` (default `$NAAVIK_RUNS`, else
@@ -96,63 +98,12 @@ and `--strict` was given; `2` no report could be made (no runs, a tag no run
 writes, an unknown seed key, conflicting options), with the reason on
 standard error.
 
-## Your Python training entry point
+## Running the engine yourself
 
-The following options apply when you launch your own entry point, such as `python -m my_project.train`. See [Configuration](../guide/04-configuration.md) for session settings and [Checkpoints, resume, and extend](../guide/05-checkpoints-and-resume.md) for continuing a session.
-
-## Operations
-
-The three operations, `--config`, `--resume-session`, and
-`--extend-session`, are mutually exclusive and one is required. New-session
-type selection and constructor-specific arguments belong in the session file
-(`session_type`, `session_kwargs`).
-
-| Argument | Operation | Notes |
-|---|---|---|
-| `--config PATH` | Start a new session from a YAML file that is the session | It may [include other files](../guide/04-configuration.md#sharing-configuration-between-files); overrides are relative to the session and applied after the includes; see [Configuration](../guide/04-configuration.md#omegaconf-overrides) |
-| `--resume-session PATH` | Continue a checkpoint unchanged | Accepts only the three launch-topology overrides; see [Resume](../guide/05-checkpoints-and-resume.md#resume) |
-| `--extend-session PATH` | Continue a checkpoint with changed, extension-safe settings | Overrides are relative to the session, as with `--config`; see [Extend](../guide/05-checkpoints-and-resume.md#extend) |
-
-`--override KEY=VALUE [KEY=VALUE ...]` applies to any of the three: the
-keys each operation accepts, and how they are addressed, are in the notes
-above.
-
-The launch-topology keys `ddp.world_size`, `ddp.master_addr` and
-`ddp.master_port` are accepted by every operation, because they describe the
-machine rather than the session — see
-[The launch decides the topology](../guide/06-distributed-training.md#the-launch-decides-the-topology).
-
-## Debugging
-
-Pass `--debug` for debugger-managed worker processes. Workers are spawned
-normally, and the parent waits for them using plain process joins without
-heartbeat, failure, timeout, or termination monitoring:
-
-```bash
-python -m my_project.train --config my_project/config.yaml --debug
-```
-
-## Process-monitoring options
-
-```bash
-python -m my_project.train \
-  --config my_project/config.yaml \
-  --heartbeat-timeout 60 \
-  --stop-sync-grace-period 0.01 \
-  --stop-sync-poll-interval 0.005 \
-  --process_timeout_on_join 30
-```
-
-| Argument | Default | Meaning |
-|---|---:|---|
-| `--heartbeat-timeout` | `30.0` | Maximum seconds a live worker may go without a stage change or `session.send_heartbeat()` call |
-| `--stop-sync-grace-period` | `0.01` | Seconds to poll a DDP stop vote still pending when it is read before sleeping |
-| `--stop-sync-poll-interval` | `0.005` | Sleep duration between later polls of a pending DDP stop vote |
-| `--process_timeout_on_join` | `30.0` | Graceful-shutdown period before surviving workers are terminated |
-
-The stop-sync grace period must be a finite non-negative value. The poll
-interval must be finite and greater than zero. These are process-runtime
-settings and are not written into session configuration or checkpoints.
+The engine's own options (`--config`, `--resume-session`, `--extend-session`,
+`--override`, `--debug`, and the process-monitoring timeouts), for a program
+of your own such as `python -m my_project.train`, are on
+[Running the engine from Python](engine.md).
 
 ---
 

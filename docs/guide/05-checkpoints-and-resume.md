@@ -6,8 +6,9 @@ A checkpoint captures a running session so it can be continued later — on the
 same machine or a different one, with the same hyperparameters or changed ones.
 This page covers what a checkpoint holds, how it is laid out on disk, reading
 part of one, what happens when a component changes between saving and
-loading, the two ways to continue from one (`--resume-session` and
-`--extend-session`), and what may safely change in each.
+loading, the two ways to continue from one (resume: `naavik resume`, or the
+engine's `--resume-session`; extend: the engine's `--extend-session`), and what
+may safely change in each.
 
 To turn checkpointing on, configure the built-in `checkpointer` hook; its
 options are in the
@@ -202,15 +203,25 @@ resuming launch resolved.
 
 ## Resume
 
+A run started with `naavik run` or `naavik launch` is a mission; continue
+its unfinished experiments from their latest complete checkpoints with:
+
 ```bash
-python -m my_project.train --resume-session <checkpoint-path>
+naavik resume <mission-id>                          # every unfinished experiment
+naavik resume <mission-id> --experiment run/config/000
 ```
 
-The engine loads the session in the parent, resolves the launch topology, sends session state to workers, and continues from the saved iteration.
+Each continues as a new attempt in the same session directory, with the
+same config, code, and environment; which experiments it picks, and the
+options it takes, are in
+[Resuming unfinished experiments](08-missions.md#10-resuming-unfinished-experiments).
+The engine loads the session in the parent, resolves the launch topology,
+sends session state to workers, and continues from the saved iteration.
 
-The only overrides `--resume-session` accepts are the launch topology —
-`ddp.world_size`, `ddp.master_addr` and `ddp.master_port` — because those
-describe the machine rather than the session:
+Nothing but the launch topology may change in a resume. To continue with
+changed settings, extend the checkpoint instead ([Extend](#extend)); to
+resume a checkpoint by its path (one not made by a mission) or on a
+different number of GPUs, run the engine yourself:
 
 ```bash
 python -m my_project.train \
@@ -218,13 +229,17 @@ python -m my_project.train \
   --override ddp.world_size=4
 ```
 
-Any other override is rejected with a pointer to `--extend-session`, rather
-than being silently ignored. See
-[Resuming on a different number of GPUs](#resuming-on-a-different-number-of-gpus).
+The only overrides `--resume-session` accepts are the launch topology —
+`ddp.world_size`, `ddp.master_addr` and `ddp.master_port` — because those
+describe the machine rather than the session. Any other override is
+rejected with a pointer to `--extend-session`, rather than being silently
+ignored. See [Running the engine from Python](../reference/engine.md) for
+the entry point and its options.
 
 ## Resuming on a different number of GPUs
 
-A run trained on eight GPUs resumes on four with the same command. If the
+A run trained on eight GPUs resumes on four with `--resume-session` (a
+mission's `naavik resume` keeps its experiments' GPUs). If the
 stored world size no longer fits the visible CUDA devices of an `nccl` run,
 the launch warns and falls back to the device count. Choose a size explicitly with
 `--override ddp.world_size=N`, which is the one kind of override
@@ -255,7 +270,12 @@ position is converted to the topology-independent form.
 ## Extend
 
 To restore one training checkpoint and change extension-safe hyperparameters,
-use overrides relative to that session, as with `--config`:
+run the engine yourself (naavik has no `extend` yet; see
+[Running the engine from Python](../reference/engine.md)), with overrides
+relative to the session. A checkpoint of a mission's experiment is under its
+mission directory, `tasks/<experiment>/sessions/session_<time>/checkpoints/`;
+the extension runs outside the mission, so `naavik status` does not show it
+(the [run registry](13-run-registry.md) records it):
 
 ```bash
 python -m my_project.train \

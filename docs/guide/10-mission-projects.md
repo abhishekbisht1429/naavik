@@ -202,16 +202,23 @@ with the same `pip install ... @<sha>`).
 ### A host for this machine
 
 To run the same mission file on your workstation, without committing each
-change and in the environment your IDE already uses:
+change and in the environment your IDE already uses, let `naavik init` add a
+host for this machine (it asks before adding to an existing hosts file):
+
+```bash
+naavik init --host here
+```
+
+It writes:
 
 ```yaml
 hosts:
   here:
     connection: local
-    scheduler: {kind: builtin, gpus: [4, 5]}   # the GPUs missions may use here
-    run_code_from: working_tree                # run the working tree as it is
+    scheduler: {kind: builtin, gpus: all}         # any free GPU; or a count, or [indices]
+    run_code_from: working_tree                   # run the working tree as it is
     python_environment: {use_existing: current}   # the interpreter running naavik
-    directories: {missions: /data/me/naavik/missions, python_environments: /data/me/naavik/envs, datasets: /data/me/naavik/datasets}
+    directories: {...}                            # absolute, under ~/.local/share/naavik
 ```
 
 `naavik launch missions/sweep.yaml --host here` then needs no requirements

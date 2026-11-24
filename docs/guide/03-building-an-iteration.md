@@ -318,7 +318,7 @@ returns the loss from `run`; `backward` picks it up exactly as it does a
 
 ---
 
-**Next:** [Configuration](04-configuration.md) — the full `sessions` YAML
+**Next:** [Configuration](04-configuration.md) — the full session file
 structure and `session_config` fields.
 
 **Reference:** [generic steps](../reference/generic-steps.md) and

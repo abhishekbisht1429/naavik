@@ -208,7 +208,7 @@ hooks:
 Components are listed by kind under `resources`, `steps` and `hooks`, and each
 entry must name a component visible to the active session type; listing one
 under the wrong kind is an error. The groups are optional: a component may
-also be listed directly in the session entry, next to `session_config`, and the
+also be listed directly at the top level of the file, next to `session_config`, and the
 two layouts can be mixed. Listing order is not execution order -- steps run in
 the order their data flows. `role_bindings` maps a role name to a registered
 implementation, and configuration belongs under that implementation name (see
@@ -246,35 +246,10 @@ recorded (`naavik runs list`), uncommitted edits included.
 
 ### Running the engine from your own program
 
-The engine also runs inside a program of your own, without the launcher:
-
-```python
-# my_project/train.py
-from naavik.engine import Configurator
-from naavik.engine import TrainingEngine
-
-
-def main() -> None:
-    configurator = Configurator()
-
-    with TrainingEngine(configurator) as engine:
-        engine.start_session()
-
-
-if __name__ == "__main__":
-    main()
-```
-
-```bash
-python -m my_project.train --config my_project/config.yaml
-```
-
-The `if __name__ == "__main__"` guard is required for safe process spawning.
-The parent process creates the session and worker configuration. The worker
-process reconstructs the session and executes the configured components.
-For debugger-managed worker processes, pass `--debug`: workers are spawned
-normally, and the parent waits for them using plain process joins without
-heartbeat, failure, timeout, or termination monitoring.
+The engine also runs inside a program of your own, without the launcher
+(`python -m my_project.train --config my_project/config.yaml`): to embed a
+session, to debug worker processes, or to extend a checkpoint. See
+[Running the engine from Python](docs/reference/engine.md).
 
 ## Training a real model
 

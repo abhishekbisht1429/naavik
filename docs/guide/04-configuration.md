@@ -150,11 +150,12 @@ project.
   read and write.
 - The configuration is stored as written: `config.yaml` in the session
   directory and every checkpoint keep the grouped layout.
-- An override addresses a component where it is listed:
-  `steps.forward.args=[x]`, with `--config` and with `--extend-session`
-  alike. Overriding
-  `forward.args` when `forward` is listed under `steps` is refused with the
-  path to use. The launch-topology overrides stay `ddp.<key>` either way.
+- An override addresses a component by its name with `naavik run`
+  (`--override forward:args=[x]`, wherever `forward` is listed; a path
+  through a group, `steps.forward.args`, is refused with that advice). The
+  engine's `--config` and `--extend-session` take the path where it is
+  listed: `steps.forward.args=[x]`; there, `forward.args` for a `forward`
+  listed under `steps` is refused with the path to use. The launch-topology overrides stay `ddp.<key>` either way.
 
 An empty value (`classifier:`) configures a component with no settings, the
 same as `classifier: {}`, at the top level or in a group.
@@ -230,26 +231,41 @@ resolved, so it would reach the component as that literal text. Share
 settings with includes instead. Write `\${` for a value that must contain
 a literal `${`.
 
-## New session
+## Running a config
 
 ```bash
-python -m my_project.train --config my_project/config.yaml
+naavik run my_project/config.yaml
 ```
 
-## OmegaConf overrides
+`naavik run` checks the config with your code and runs it as an experiment
+on this machine (set up once with `naavik init`; see
+[your first run](00-naavik-first-run.md)). Each experiment gets its own
+session directory, so naavik sets `session_config.sessions_dir` itself and
+an override of it is refused.
+
+## Overrides
 
 ```bash
-python -m my_project.train \
-  --config my_project/config.yaml \
-  --override \
-  'session_config.max_iterations=2000' \
-  'logger.log_every=25'
+naavik run my_project/config.yaml \
+  --override session_config.max_iterations=2000 \
+  --override logger.log_every=25 \
+  --override forward:args=[x]
 ```
 
-Overrides are relative to the session, and are applied after its includes are
-merged. For a file still in the earlier `sessions: [...]` form,
-`sessions[0].logger.log_every=25` is accepted too; on a session file it is
-refused with the path to write instead.
+- `--override PATH=VALUE` sets a path relative to the session
+  (`session_config.max_iterations`, or a component listed at the top
+  level); `--override component:PATH=VALUE` a path inside that component's
+  entry, wherever it is listed (top level or a group). A path through a
+  group (`steps.forward.args`) is refused: use `forward:args`. Repeat the
+  flag for more.
+- Overrides apply after the includes are merged.
+- `VALUE` is read as YAML, like a config file: `3.0e-4` is a number, `3e-4`
+  the string `"3e-4"`.
+
+A mission file sets values the same way, with `overrides` and `vary` (see
+[mission files](../reference/mission-files.md#recipes)). Running the engine
+from a program of your own takes `--override` too, with OmegaConf's value
+rules; see [Running the engine from Python](../reference/engine.md#overrides).
 
 The `ddp.world_size`, `ddp.master_addr` and `ddp.master_port` keys are an
 exception to everything on this page: they describe the machine a run is

@@ -83,8 +83,12 @@ a warning.
 `master_addr` has to be an address of the machine running the engine, since
 every rank runs there; any other address is reported at launch too.
 
+With `naavik run` or a mission, the experiment's GPUs are its
+`per_experiment.gpus` (with `nccl`, `ddp.world_size` must equal it); the
+port is chosen as above. Running the engine yourself,
 `--resume-session` accepts these three overrides and rejects any other, which
-belongs to `--extend-session`.
+belongs to `--extend-session` (see
+[Running the engine from Python](../reference/engine.md)).
 
 ## What each rank builds
 

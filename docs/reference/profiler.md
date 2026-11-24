@@ -69,7 +69,8 @@ session resumed is not restarted; if every window did, nothing is recorded,
 and the profiler says so. Nothing about a run in progress is checkpointed.
 
 An extended session may change `start_iteration`, `warmup`, `active`, `wait`
-and `repeat`, for instance to profile later iterations:
+and `repeat`, for instance to profile later iterations (extending runs the
+engine yourself; see [Running the engine from Python](engine.md)):
 
 ```bash
 python -m my_project.train \
