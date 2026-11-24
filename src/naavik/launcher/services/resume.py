@@ -344,9 +344,10 @@ def build_attempt(plan: dict, receipt: dict, chosen: list[Candidate], dialect,
             raise ResumeError(f"{batch_id} was launched before missions recorded what resume "
                               "needs (job resources in plan.json); launch a new mission")
         raw = node_json["resources"]
-        walltime = changes.walltime or raw["walltime"]
+        walltime = changes.walltime or raw["walltime"]     # None: no limit
         resources = Resources(
-            walltime=walltime, walltime_seconds=parse_walltime(walltime),
+            walltime=walltime,
+            walltime_seconds=parse_walltime(walltime) if walltime else None,
             gpus=raw["gpus"], cpus=changes.cpus or raw["cpus"],
             memory=changes.memory or raw["memory"],
             scheduler_options=raw.get("scheduler_options") or {},
@@ -356,7 +357,7 @@ def build_attempt(plan: dict, receipt: dict, chosen: list[Candidate], dialect,
             raise ResumeError("; ".join(problems))
         stop_grace = node_json.get("stop_grace_seconds", 0)
         lead = dialect.signal_lead(timeout, stop_grace)
-        if lead >= resources.walltime_seconds:
+        if resources.walltime_seconds is not None and lead >= resources.walltime_seconds:
             raise ResumeError(f"job '{group}': the shutdown signal lead ({lead}s) is not "
                               f"shorter than the walltime ({walltime})")
         node = JobNode(

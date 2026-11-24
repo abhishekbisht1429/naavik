@@ -89,6 +89,17 @@ class CancelResult:
     detail: str
 
 
+class LiveStates(dict):
+    """A scheduler's live states, `{job or element id: state}`, and why
+    some pending ones wait (`details`: `{id: reason}`; empty when the
+    scheduler does not say). A plain mapping to everything that reads only
+    the states."""
+
+    def __init__(self, states=(), details=None):
+        super().__init__(states)
+        self.details: dict[str, str] = dict(details or {})
+
+
 class SchedulerSubmitter(Protocol):
     def submit(self, node: JobNode, script_path: str,
                dependencies: list[str]) -> str:

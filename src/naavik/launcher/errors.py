@@ -34,6 +34,9 @@ class Problems:
     def __bool__(self) -> bool:
         return bool(self._items)
 
+    def __len__(self) -> int:
+        return len(self._items)
+
     def __str__(self) -> str:
         return "; ".join(self._items)
 

@@ -42,12 +42,13 @@ code:
   framework_from: installed
   python_paths: ["."]
 quick_run_defaults:
-  per_experiment: {walltime: "00:10:00", cpus: 2, memory: 4G, gpus: 0}
+  per_experiment: {gpus: 0}
 ```
 
 This tells Naavik to use the installed framework and make your project package
-importable. The resource settings describe one experiment. On the built-in
-local scheduler, CPU and memory settings are recorded but not enforced.
+importable. The resource settings describe one experiment: here, no GPUs. On
+this machine's built-in scheduler, an experiment has no time, CPU, or memory
+limit unless you set `walltime` (CPUs and memory are never limited there).
 
 Create a host file outside the project. These commands use absolute paths
 under your home directory for the local mission files and data:
@@ -59,7 +60,7 @@ default_host: here
 hosts:
   here:
     connection: local
-    scheduler: {kind: builtin, gpus: []}
+    scheduler: {kind: builtin}         # gpus: all, the default
     run_code_from: working_tree
     python_environment: {use_existing: current}
     directories:

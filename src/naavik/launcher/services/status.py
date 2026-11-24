@@ -14,6 +14,8 @@ from collections import Counter
 import dataclasses
 from dataclasses import dataclass
 
+from naavik.launcher.ports import LiveStates
+
 
 @dataclass(frozen=True)
 class Row:
@@ -26,6 +28,8 @@ class Row:
     #: The session config file an experiment was made from, when its
     #: mission used more than one (the experiment table's 6th column).
     config_file: str | None = None
+    #: Why a queued job or element has not started, when its scheduler says.
+    waiting: str | None = None
 
 
 #: Slurm job states after which a job holds nothing and will not run again.
@@ -130,7 +134,17 @@ def expand_ranges(live: dict) -> dict:
             if first.isdigit() and (not last or last.isdigit()):
                 for index in range(int(first), int(last or first) + 1):
                     expanded.setdefault(f"{job}_{index}", state)
-    return expanded
+    return LiveStates(expanded, getattr(live, "details", None))
+
+
+def _live_row(name: str, values: str, live: dict, key: str, suffix: str = "") -> Row:
+    """The row of a job or element in the scheduler's queue: its state, the
+    id as the detail, and why it waits when the scheduler says (a step's
+    single element is `<job>_0`)."""
+    details = getattr(live, "details", None) or {}
+    reason = details.get(key) or details.get(f"{key}_0")
+    detail = f"job {key}: {reason}" if reason else f"job {key}"
+    return Row(name, values, live[key], detail + suffix, True, waiting=reason)
 
 
 def _is_group(node_id: str, node: dict) -> bool:
@@ -173,11 +187,11 @@ def _attempt_row(task, values, group, index, attempt, node, record, live,
         state, detail = _record_state(record)
         return Row(task, values, state, detail + suffix if detail else suffix.strip(" ()"))
     if element in live:
-        return Row(task, values, live[element], f"job {element}{suffix}", True)
+        return _live_row(task, values, live, element, suffix)
     if cancelled:      # its element left the queue; the job may run on for others
         return Row(task, values, "cancelled", suffix.strip(" ()"))
     if node.get("job_ref") in live:
-        return Row(task, values, live[node["job_ref"]], f"job {node['job_ref']}{suffix}", True)
+        return _live_row(task, values, live, node["job_ref"], suffix)
     if node["status"] == "submitted":
         return Row(task, values, "ended without a record",
                    f"see logs/{group}/{node['job_ref']}_{index}.out{suffix}")
@@ -198,7 +212,7 @@ def task_rows(receipt: dict, files: BatchFiles | None, live: dict) -> list[Row]:
             continue
         record = files.records.get(f"nodes/{node_id}/record.json")
         if node.get("job_ref") in live:
-            rows.append(Row(node_id, "", live[node["job_ref"]], f"job {node['job_ref']}", True))
+            rows.append(_live_row(node_id, "", live, node["job_ref"]))
             continue
         if record:
             state, detail = _record_state(record)
@@ -241,13 +255,13 @@ def _task_row(line, group, files, receipt, attempts, live, node, rows) -> None:
     if record:
         state, detail = _record_state(record)
     elif element in live:
-        rows.append(Row(task, values, live[element], f"job {element}", True))
+        rows.append(_live_row(task, values, live, element))
         return
     elif _cancelled(receipt, task, 1):
         # Its element left the queue; the job may run on for others.
         state, detail = "cancelled", ""
     elif node.get("job_ref") in live:
-        rows.append(Row(task, values, live[node["job_ref"]], f"job {node['job_ref']}", True))
+        rows.append(_live_row(task, values, live, node["job_ref"]))
         return
     elif node["status"] in ("cancelled", "unknown", "refused", "cancel failed"):
         state, detail = node["status"], ""

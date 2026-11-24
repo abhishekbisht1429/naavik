@@ -16,7 +16,7 @@ import re
 import subprocess
 
 from naavik.launcher.compile.plan import JobNode
-from naavik.launcher.ports import CancelResult, SubmissionFailed, SubmissionUncertain
+from naavik.launcher.ports import CancelResult, LiveStates, SubmissionFailed, SubmissionUncertain
 from naavik.launcher.ports.remote_probe import RemoteProcessProbe
 from naavik.launcher.ports.ssh import TransportError
 
@@ -85,17 +85,20 @@ class HostSubmitter:
         return CancelResult(result.status == 0 and detail != "not running", detail)
 
 
-def _states(executor, refs: list[str] | None) -> dict:
+def _states(executor, refs: list[str] | None) -> LiveStates:
     result = executor.run([RUNNER_PYTHON, "-c", _runner_program(), "states", *(refs or [])])
     if result.status != 0:
         raise RuntimeError(f"reading the host jobs failed: {result.stderr.strip()}")
-    return json.loads(result.stdout or "{}")
+    data = json.loads(result.stdout or "{}")
+    return LiveStates(data.get("states") or {}, data.get("details") or {})
 
 
 def job_states(executor):
     """Live states of jobs and their elements: `<ref>` and `<ref>_<index>`
-    -> pending | running; finished ones are absent, as in a queue."""
-    return lambda job_refs: _states(executor, list(job_refs)) if job_refs else {}
+    -> pending | running; finished ones are absent, as in a queue. Their
+    `details` say why pending elements wait (GPUs, `max_parallel`, a job
+    they run after)."""
+    return lambda job_refs: _states(executor, list(job_refs)) if job_refs else LiveStates()
 
 
 def user_job_states(executor) -> dict:
@@ -107,9 +110,18 @@ def owner_probe(executor):
     return RemoteProcessProbe(executor)
 
 
-def target_check(executor, settings) -> list[str]:
+def requested_gpus(plan) -> int:
+    """The most GPUs one experiment (or step) of `plan` asks for."""
+    return max((node.resources.gpus for node in plan.nodes if node.resources is not None),
+               default=0)
+
+
+def target_check(executor, settings, plan=None) -> list[str]:
     """What the target needs before anything is staged: a Python 3.8+
-    `python3` for the runner, and every GPU of the pool."""
+    `python3` for the runner; and, when a job asks for GPUs or the pool
+    names some, `nvidia-smi`, every GPU the pool names, and enough GPUs for
+    the largest request (with `all` or a count, the machine's are counted
+    here: validation, offline, cannot)."""
     problems = []
     # Through `sh`, so a missing program is an exit status on every executor.
     result = executor.run(["sh", "-c", f'{RUNNER_PYTHON} -c "import sys; '
@@ -117,17 +129,28 @@ def target_check(executor, settings) -> list[str]:
     if result.status != 0 or result.stdout.strip() != "True":
         problems.append(f"the host needs {RUNNER_PYTHON} 3.8 or newer for the builtin "
                         f"scheduler's runner ({(result.stderr or result.stdout).strip() or 'too old'})")
-    if settings.gpus:
-        result = executor.run(["sh", "-c", "nvidia-smi --query-gpu=index --format=csv,noheader"])
-        if result.status != 0:
-            problems.append("scheduler.gpus needs nvidia-smi on the host "
-                            f"({result.stderr.strip() or 'not found'})")
-        else:
-            present = {int(line) for line in result.stdout.split() if line.strip().isdigit()}
-            missing = [index for index in settings.gpus if index not in present]
-            if missing:
-                problems.append(f"scheduler.gpus lists GPU(s) {missing} that the host does not "
-                                f"have (it has {sorted(present)})")
+    wanted = requested_gpus(plan) if plan is not None else 0
+    if not wanted and not settings.gpu_indices:
+        return problems
+    result = executor.run(["sh", "-c", "nvidia-smi --query-gpu=index --format=csv,noheader"])
+    if result.status != 0:
+        problems.append(f"scheduler.gpus ({settings.describe_gpus()}) needs nvidia-smi on the "
+                        f"host ({result.stderr.strip() or 'not found'})")
+        return problems
+    present = sorted({int(line) for line in result.stdout.split() if line.strip().isdigit()})
+    indices = settings.gpu_indices
+    if indices is not None:
+        missing = [index for index in indices if index not in present]
+        if missing:
+            problems.append(f"scheduler.gpus lists GPU(s) {missing} that the host does not "
+                            f"have (it has {present})")
+    usable = len(indices) if indices is not None else min(
+        len(present), settings.gpu_limit if settings.gpu_limit is not None else len(present))
+    if wanted > usable:
+        problems.append(
+            f"an experiment requests {wanted} GPU(s), but at most {usable} may be in use at "
+            f"once on this host (scheduler.gpus: {settings.describe_gpus()}; the machine has "
+            f"{len(present)})")
     return problems
 
 

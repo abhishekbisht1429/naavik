@@ -36,9 +36,9 @@ class SchedulerBundle:
     #: Job name -> how to look for a job whose submission had an uncertain
     #: outcome (it may exist without the receipt knowing its reference).
     reconcile_hint: Callable[[str], str] = lambda job_name: f"look for a job named {job_name}"
-    #: (RemoteExecutor, settings) -> problems found on the target itself
-    #: before anything is staged (None: nothing to check).
-    target_check: Callable[[Any, Any], list[str]] | None = None
+    #: (RemoteExecutor, settings, ExecutionPlan) -> problems found on the
+    #: target itself before anything is staged (None: nothing to check).
+    target_check: Callable[[Any, Any, Any], list[str]] | None = None
     #: ExecutionPlan -> {path relative to the batch directory: content} the
     #: scheduler needs staged with the plan (None: nothing).
     extra_files: Callable[[Any], dict[str, str]] | None = None

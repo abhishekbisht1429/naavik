@@ -15,7 +15,17 @@ it depends on, then runs the script once per element (a task set's tasks,
 or once for setup/prepare), at most `max-parallel` at a time, each with its
 share of the GPU pool. An element gets USR1 `signal-lead` seconds before its
 walltime (the task wrapper turns that into a cooperative stop) and SIGKILL
-at the walltime. The job's state is a JSON file, rewritten on every change:
+at the walltime; without a walltime it runs until it ends. CPUs and memory
+are not limited.
+
+The GPU pool (`gpu-pool`) is `all` or a list of indices; `gpu-limit` caps
+the GPUs held at once by all of this user's runners on the host (default:
+the pool's size). Which GPUs an element gets is decided when it starts:
+free ones of the pool, skipping those held by other runners and, with
+`busy-gpus=wait`, those someone else is using. While an element waits, the
+job file says why (`waiting`); a request the pool can never satisfy fails
+the job at once, with the reason in each element's log.
+The job's state is a JSON file, rewritten on every change:
 
     <state dir>/jobs/<ref>.json
 
@@ -29,6 +39,7 @@ reference is `h<pid>.<start time>` of the runner, checkable on this host.
 `python3 host_runner.py cancel REF [INDEX ...]` asks a runner to stop.
 """
 
+import fcntl
 import json
 import os
 import signal
@@ -38,7 +49,7 @@ import sys
 import time
 
 from naavik.launcher.remote.runtime import StdlibFilesystem, process_start_time
-from naavik.launcher.remote.lease import Lease
+from naavik.launcher.remote.lease import LOCK_SUFFIX, Lease
 
 POLL = 0.5
 DIRECTIVE = "#TFHOST "
@@ -128,12 +139,21 @@ def _nvidia_smi(query):
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
 
-def gpu_uuids(pool):
-    """The UUIDs of the pool's GPUs (nvidia-smi indices), in pool order."""
-    by_index = {}
+def gpu_indices():
+    """{UUID: nvidia-smi index} of every GPU of the machine."""
+    found = {}
     for line in _nvidia_smi("gpu=index,uuid"):
         index, _, uuid = line.partition(",")
-        by_index[int(index)] = uuid.strip()
+        found[uuid.strip()] = int(index)
+    return found
+
+
+def gpu_uuids(pool):
+    """The UUIDs of the pool's GPUs (nvidia-smi indices), in pool order;
+    `pool` None: every GPU of the machine, in index order."""
+    by_index = {index: uuid for uuid, index in gpu_indices().items()}
+    if pool is None:
+        return [by_index[index] for index in sorted(by_index)]
     missing = [index for index in pool if index not in by_index]
     if missing:
         raise RuntimeError("GPU(s) {} of the pool do not exist here (have {})".format(
@@ -159,43 +179,116 @@ def busy_uuids():
     return busy
 
 
+SLOT_PREFIX = "gpu-"
+
+
 class Slots:
     """Host-wide GPU slots: one lease per GPU, held by the runner using it,
-    so jobs of every batch on this host share the pool without overlap."""
+    so jobs of every batch on this host share the pool without overlap; and
+    at most `limit` held at once by all of this user's runners, counted
+    under one lock so two runners never both take the last ones."""
 
-    def __init__(self, directory, uuids, wait_busy, owner):
+    def __init__(self, directory, uuids, wait_busy, owner, limit=None, indices=None):
         self.directory = directory
         self.uuids = uuids
         self.wait_busy = wait_busy
         self.owner = owner
+        #: The most GPUs held at once (never more than the pool has).
+        self.limit = len(uuids) if limit is None else min(limit, len(uuids))
+        self.index_of = indices or {}
         self.held = {}
+        #: Why the last `take` returned None (for the job file).
+        self.reason = None
 
     def take(self, count):
-        """`count` free GPUs (their leases now held), or None."""
+        """`count` free GPUs (their leases now held), or None (`reason`
+        says why)."""
         if count == 0:
             return []
-        busy = busy_uuids() if self.wait_busy else set()
-        taken = []
-        for uuid in self.uuids:
-            if len(taken) == count:
-                break
-            if uuid in busy or uuid in self.held:
-                continue
-            lease = Lease(StdlibFilesystem(), _ProcessOwners(),
-                          os.path.join(self.directory, "slots", "gpu-" + uuid), self.owner)
-            if lease.try_acquire():
-                self.held[uuid] = lease
-                taken.append(uuid)
-        if len(taken) < count:
-            self.give_back(taken)
-            return None
+        with self._locked():
+            busy = busy_uuids() if self.wait_busy else set()
+            held = self._held_by_runners() | set(self.held)
+            free = [uuid for uuid in self.uuids if uuid not in busy and uuid not in held]
+            if len(held) + count > self.limit or len(free) < count:
+                self.reason = self._why(count, free, held, busy)
+                return None
+            taken = []
+            for uuid in free:
+                if len(taken) == count:
+                    break
+                lease = Lease(StdlibFilesystem(), _ProcessOwners(),
+                              os.path.join(self.directory, "slots", SLOT_PREFIX + uuid),
+                              self.owner)
+                if lease.try_acquire():
+                    self.held[uuid] = lease
+                    taken.append(uuid)
+            if len(taken) < count:
+                self.give_back(taken)
+                self.reason = self._why(count, [], held, busy)
+                return None
+        self.reason = None
         return taken
+
+    def _locked(self):
+        """The lock every runner of this user takes to count and take slots."""
+        path = os.path.join(self.directory, "slots", "take.lock")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        return _FileLock(path)
+
+    def _held_by_runners(self):
+        """UUIDs of the GPUs whose lease a live runner holds (this one too)."""
+        held = set()
+        try:
+            names = os.listdir(os.path.join(self.directory, "slots"))
+        except FileNotFoundError:
+            return held
+        for name in names:
+            if not (name.startswith(SLOT_PREFIX) and name.endswith(LOCK_SUFFIX)):
+                continue
+            data = StdlibFilesystem().read(
+                os.path.join(self.directory, "slots", name, "owner.json"))
+            if data is None:
+                continue            # being created: counted by its own runner's lock
+            if _ProcessOwners().is_alive(json.loads(data.decode())):
+                held.add(name[len(SLOT_PREFIX):-len(LOCK_SUFFIX)])
+        return held
+
+    def _why(self, count, free, held, busy):
+        room = max(self.limit - len(held), 0)
+        parts = ["limit {}".format(self.limit)]
+        if held:
+            parts.append("{} held by your experiments".format(len(held)))
+        outside = sorted(self.index_of.get(uuid, uuid) for uuid in busy if uuid in self.uuids
+                         and uuid not in held)
+        if outside:
+            parts.append("GPU(s) {} busy outside naavik".format(
+                ", ".join(str(index) for index in outside)))
+        return "waiting for GPUs: needs {}; {} free now ({})".format(
+            count, min(len(free), room), "; ".join(parts))
 
     def give_back(self, uuids):
         for uuid in uuids:
             lease = self.held.pop(uuid, None)
             if lease is not None:
                 lease.release()
+
+
+class _FileLock:
+    """An exclusive `flock` on a file, held for a `with` block."""
+
+    def __init__(self, path):
+        self.path = path
+        self.handle = None
+
+    def __enter__(self):
+        self.handle = open(self.path, "a")
+        fcntl.flock(self.handle, fcntl.LOCK_EX)
+        return self
+
+    def __exit__(self, *exc):
+        fcntl.flock(self.handle, fcntl.LOCK_UN)
+        self.handle.close()
+        return False
 
 
 class _ProcessOwners:
@@ -222,11 +315,17 @@ class Runner:
         self.gpus = int(d.get("gpus", "0"))
         self.walltime = int(d["walltime"]) if d.get("walltime") else None
         self.lead = int(d["signal-lead"]) if d.get("signal-lead") else None
-        self.pool = [int(item) for item in d.get("gpu-pool", "").split(",") if item]
+        pool = d.get("gpu-pool", "")
+        #: The pool's indices, or None for every GPU of the machine (`all`).
+        self.pool = None if pool == "all" else [int(item) for item in pool.split(",") if item]
+        #: The most GPUs held at once by this user's runners (None: the pool's size).
+        self.gpu_limit = int(d["gpu-limit"]) if d.get("gpu-limit") else None
         self.state = {
             "ref": self.ref, "job_name": d["job-name"], "script": script,
             "after": self.after, "elements": {str(i): PENDING for i in self.elements},
             "exit": {}, "final": False, "error": None,
+            # element -> why it has not started yet
+            "waiting": {},
         }
         self.running = {}        # index -> (process, gpus, started, signalled)
         self.stopping = None     # when a cancel of the whole job arrived
@@ -244,12 +343,31 @@ class Runner:
             self.state["exit"][str(index)] = exit_status
         self.save()
 
+    def set_waiting(self, reasons):
+        """Why the elements not started yet wait ({index: reason})."""
+        reasons = {str(index): reason for index, reason in reasons.items()}
+        if reasons != self.state["waiting"]:
+            self.state["waiting"] = reasons
+            self.save()
+
     def finish(self, error=None):
         for index, value in self.state["elements"].items():
             if value not in FINAL:
                 self.state["elements"][index] = CANCELLED
         self.state["final"], self.state["error"] = True, error
+        self.state["waiting"] = {}
         self.save()
+
+    def fail(self, message):
+        """Fail every element without running it, the reason in its log
+        (where `naavik logs` and `naavik run` show it)."""
+        for index in self.elements:
+            path = self.directives["log"].format(job=self.ref, index=index)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "a") as log:
+                log.write("[host runner] {}\n".format(message))
+            self.state["elements"][str(index)] = FAILED
+        self.finish(message)
 
     # Steps ----------------------------------------------------------------
 
@@ -258,6 +376,8 @@ class Runner:
         complete entirely (this job is then cancelled, like Slurm's
         `--kill-on-invalid-dep`)."""
         for ref in self.after:
+            self.set_waiting({index: "waiting for job {} to finish first".format(ref)
+                              for index in self.elements})
             while True:
                 if self.stopping is not None:
                     return False
@@ -314,15 +434,27 @@ class Runner:
         if not self.dependencies_ok():
             self.finish("a job it runs after did not complete")
             return 1
+        self.set_waiting({})
         try:
             uuids = gpu_uuids(self.pool) if self.gpus else []
+            indices = gpu_indices() if self.gpus else {}
         except (OSError, RuntimeError) as error:
             self.finish("cannot use the GPU pool: {}".format(error))
             return 1
         self.slots = Slots(self.directory, uuids,
                            self.directives.get("busy-gpus", "wait") == "wait",
                            {"host": socket.gethostname(), "pid": os.getpid(),
-                            "start_time": process_start_time(os.getpid())})
+                            "start_time": process_start_time(os.getpid())},
+                           limit=self.gpu_limit, indices=indices)
+        if self.gpus > self.slots.limit:
+            if self.pool is not None:
+                written = "[{}]".format(", ".join(str(index) for index in self.pool))
+            else:
+                written = "all" if self.gpu_limit is None else str(self.gpu_limit)
+            self.fail("requests {} GPU(s) per experiment, but at most {} may be in use at "
+                      "once on this host (scheduler.gpus: {}; the machine has {})".format(
+                          self.gpus, self.slots.limit, written, len(indices)))
+            return 1
         waiting = list(self.elements)
         try:
             while waiting or self.running:
@@ -339,11 +471,17 @@ class Runner:
                     if time.time() - self.stopping >= (self.lead or 0):
                         for index in list(self.running):
                             self.stop(index, kill=True)
+                reason = None
                 while waiting and len(self.running) < self.max_parallel:
                     uuids = self.slots.take(self.gpus) if self.gpus else None
                     if self.gpus and uuids is None:
-                        break                         # no free GPU yet
+                        reason = self.slots.reason    # no free GPU yet
+                        break
                     self.start(waiting.pop(0), uuids)
+                if waiting and reason is None:
+                    reason = ("waiting: at most {} experiment(s) of this job run at "
+                              "once".format(self.max_parallel))
+                self.set_waiting({index: reason for index in waiting})
                 self.watch()
                 time.sleep(POLL)
         finally:
@@ -413,6 +551,20 @@ def live_states(refs=None):
     return states
 
 
+def live_details(refs=None):
+    """{ref_index: why it waits} of the pending elements of live runners
+    that say (jobs written before runners recorded it say nothing)."""
+    states = live_states(refs)
+    details = {}
+    for ref in {key.split("_", 1)[0] for key in states}:
+        data = read_job(job_dir(ref), ref) or {}
+        for index, reason in (data.get("waiting") or {}).items():
+            key = "{}_{}".format(ref, index)
+            if reason and states.get(key) == PENDING:
+                details[key] = reason
+    return details
+
+
 def request_cancel(ref, indices):
     """Ask a runner to stop: everything (SIGTERM), or only `indices`."""
     if not ref_alive(ref):
@@ -438,7 +590,10 @@ def main(argv=None):
         signal.signal(signal.SIGTERM, lambda signum, frame: runner.cancel())
         return runner.run()
     if command == "states":
-        print(json.dumps(live_states(argv or None), sort_keys=True))
+        # The launcher passes this program itself (`python3 -c`), so it reads
+        # the shape it prints, whatever runner wrote the job files.
+        print(json.dumps({"states": live_states(argv or None),
+                          "details": live_details(argv or None)}, sort_keys=True))
         return 0
     if command == "cancel":
         print(request_cancel(argv[0], [int(i) for i in argv[1:]]))

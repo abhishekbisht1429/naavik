@@ -28,6 +28,11 @@ def code_check_on(monkeypatch, tmp_path):
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
 
 
+#: A job on a builtin host without the CPUs and memory it would not limit
+#: (given, they add a note of their own).
+BUILTIN_RESOURCES = {"walltime": "00:10:00"}
+
+
 def git(root, *args):
     return subprocess.run(["git", *args], cwd=root, check=True, capture_output=True,
                           text=True).stdout.strip()
@@ -38,9 +43,10 @@ def commit(root, message="change"):
     git(root, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", message)
 
 
-def project(tmp_path, *configs, requirements=None, code=None, extra=None):
+def project(tmp_path, *configs, requirements=None, code=None, extra=None, resources=None):
     """A repository with the integration components and one experiment per
-    config (files `configs/<name>.yaml`)."""
+    config (files `configs/<name>.yaml`). `resources`: the job's
+    (default: a walltime, 2 CPUs, 4G, which a Slurm host needs)."""
     experiments, files = [], {"my_project/components.py": COMPONENTS.read_text()}
     for index, config in enumerate(configs):
         files[f"configs/c{index}.yaml"] = yaml.safe_dump(config)
@@ -48,7 +54,8 @@ def project(tmp_path, *configs, requirements=None, code=None, extra=None):
     manifest = {
         "version": 1, "name": "check", "code": code or {"framework": "dependency", "paths": ["."]},
         "training": {"config": "configs/c0.yaml"},
-        "groups": {"cpu": {"resources": {"walltime": "00:10:00", "cpus": 2, "memory": "4G"},
+        "groups": {"cpu": {"resources": resources or {"walltime": "00:10:00", "cpus": 2,
+                                                       "memory": "4G"},
                            "experiments": experiments[:1]}},
     }
     if requirements is not None:
@@ -99,7 +106,7 @@ def test_render_and_launch_refuse_before_anything_is_staged(tmp_path, here, caps
 
 def test_what_cannot_be_checked_is_said_once(tmp_path, here, capsys):
     config = dict(session(), import_components={"model": {"checkpoint": str(tmp_path / "missing")}})
-    assert validate(project(tmp_path, config), here) == 0
+    assert validate(project(tmp_path, config, resources=BUILTIN_RESOURCES), here) == 0
     notes = [line for line in capsys.readouterr().out.splitlines() if line.startswith("note: ")]
     assert notes == ["note: cpu/c0/000: not checked: import_components restores components "
                      "from checkpoints, so its plan is only known when the session is built"]
@@ -233,7 +240,7 @@ def test_the_check_follows_source_ref_not_head(tmp_path, here, capsys):
 
 def test_a_note_common_to_many_tasks_is_said_once(tmp_path, here, capsys):
     config = dict(session(), import_components={"model": {"checkpoint": str(tmp_path / "missing")}})
-    root = project(tmp_path, config)
+    root = project(tmp_path, config, resources=BUILTIN_RESOURCES)
     data = yaml.safe_load((root / "batch.yaml").read_text())
     data["groups"]["cpu"]["experiments"][0]["matrix"] = [
         {"path": "session_config.rng_seed", "values": [1, 2, 3]}]

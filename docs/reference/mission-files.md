@@ -172,10 +172,13 @@ Used by jobs, `prepare_on_host` sources (`allocation`), and the host's
 
 | Key | Required | Default | Meaning |
 |---|---|---|---|
-| `walltime` | yes | | Time limit `[D-]HH:MM:SS`. |
-| `memory` | yes | | Memory per experiment (on one node), e.g. `64G`. The builtin scheduler records it but does not limit it. |
-| `cpus` | yes | | CPU cores per experiment. The builtin scheduler records it but does not limit it. |
-| `gpus` | no | `0` | GPUs per experiment on one node. With `nccl`, `ddp.world_size` must equal it; with `gloo`, `world_size` must fit in `cpus`. |
+| `walltime` | on Slurm | no limit | Time limit `[D-]HH:MM:SS`. Left out (builtin hosts only), the experiment runs until it ends. |
+| `memory` | on Slurm | no limit | Memory per experiment (on one node), e.g. `64G`. The builtin scheduler never limits it: left out, the experiment uses what the machine has; given, it is recorded with a note. |
+| `cpus` | on Slurm | no limit | CPU cores per experiment. As `memory` on the builtin scheduler. |
+| `gpus` | no | `0` | GPUs per experiment on one node, taken from the host's pool ([`scheduler.gpus`](hosts-file.md#scheduler-builtin) on a builtin host). With `nccl`, `ddp.world_size` must equal it; with `gloo` and `cpus` given, `world_size` must fit in `cpus`. |
+
+A Slurm host refuses a job without `walltime`, `cpus`, or `memory`, naming
+them; a mission file that leaves them out runs on builtin hosts only.
 
 `partition`, `account`, and `qos` are refused here: they come from the host.
 

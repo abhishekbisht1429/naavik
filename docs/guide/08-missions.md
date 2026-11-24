@@ -65,7 +65,7 @@ default_host: here
 hosts:
   here:
     connection: local
-    scheduler: {kind: builtin, gpus: [0]}   # the GPUs experiments may use
+    scheduler: {kind: builtin}   # gpus: all, the default: any free GPU of the machine
     directories:
       missions: /data/me/naavik/missions
       python_environments: /data/me/naavik/envs
@@ -82,13 +82,13 @@ default_host: here
 hosts:
   here:                          # this machine
     connection: local
-    scheduler: {kind: builtin, gpus: [4, 5]}   # the GPUs experiments may use
+    scheduler: {kind: builtin, gpus: 4}   # at most 4 GPUs at once, whichever are free
     run_code_from: working_tree  # run uncommitted work (below)
     directories: {missions: /data/me/naavik/missions, python_environments: /data/me/naavik/envs, datasets: /data/me/naavik/datasets}
     python_environment: {use_existing: current}   # the environment running naavik (e.g. the IDE's interpreter)
   gpubox:                        # a machine reached over SSH
     connection: {ssh: gpubox}
-    scheduler: {kind: builtin, gpus: [0, 1, 2, 3]}
+    scheduler: {kind: builtin, gpus: [0, 1, 2, 3]}   # only these GPUs
     directories: {...}
     python_environment: {use_existing: /opt/envs/train}
   bigred200:                     # a Slurm cluster
@@ -115,11 +115,19 @@ cluster host.
   copied to fetch).
 - **What runs the jobs:** `kind: slurm`, or `kind: builtin` for a machine
   without a scheduler. With `builtin`, each job is a small runner process
-  started detached on the host (it outlives your SSH connection). It runs a
-  job's experiments at most `max_parallel_experiments` at a time, gives each
-  experiment its GPUs from the `scheduler.gpus` pool, sends the same early
+  started detached on the host (it outlives your SSH connection), and it is
+  the scheduler: it runs a job's experiments at most
+  `max_parallel_experiments` at a time, gives each the GPUs its mission file
+  asks for (`per_experiment.gpus`) when they are free, sends the same early
   stop signal before the walltime that Slurm does, and kills an experiment
-  at the walltime.
+  at the walltime. Without a walltime an experiment runs until it ends.
+- **The GPU pool:** `scheduler.gpus` is `all` (the default: any free GPU of
+  the machine), a count (`4`: any 4 at once, whichever are free), or a list
+  of indices (only those). It is also the limit on GPUs in use at once by
+  all your experiments on the machine. A job asking for more than the pool
+  allows is refused before staging. While an experiment waits for GPUs,
+  `naavik status` and `naavik run` say why: `waiting for GPUs: needs 4; 2
+  free now (limit 4; 2 held by your experiments)`.
 - **GPUs on a builtin host:** an experiment sees only its own GPUs
   (`CUDA_VISIBLE_DEVICES` holds their UUIDs, numbered from 0 inside the
   experiment, so use `device: cuda` in the config); an experiment of a job
@@ -129,10 +137,13 @@ cluster host.
   one with a compute process `nvidia-smi` lists, or with memory in use
   (other containers' processes are not listed, but their memory is);
   `when_gpus_busy: use_anyway` ignores other users.
-- **Not enforced by `builtin`:** `cpus` and `memory` are recorded, not
-  limited.
+- **Never limited by `builtin`:** CPUs and memory. `per_experiment.cpus`,
+  `memory`, and `walltime` may be left out for a builtin host (no limit);
+  given, `cpus` and `memory` are recorded, with a note saying so. A Slurm
+  host requires all three.
 - **Before staging,** `launch` checks the host: `python3` 3.8 or newer for
-  the runner and, with a GPU pool, every pool GPU in `nvidia-smi`.
+  the runner and, when a job asks for GPUs or the pool lists indices,
+  `nvidia-smi`, the listed GPUs, and enough GPUs for the largest request.
 
 SSH uses your own OpenSSH configuration, agent, and control connections; no
 credentials are stored and MFA is never automated (`BatchMode=yes` fails fast
@@ -1016,7 +1027,8 @@ See [Comparing runs](12-comparing-runs.md).
 ## Limitations
 
 Single-node experiments only; schedulers: Slurm and `builtin`; `builtin`
-does not limit CPUs or memory; resuming cannot change the config or the
+never limits CPUs or memory, and schedules GPUs simply (in order, without
+priorities or fairness between missions); resuming cannot change the config or the
 number of GPUs, and missions launched before `resume` existed cannot be
 resumed; components that bind fixed ports (other than `tensorboard` with
 `serve: false`) fail when experiments share a node; explicitly configured

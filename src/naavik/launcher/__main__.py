@@ -529,7 +529,7 @@ def _launch(profile, compiled, repository, *, manifest_label: str, review):
 
     bundle = get_scheduler(profile.scheduler)
     if bundle.target_check is not None:
-        problems = bundle.target_check(ports["executor"], profile.scheduler_settings)
+        problems = bundle.target_check(ports["executor"], profile.scheduler_settings, plan)
         if problems:
             raise HpcError("the host cannot run this mission:\n  " + "\n  ".join(problems))
     manifest = compiled.manifest
@@ -847,9 +847,9 @@ def _resume(args) -> int:
               f"{candidate.iteration}/{total}  {relative}")
     for group in attempt.groups:
         r = group.node.resources
-        print(f"  job {group.group}: walltime {r.walltime}, {r.gpus} GPU(s), {r.cpus} CPU(s), "
-              f"{r.memory}" + (f", at most {group.node.max_parallel} at once"
-                               if group.node.max_parallel else ""))
+        print(f"  job {group.group}: {r.describe()}"
+              + (f", at most {group.node.max_parallel} at once"
+                 if group.node.max_parallel else ""))
     if args.dry_run:
         for group in attempt.groups:
             print(f"\n# {group.script_path}\n{group.script}# {group.table_path}\n{group.table}")

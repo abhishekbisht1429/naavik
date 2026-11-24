@@ -51,7 +51,7 @@ def test_the_host_block_names_a_gpu_pool_and_what_to_do_with_busy_gpus():
     profile = parse_profiles(_profile(gpus=[4, 5], busy_gpus="use"), None, "targets.yaml")
     assert profile.scheduler == "host"
     assert profile.scheduler_settings == HostSettings(gpus=(4, 5), busy_gpus="use")
-    assert parse_profiles(_profile(), None, "t").scheduler_settings == HostSettings((), "wait")
+    assert parse_profiles(_profile(), None, "t").scheduler_settings == HostSettings("all", "wait")
 
 
 @pytest.mark.parametrize("host, message", [

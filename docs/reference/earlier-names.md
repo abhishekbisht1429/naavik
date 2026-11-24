@@ -32,6 +32,7 @@ file](hosts-file.md) and [mission files](mission-files.md).
 | `scheduler: host` + `host: {...}` | `scheduler: {kind: builtin, ...}` |
 | `slurm.defaults`, `slurm.partitions {gpu, cpu}` | `sbatch_options`, `partitions {gpu_jobs, cpu_jobs}` |
 | `host.busy_gpus: wait\|use` | `when_gpus_busy: wait\|use_anyway` |
+| `scheduler.gpus` left out: no GPUs | left out: `all`; write `gpus: []` for none |
 | `roots {batches, envs, data}` | `directories {missions, python_environments, datasets}` |
 | `hooks {common, setup, prepare, task}` | `shell_commands_before {everything, environment_build, data_preparation, experiments}` |
 | `env {existing, python_source, site_python_identity, backend, conda_packages, conda_run, bootstrap_python}` | `python_environment {use_existing, interpreter_from, site_interpreter, kind, conda_packages, activate_with_conda_run, bootstrap_interpreter}` |

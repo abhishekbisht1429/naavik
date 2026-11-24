@@ -80,20 +80,36 @@ same on every host.
 
 `scheduler: {kind: builtin, ...}`: naavik's own scheduler, for a machine
 without one (this machine, or a machine over SSH). Each job is a runner
-process started detached on the host; it runs at most
-`max_parallel_experiments` experiments at a time, gives each its GPUs from
-the pool, sends the early stop signal before the walltime, and kills an
-experiment at the walltime.
+process started detached on the host. The runner decides what runs when: at
+most `max_parallel_experiments` experiments of the job at a time, each with
+the GPUs its mission file asks for, taken from the pool when they are free.
+It sends the early stop signal before the walltime and kills an experiment
+at the walltime; an experiment without a walltime runs until it ends.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `gpus` | `[]` | GPU indices (as `nvidia-smi` numbers them) that experiments may use, in the order they are tried. A job may not request more GPUs than the pool has. Each GPU is given to one experiment at a time across every mission on the machine. |
+| `gpus` | `all` | The GPU pool, which is also the limit on GPUs in use at once by all your experiments on the machine, in every mission: `all` (every GPU of the machine), a count (`4`: any 4 at once, whichever are free), or a list of `nvidia-smi` indices (`[0, 1]`: only those). Which GPUs an experiment gets is decided when it starts. Each GPU is given to one experiment at a time. `[]` or `0` allows none. |
 | `when_gpus_busy` | `wait` | `wait`: skip a pool GPU someone else is using (a compute process `nvidia-smi` lists, or 256 MiB or more of memory in use, which also shows other containers' processes) until it is free; `use_anyway`: only the pool decides. |
+
+How many GPUs each experiment gets is the mission file's
+[`per_experiment.gpus`](mission-files.md#per_experiment) (default 0). A
+request the pool can never satisfy is refused before anything is staged:
+by `validate` for a count or a list, by `launch` (which counts the machine's
+GPUs) for `all`. Should one still reach the runner, every experiment of the
+job fails at once with the reason in its log. An experiment waiting for GPUs
+says why, in `naavik status` and while `naavik run` follows it:
+
+```text
+run/vit/000  pending  job h4711.9_0: waiting for GPUs: needs 4; 2 free now (limit 4; 2 held by your experiments)
+```
 
 The builtin scheduler takes no `scheduler_options`. It runs a runner with the
 host's `python3` (3.8 or newer, checked by `launch`), keeps its job state
-under `$XDG_STATE_HOME/naavik/host/<hostname>/` on the host,
-and does not limit an experiment's CPUs or memory.
+under `$XDG_STATE_HOME/naavik/host/<hostname>/` on the host, and never limits
+an experiment's CPUs or memory: `per_experiment.cpus` and `memory` may be
+left out (the experiment uses what the machine has), and when given they are
+recorded, with a note saying they are not enforced. `nvidia-smi` is needed
+only when a job asks for GPUs or the pool lists indices.
 
 #### Scheduler: slurm
 

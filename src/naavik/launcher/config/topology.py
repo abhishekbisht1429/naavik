@@ -87,7 +87,7 @@ def _ddp_problems(session: Mapping, resources: Resources) -> list[str]:
             "the group requests GPUs but ddp.backend is not set (the engine "
             "default is 'gloo'); set it explicitly"
         )
-    if world_size > resources.cpus:
+    if resources.cpus is not None and world_size > resources.cpus:
         problems.append(
             f"ddp backend 'gloo' runs world_size {world_size} processes but "
             f"the group requests only {resources.cpus} CPUs"

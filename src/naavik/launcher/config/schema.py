@@ -482,12 +482,24 @@ def _kind_name(scheduler: str) -> str:
 
 @dataclass(frozen=True)
 class Resources:
-    walltime: str
-    walltime_seconds: int
+    """What one experiment (or step) asks for. `walltime`, `cpus`, and
+    `memory` may be None: no limit, the experiment uses what the machine has.
+    The builtin scheduler accepts that; Slurm refuses it (its dialect's
+    `check_resources`)."""
+
+    walltime: str | None
+    walltime_seconds: int | None
     gpus: int
-    cpus: int
-    memory: str
+    cpus: int | None
+    memory: str | None
     scheduler_options: dict
+
+    def describe(self) -> str:
+        """`walltime 02:00:00, 1 GPU(s), 8 CPU(s), 64G` ("no limit" for
+        what is not given)."""
+        return (f"walltime {self.walltime or 'no limit'}, {self.gpus} GPU(s), "
+                f"{'no limit on' if self.cpus is None else self.cpus} CPU(s), "
+                f"{'no limit on memory' if self.memory is None else self.memory}")
 
 
 #: `from_mission.checkpoint`: each source experiment's newest complete
@@ -569,7 +581,10 @@ _PROFILE_KEY_MESSAGE = (
 )
 
 
-def parse_resources(raw, where, problems, *, require_cpus=True) -> Resources | None:
+def parse_resources(raw, where, problems) -> Resources | None:
+    """`walltime`, `gpus`, `cpus`, `memory`; each but `gpus` (default 0) may
+    be left out, meaning no limit (refused by Slurm when the plan is
+    compiled for a Slurm host)."""
     reader = _Reader(
         raw, where, problems,
         {"walltime", "gpus", "cpus", "memory"},
@@ -579,16 +594,17 @@ def parse_resources(raw, where, problems, *, require_cpus=True) -> Resources | N
             for key in ("partition", "qos", "account")
         },
     )
-    walltime = reader.string("walltime", required=True)
+    problems_before = len(problems)
+    walltime = reader.string("walltime")
     seconds = parse_walltime(walltime) if walltime else None
     if walltime and seconds is None:
         problems.add(f"{where}.walltime must be [D-]HH:MM:SS; got {walltime!r}")
     gpus = reader.positive_int("gpus", 0, minimum=0)
-    cpus = reader.positive_int("cpus", required=require_cpus, default=1)
-    memory = reader.string("memory", required=True)
+    cpus = reader.positive_int("cpus")
+    memory = reader.string("memory")
     if memory and parse_size(memory) is None:
         problems.add(f"{where}.memory must be a size such as 64G; got {memory!r}")
-    if seconds is None or memory is None or cpus is None:
+    if len(problems) > problems_before:
         return None
     return Resources(walltime, seconds, gpus or 0, cpus, memory, {})
 

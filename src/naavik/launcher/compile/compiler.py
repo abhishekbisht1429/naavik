@@ -350,6 +350,11 @@ def compile_plan(
     if requires_python is None and not problem:
         notes.append("pyproject.toml declares no requires-python; the interpreter version is not checked against it")
     notes += earlier_form
+    limited = sorted({key for group in manifest.groups if group.resources is not None
+                      for key in ("cpus", "memory") if getattr(group.resources, key) is not None})
+    if dialect.name == "host" and limited:
+        notes.append(f"host '{profile.name}' (builtin scheduler) does not limit "
+                     f"{' or '.join(limited)}: the values are recorded, not enforced")
     if manifest.session_index_given:
         notes.append("base.session_index is no longer needed: a config file is one "
                      "session; remove it")
@@ -498,7 +503,9 @@ def compile_plan(
                 "--plan", plan_file, *manifest.engine_options,
             ]
             lead = dialect.signal_lead(timeout, node.stop_grace_seconds)
-            if lead >= node.resources.walltime_seconds:
+            # Without a walltime (builtin hosts) nothing is stopped early.
+            if (node.resources.walltime_seconds is not None
+                    and lead >= node.resources.walltime_seconds):
                 problems.add(
                     f"job '{node.group}': the shutdown signal lead ({lead}s "
                     "= process_timeout_on_join + stop_grace_period) is not shorter "

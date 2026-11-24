@@ -119,6 +119,12 @@ class SlurmDialect:
                     problems.append(
                         f"{where}.scheduler_options.slurm.{key} contains a control character"
                     )
+        missing = [key for key in ("walltime", "cpus", "memory")
+                   if getattr(resources, key) is None]
+        if missing:
+            problems.append(
+                f"{where}: {', '.join(missing)} must be given on a Slurm host (only the "
+                "builtin scheduler runs an experiment without a limit)")
         if resources.gpus > 0 and "gpu" not in self.settings.partitions:
             problems.append(f"{where}: requests GPUs but the profile sets no slurm.partitions.gpu")
         if resources.gpus == 0 and "cpu" not in self.settings.partitions:

@@ -6,6 +6,10 @@ bytes since the last read) and the task's state comes from the same rows as
 `naavik status` (the scheduler's queue, then the task's record, which the
 task wrapper writes only when it ends).
 
+While the task waits to start, why it waits is said once, and again when
+it changes (the builtin scheduler says: GPUs, `max_parallel`, a job it runs
+after).
+
 Ctrl-C: the first cancels the task (as `naavik cancel --task`) and keeps
 following until it has stopped; the second stops following (the cancel
 stands, the task is not waited for).
@@ -50,6 +54,8 @@ class Follower:
         self.interval, self.sleep = interval, sleep
         self.offset = 0
         self.cancelled = False
+        #: The last reason for waiting that was said (said again on change).
+        self.waiting: str | None = None
 
     def _row(self):
         for row in self.rows():
@@ -68,6 +74,9 @@ class Follower:
 
     def _step(self) -> Outcome | None:
         row = self._row()
+        if row.waiting and row.waiting != self.waiting:
+            self.say(f"{self.task}: {row.waiting}")
+        self.waiting = row.waiting
         # Read after the row: once the task has ended, this has its last line.
         self._drain()
         if row.live:
