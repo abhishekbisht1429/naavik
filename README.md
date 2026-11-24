@@ -13,26 +13,27 @@ Start with [your first Naavik run](docs/guide/00-naavik-first-run.md), or follow
 
 - **Session**: one training or analysis workflow, described by a
   **session file** (YAML) and kept in its **session directory**, with its
-  logs and checkpoints.
+  state, logs, and checkpoints. A session exists whether or not it is
+  running, as a program does.
+- **Run**: a session in progress, as a process is a program running: from
+  the moment the engine starts or continues the session until it stops.
+  `naavik run` makes one; a resume is a new run of the same session. Each
+  run has a **run id** and a **run record** in the run registry.
 - **Component**: a piece of a session: a **resource** (a model, a dataset,
   the optimizer), a **step** (work every iteration), or a **hook** (work at
   fixed points).
-- **Run**: one launch of the engine, with a **run id** and a **run record**
-  in the run registry. A resume is a new run of the same session.
-- **Experiment**: one session file with its values, run on a host; an
-  **attempt** is one try at it (`naavik resume` makes the next).
-- **Mission**: experiments launched together on one host, by `naavik run`
-  (one experiment) or `naavik launch` (a **mission file** of **jobs** and
-  **recipes**).
-- **Host**: a machine you run on (this one, over SSH, or a Slurm cluster),
-  in your **hosts file**; its **scheduler** runs the jobs (naavik's
-  **builtin** one, or Slurm).
+- **Mission**: sessions launched together on a host as **experiments**,
+  with `naavik launch`: a **mission file** of **jobs** and **recipes**, or
+  one session file (`naavik launch --session`). An **attempt** is one try
+  at an experiment (`naavik resume` makes the next); each attempt is a run.
+- **Host**: a machine you launch missions on (this one, over SSH, or a
+  Slurm cluster), in your **hosts file**; its **scheduler** runs the jobs
+  (naavik's **builtin** one, or Slurm).
 - **Project file** (`naavik-project.yaml`): what your project's missions
   share; `naavik init` writes it and a host for this machine.
 
-A mission holds experiments; each attempt of an experiment is a run; a run
-builds or continues a session. See
-[Missions, experiments, sessions, and runs](docs/concepts/missions-sessions-runs.md).
+A session is run by runs; a mission runs experiments, each attempt a run.
+See [Missions, experiments, sessions, and runs](docs/concepts/missions-sessions-runs.md).
 
 > **Project status:** This project is under active development. The current API is suitable for experimentation and framework development, but review [Current behavior and limitations](docs/concepts/limitations.md) before using it for long-running or production workloads.
 
@@ -240,38 +241,41 @@ implementation, and configuration belongs under that implementation name (see
 inherit `Component.__init__` are activated without an entry; required
 components with a custom constructor must have one.
 
-### 4. Set up naavik for this machine (once)
+### 4. Run it
 
-From the directory containing `my_project`, make it a Git repository with a
-first commit (naavik runs your working tree as a snapshot on top of it),
-then let `naavik init` write the project file and a host for this machine:
-
-```bash
-git init && git add my_project && git commit -m "first commit"
-naavik init
-```
-
-`naavik init` writes `naavik-project.yaml` (commit it) and a host named
-`here` in `~/.config/naavik/hosts.yaml`, and prints what it chose. It never
-overwrites a file; with an existing hosts file, it asks before adding the
-host. See [your first run](docs/guide/00-naavik-first-run.md) for what the
-two files hold.
-
-### 5. Run it
+From the directory containing `my_project`:
 
 ```bash
 naavik run my_project/config.yaml
 ```
 
-`naavik run` checks the config with your code, runs it as a mission of one
-experiment on this machine, and follows its log until it ends. The run is
-recorded (`naavik runs list`), uncommitted edits included.
+`naavik run` runs the session with the engine, here: one run, recorded in
+the run registry (`naavik runs list`). It prints the session directory, so
+an interrupted session continues with
+`naavik run --resume-session ./runs/session_<time>`.
+
+### 5. Launch it as a mission (optional)
+
+To run on another host, follow it with `naavik status`, or sweep values,
+launch it as a mission. Missions run a commit (or a snapshot of your working
+tree), so make the directory a Git repository with a first commit, and let
+`naavik init` write the project file and a host for this machine, once:
+
+```bash
+git init && git add my_project && git commit -m "first commit"
+naavik init
+naavik launch --session my_project/config.yaml
+```
+
+See [your first run](docs/guide/00-naavik-first-run.md) for what `naavik
+init` writes, and [Running missions](docs/guide/08-missions.md) for sweeps
+and other hosts.
 
 ### Running the engine from your own program
 
-The engine also runs inside a program of your own, without the launcher
+The engine also runs inside a program of your own
 (`python -m my_project.train --config my_project/config.yaml`): to embed a
-session, to debug worker processes, or to extend a checkpoint. See
+session, or to extend one. See
 [Running the engine from Python](docs/reference/engine.md).
 
 ## Training a real model

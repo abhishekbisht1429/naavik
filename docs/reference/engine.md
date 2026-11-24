@@ -2,21 +2,19 @@
 
 [← Docs](../README.md)
 
-`naavik run` and `naavik launch` run the engine for you: as a mission, with a
-receipt, logs, `status`, `cancel`, `resume`, and a snapshot of the code. This
-page is for running the engine yourself, from a program of your own. Use it
-to:
+`naavik run CONFIG` runs a session file's session with the engine, here,
+and `naavik launch` runs missions; both build the engine for you. This page
+is for running the engine yourself, from a program of your own. Use it to:
 
 - embed a session in a larger program or a notebook;
-- run worker processes under a debugger (`--debug`);
-- extend a checkpoint (`--extend-session`): naavik has no `extend` yet;
-- resume a checkpoint by its path (`--resume-session`), such as one not made
-  by a mission, or on a different number of GPUs (`naavik resume` keeps a
-  mission's GPUs).
+- extend a session (`--extend-session`): naavik has no `extend` yet.
 
-Such a launch is recorded in the [run registry](../guide/13-run-registry.md)
-like any other, but it is not a mission: no receipt, no `naavik status`, no
-snapshot of the code.
+Resuming (`--resume-session`) and `--debug` are also on `naavik run`, which
+needs no entry point of your own.
+
+Such a launch is a run like any other, recorded in the
+[run registry](../guide/13-run-registry.md); it is not a mission: no
+receipt, no `naavik status`.
 
 ## The entry point
 
@@ -49,18 +47,25 @@ process reconstructs the session and executes the configured components.
 
 ## Operations
 
-The three operations, `--config`, `--resume-session`, and
-`--extend-session`, are mutually exclusive and one is required. New-session
+The operations are mutually exclusive and one is required. New-session
 type selection and constructor-specific arguments belong in the session file
 (`session_type`, `session_kwargs`).
 
 | Argument | Operation | Notes |
 |---|---|---|
 | `--config PATH` | Start a new session from a YAML file that is the session | It may [include other files](../guide/04-configuration.md#sharing-configuration-between-files); overrides are relative to the session and applied after the includes; see [Overrides](#overrides) |
-| `--resume-session PATH` | Continue a checkpoint unchanged | Accepts only the three launch-topology overrides; see [Resume](../guide/05-checkpoints-and-resume.md#resume) |
-| `--extend-session PATH` | Continue a checkpoint with changed, extension-safe settings | Overrides are relative to the session, as with `--config`; see [Extend](../guide/05-checkpoints-and-resume.md#extend) |
+| `--resume-session SESSION_DIR` | Continue a session, unchanged, from its latest checkpoint | The latest complete checkpoint (highest iteration) under the session directory; the log says which. Accepts only the three launch-topology overrides; see [Resume](../guide/05-checkpoints-and-resume.md#resume) |
+| `--resume-session-from-checkpoint CHECKPOINT` | Continue a session, unchanged, from this checkpoint | As above, from the checkpoint given |
+| `--extend-session SESSION_DIR` | Continue a session from its latest checkpoint with changed, extension-safe settings | Overrides are relative to the session, as with `--config`; see [Extend](../guide/05-checkpoints-and-resume.md#extend) |
+| `--extend-session-from-checkpoint CHECKPOINT` | The same, from this checkpoint | Also takes the deprecated `CHECKPOINT NEW_MAX_ITERATIONS` |
 
-`--override KEY=VALUE [KEY=VALUE ...]` applies to any of the three: the
+A checkpoint given to `--resume-session` or `--extend-session` is refused,
+naming the `-from-checkpoint` flag: those take a session directory. A
+checkpoint outside its session directory (an explicit
+`checkpointer.checkpoints_dir`) is not found by the session flags; give it
+with the `-from-checkpoint` ones.
+
+`--override KEY=VALUE [KEY=VALUE ...]` applies to any of them: the
 keys each operation accepts, and how they are addressed, are in the notes
 above.
 

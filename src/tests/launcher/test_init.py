@@ -225,7 +225,7 @@ def test_inline_hosts_are_not_edited_and_the_block_is_printed(here, capsys):
 # Right after init --------------------------------------------------------------------------
 
 
-def test_naavik_run_works_right_after_init(tmp_path, environment):
+def test_naavik_launch_session_works_right_after_init(tmp_path, environment):
     """In the environment the run uses (`use_existing: current`): init's
     interpreter is the experiment's."""
     root = _repo(tmp_path / "repo")
@@ -244,7 +244,7 @@ def test_naavik_run_works_right_after_init(tmp_path, environment):
     init = subprocess.run([python, "-m", "naavik.cli", "init"], cwd=root, env=env,
                           capture_output=True, text=True, stdin=subprocess.DEVNULL)
     assert init.returncode == 0, init.stderr
-    run = subprocess.run([python, "-m", "naavik.cli", "run", "my_project/config.yaml"],
+    run = subprocess.run([python, "-m", "naavik.cli", "launch", "--session", "my_project/config.yaml"],
                          cwd=root, env=env, capture_output=True, text=True,
                          stdin=subprocess.DEVNULL, timeout=240)
     assert run.returncode == 0, run.stdout[-3000:] + run.stderr[-3000:]

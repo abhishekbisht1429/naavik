@@ -19,6 +19,11 @@ from naavik.components.config import (
     reject_legacy_components_entry,
 )
 from naavik.engine.topology import TOPOLOGY_KEYS
+from naavik.session.checkpoint_format import (
+    CheckpointFormatError,
+    is_checkpoint,
+    latest_checkpoint,
+)
 
 
 #: Overrides that describe the launch rather than the session, and so may be
@@ -81,23 +86,43 @@ class Configurator:
             )
         return parsed
 
-    def __init__(self):
+    def __init__(self, argv=None, *, session=None):
+        """Read the engine's options from `argv` (default: the command
+        line, `sys.argv[1:]`).
+
+        `session`: `(definition, sources)` of a new session its caller has
+        already loaded (includes merged, overrides applied, `\\${`
+        unescaped), with `sources` as `load_session` returns them; `argv`
+        then holds only the other options (`naavik run` does this, so the
+        run's record names the user's file)."""
         self._parser = argparse.ArgumentParser()
 
-        group = self._parser.add_mutually_exclusive_group(required=True)
+        group = self._parser.add_mutually_exclusive_group(required=session is None)
         group.add_argument("--config", help="Path to session config file")
+        group.add_argument(
+            "--resume-session",
+            metavar="SESSION_DIR",
+            help="Continue the session in SESSION_DIR from its latest checkpoint",
+        )
+        group.add_argument(
+            "--resume-session-from-checkpoint",
+            metavar="CHECKPOINT",
+            help="Continue a session from this checkpoint",
+        )
         group.add_argument(
             "--extend-session",
             nargs="+",
-            metavar="VALUE",
-            help=(
-                "Path to session checkpoint to extend, optionally followed "
-                "by the deprecated positional maximum iteration count"
-            ),
+            metavar="SESSION_DIR",
+            help="Extend the session in SESSION_DIR from its latest checkpoint",
         )
         group.add_argument(
-            "--resume-session",
-            help="Path to checkpoint to resume the session from",
+            "--extend-session-from-checkpoint",
+            nargs="+",
+            metavar="VALUE",
+            help=(
+                "Extend a session from this checkpoint, optionally followed "
+                "by the deprecated positional maximum iteration count"
+            ),
         )
 
         self._parser.add_argument("--override", type=str, nargs="*", default=None)
@@ -130,7 +155,7 @@ class Configurator:
             default=30.0,
         )
 
-        self._args = self._parser.parse_args()
+        self._args = self._parser.parse_args(argv)
 
         self._session_configs = None
         self._config_sources = None
@@ -140,7 +165,17 @@ class Configurator:
         self._topology_overrides = {}
         self._mode = None
 
-        if self._args.config:
+        if session is not None:
+            operations = ("config", "resume_session", "resume_session_from_checkpoint",
+                          "extend_session", "extend_session_from_checkpoint")
+            if any(getattr(self._args, name) for name in operations) or self._args.override:
+                raise ValueError("a Configurator given a session takes no operation "
+                                 "and no --override in argv")
+            definition, sources = session
+            self._mode = "new"
+            self._session_configs = [deepcopy(dict(definition))]
+            self._config_sources = [list(sources)]
+        elif self._args.config:
             self._mode = "new"
             try:
                 loaded = load_session(self._args.config)
@@ -165,15 +200,28 @@ class Configurator:
                 self._parser.error(str(error))
             self._session_configs = [unescape(merged)]
             self._config_sources = [loaded.sources]
-        elif self._args.extend_session:
+        elif self._args.extend_session or self._args.extend_session_from_checkpoint:
             self._mode = "extend"
-            values = self._args.extend_session
-            if len(values) > 2:
-                self._parser.error(
-                    "--extend-session accepts CHECKPOINT and an optional "
-                    "deprecated NEW_MAX_ITERATIONS value"
-                )
-            self._checkpoint_path = values[0]
+            if self._args.extend_session:
+                values = self._args.extend_session
+                if len(values) > 1 or is_checkpoint(values[0]):
+                    self._parser.error(
+                        "--extend-session takes a session directory and extends it from "
+                        "its latest checkpoint; to extend from a given checkpoint (and "
+                        "for the deprecated NEW_MAX_ITERATIONS) use "
+                        "--extend-session-from-checkpoint"
+                    )
+                self._checkpoint_path = self._latest(values[0], "extending")
+                values = [self._checkpoint_path]
+            else:
+                values = self._args.extend_session_from_checkpoint
+                if len(values) > 2:
+                    self._parser.error(
+                        "--extend-session-from-checkpoint accepts CHECKPOINT and an "
+                        "optional deprecated NEW_MAX_ITERATIONS value"
+                    )
+                self._checkpoint_path = values[0]
+                self._say_checkpoint("extending", values[0])
             overrides = list(self._args.override or [])
             self._topology_overrides, overrides = (
                 self._split_topology_overrides(overrides)
@@ -213,9 +261,19 @@ class Configurator:
             except ConfigFileError as error:
                 self._parser.error(str(error))
             self._extension_overrides = tuple(overrides)
-        elif self._args.resume_session:
+        elif self._args.resume_session or self._args.resume_session_from_checkpoint:
             self._mode = "resume"
-            self._checkpoint_path = self._args.resume_session
+            if self._args.resume_session:
+                if is_checkpoint(self._args.resume_session):
+                    self._parser.error(
+                        f"--resume-session takes a session directory and resumes it from "
+                        f"its latest checkpoint; {self._args.resume_session} is a "
+                        "checkpoint: use --resume-session-from-checkpoint"
+                    )
+                self._checkpoint_path = self._latest(self._args.resume_session, "resuming")
+            else:
+                self._checkpoint_path = self._args.resume_session_from_checkpoint
+                self._say_checkpoint("resuming", self._checkpoint_path)
             self._topology_overrides, unsupported = (
                 self._split_topology_overrides(self._args.override or [])
             )
@@ -224,9 +282,25 @@ class Configurator:
                 self._parser.error(
                     "--resume-session only accepts launch-topology "
                     f"overrides ({', '.join(sorted(_TOPOLOGY_OVERRIDES))}), "
-                    f"but got: {names}. Use --extend-session to change the "
-                    "session configuration."
+                    f"but got: {names}. Extend the session (--extend-session) to "
+                    "change its configuration."
                 )
+
+    def _latest(self, session_dir, verb):
+        """The latest checkpoint of the session in `session_dir`, said in
+        the log before anything is built."""
+        try:
+            path, iteration = latest_checkpoint(session_dir)
+        except CheckpointFormatError as error:
+            self._parser.error(str(error))
+        at = "" if iteration is None else f" (iteration {iteration})"
+        print(f"{verb} session {session_dir} from its latest checkpoint: {path}{at}",
+              flush=True)
+        return path
+
+    @staticmethod
+    def _say_checkpoint(verb, path):
+        print(f"{verb} from checkpoint {path}", flush=True)
 
     @staticmethod
     def _split_topology_overrides(

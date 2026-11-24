@@ -149,7 +149,7 @@ def test_two_instances_stay_distinct_across_a_real_run_and_resume(
     _run(
         [
             "training-framework",
-            "--extend-session", str(_only_checkpoint(tmp_path)),
+            "--extend-session-from-checkpoint", str(_only_checkpoint(tmp_path)),
             "--override", "session_config.max_iterations=4",
             "--heartbeat-timeout", "30",
             "--process_timeout_on_join", "10",
@@ -192,7 +192,7 @@ def test_an_extension_override_reaches_one_instance_of_a_real_run(
     _run(
         [
             "training-framework",
-            "--extend-session", str(_only_checkpoint(tmp_path)),
+            "--extend-session-from-checkpoint", str(_only_checkpoint(tmp_path)),
             "--override",
             "session_config.max_iterations=4",
             "integration_instance_recorder#beta.label=beta_renamed",

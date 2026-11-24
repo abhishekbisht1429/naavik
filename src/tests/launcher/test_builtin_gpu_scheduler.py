@@ -207,7 +207,7 @@ def test_status_shows_why_a_queued_experiment_waits():
     assert row.waiting == "waiting for GPUs: needs 2; 1 free now" and row.live
 
 
-def test_naavik_run_says_why_the_experiment_waits_once_and_again_when_it_changes():
+def test_the_follower_says_why_the_experiment_waits_once_and_again_when_it_changes():
     said = []
     rows = iter([
         [Row("run/x/000", "", "pending", "", True, waiting="needs 2; 0 free now")],

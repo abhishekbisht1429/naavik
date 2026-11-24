@@ -190,7 +190,7 @@ def run_task(config_path: str, record_path: str, plan_path: str,
         if resume:
             # The checkpoint holds the session (config, iteration, RNG, data
             # position); only the launch topology comes from this run.
-            sys.argv = [sys.argv[0], "--resume-session", resume, *engine_options]
+            sys.argv = [sys.argv[0], "--resume-session-from-checkpoint", resume, *engine_options]
         else:
             sys.argv = [sys.argv[0], "--config", config_path, *engine_options]
         with warnings.catch_warnings():

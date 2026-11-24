@@ -138,7 +138,7 @@ def test_show_of_a_resume_names_the_run_it_continues_and_its_checkpoints(tmp_pat
                                                              checkpoint_every=2)).run_id
     session_dir = list_runs(registry)[0][0].session_dirs[0]
     checkpoint = str(sorted(Path(session_dir).rglob("manifest.json"))[0].parent)
-    resumed = launch(monkeypatch, "--resume-session", checkpoint).run_id
+    resumed = launch(monkeypatch, "--resume-session-from-checkpoint", checkpoint).run_id
     capsys.readouterr()
     assert naavik_cli(["runs", "show", resumed]) == 0
     output = capsys.readouterr().out

@@ -12,7 +12,7 @@ These commands read it:
 - `naavik validate`, `render`, `launch`, and the commands that follow a
   mission (`missions`, `status`, `logs`, `cancel`, `resume`, `fetch`); see
   [Running missions](../guide/08-missions.md).
-- `naavik run`, which launches one config as a mission of one experiment.
+- `naavik launch --session`, which launches one session file as a mission of one experiment.
 - `naavik runs sync`, which copies the runs recorded on hosts into your
   [run registry](../guide/13-run-registry.md).
 
@@ -97,7 +97,7 @@ request the pool can never satisfy is refused before anything is staged:
 by `validate` for a count or a list, by `launch` (which counts the machine's
 GPUs) for `all`. Should one still reach the runner, every experiment of the
 job fails at once with the reason in its log. An experiment waiting for GPUs
-says why, in `naavik status` and while `naavik run` follows it:
+says why, in `naavik status` and while `naavik launch --session` follows it:
 
 ```text
 run/vit/000  pending  job h4711.9_0: waiting for GPUs: needs 4; 2 free now (limit 4; 2 held by your experiments)

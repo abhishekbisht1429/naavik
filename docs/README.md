@@ -13,7 +13,9 @@ you can return to the reference and concepts pages whenever you need them.
    setup, and a local experiment.
 2. Run one configuration or a sweep locally, over SSH, or on a cluster with
    [missions](guide/08-missions.md). For a single configuration, see
-   [`naavik run`](guide/08-missions.md#one-config-followed-naavik-run).
+   [`naavik launch --session`](guide/08-missions.md#one-session-file-followed-naavik-launch---session),
+   or run it here, without a mission, with
+   [`naavik run`](guide/04-configuration.md#running-a-config).
 3. Use the same guide to [follow a mission](guide/08-missions.md#7-keeping-track-of-your-missions),
    [resume unfinished experiments](guide/08-missions.md#10-resuming-unfinished-experiments),
    and [fetch results](guide/08-missions.md#11-getting-results-back).
@@ -76,7 +78,7 @@ task you need.
 
 - [The hosts file](reference/hosts-file.md) — the machines you run on
   (this machine, over SSH, or a Slurm cluster): connection, scheduler,
-  directories, Python environments; read by missions, `naavik run`, and
+  directories, Python environments; read by missions (`naavik launch`) and
   `naavik runs sync`.
 - [Mission files and the project file](reference/mission-files.md) — every
   key of the committed files: code, packages, data sources, jobs, recipes.

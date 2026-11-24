@@ -59,6 +59,13 @@ class TrainingEngine:
         self._recorded_sessions: list[tuple] = []
 
     @property
+    def session_dirs(self) -> list[str]:
+        """The directory of each session registered so far (built from a
+        config, or restored from a checkpoint)."""
+        return [str(session.session_config.session_dir)
+                for session, _ in self._recorded_sessions]
+
+    @property
     def run_id(self) -> str | None:
         """This launch's id in the run registry (None when not recorded)."""
         return self._recorder.run_id

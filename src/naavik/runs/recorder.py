@@ -102,7 +102,8 @@ class RunRecorder:
         if context:
             try:
                 given = json.loads(context)
-                record["code"] = given.pop("code", None)
+                if "code" in given:      # a mission's: its staged commit
+                    record["code"] = given.pop("code")
                 launch.update(given)
             except (ValueError, AttributeError) as error:
                 record["context_error"] = f"{ENV_CONTEXT} is not a JSON object: {error}"

@@ -78,8 +78,10 @@ def _segments(raw: Any) -> tuple[str, ...] | None:
     return segments
 
 
-def check_target(address: Address, session: Mapping) -> str | None:
-    """The problem with `address` as a target in `session`, or None."""
+def check_target(address: Address, session: Mapping, owned=FRAMEWORK_OWNED) -> str | None:
+    """The problem with `address` as a target in `session`, or None.
+    `owned`: paths the caller sets itself (a mission sets each
+    experiment's `sessions_dir`; a direct `naavik run` owns none)."""
     groups = framework.COMPONENT_GROUPS
     if address.component is not None:
         if address.component in groups:
@@ -98,11 +100,11 @@ def check_target(address: Address, session: Mapping) -> str | None:
             f"'{address.path[0]}' is a component group; address a component "
             "with 'component' instead of a path through the group"
         )
-    for owned in FRAMEWORK_OWNED:
-        shorter = min(len(owned), len(address.path))
-        if address.path[:shorter] == owned[:shorter]:
+    for path in owned:
+        shorter = min(len(path), len(address.path))
+        if address.path[:shorter] == path[:shorter]:
             return (
-                f"'{'.'.join(owned)}' is set by the HPC layer for every task "
+                f"'{'.'.join(path)}' is set by the HPC layer for every task "
                 "and cannot be addressed"
             )
     return None

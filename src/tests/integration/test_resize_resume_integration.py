@@ -155,7 +155,7 @@ def test_a_run_trained_on_two_ranks_continues_on_one(tmp_path, monkeypatch):
     _run(
         [
             "training-framework",
-            "--extend-session", str(_only_checkpoint(tmp_path)),
+            "--extend-session-from-checkpoint", str(_only_checkpoint(tmp_path)),
             "--override",
             "session_config.max_iterations=4",
             "ddp.world_size=1",

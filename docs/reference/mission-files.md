@@ -36,7 +36,7 @@ A YAML file committed in your repository; its path is the argument of
 |---|---|---|---|
 | `format_version` | yes | | Mission file format version; must be `1`. |
 | `name` | yes | | Mission name; mission ids are `<name>-<UTC time>-<short commit>`. |
-| `note` | no | | Why the mission runs; kept in the receipt and each experiment's run record (`naavik run --note`). |
+| `note` | no | | Why the mission runs; kept in the receipt and each experiment's run record (`naavik launch --session --note`). |
 | `project_file` | no | | A project file (a path in the repository) adding `code_transfer`, `code`, `python_packages`, and `data_sources`; see [The project file](#the-project-file). |
 | `code_transfer` | no | bundle of `HEAD` | Which commit runs and how it reaches the host; see [code_transfer](#code_transfer). |
 | `code` | yes | | How experiments find the framework and your code; see [code](#code). |
@@ -57,9 +57,9 @@ both the mission file and the project file is an error.
 | Key | Meaning |
 |---|---|
 | `code_transfer`, `code`, `python_packages`, `data_sources` | As in a mission file. |
-| `quick_run_defaults.per_experiment` | [Resources](#per_experiment) of a `naavik run` experiment (`--gpus`, `--walltime` override). |
-| `quick_run_defaults.max_parallel_experiments` | For `naavik run` (a positive integer). |
-| `quick_run_defaults.host` | The host `naavik run` uses when no `--host` is given. |
+| `quick_run_defaults.per_experiment` | [Resources](#per_experiment) of a `naavik launch --session` experiment (`--gpus`, `--walltime` override). |
+| `quick_run_defaults.max_parallel_experiments` | For `naavik launch --session` (a positive integer). |
+| `quick_run_defaults.host` | The host `naavik launch --session` uses when no `--host` is given. |
 
 ### code_transfer
 

@@ -52,10 +52,12 @@ Install the vision extra, which the datasets need:
 pip install "naavik[vision]"
 ```
 
-Put the configuration, `dino.yaml`, in a Git repository with a first
-commit, and set up naavik for the machine that trains it, once (the
-configuration needs no package of your own, so name the repository root as
-the python path):
+The configuration, `dino.yaml`, needs no package of your own. Its
+small-scale check (section 7) runs with `naavik run`, needing nothing else.
+The 100-epoch run is launched as a mission, to follow and resume it: for
+that, put `dino.yaml` in a Git repository with a first commit and set up
+naavik for the machine that trains it, once (name the repository root as the
+python path):
 
 ```bash
 naavik init --python-paths .
@@ -69,7 +71,7 @@ with a package of your own, import
 ```yaml
 session_config:
   rng_seed: 0
-  sessions_dir: ./runs/dino     # naavik run gives each experiment its own instead
+  sessions_dir: ./runs/dino     # a mission gives each experiment its own instead
   max_iterations: 125100      # 100 epochs of 1251 steps at batch 1024
   device: cuda
   components_package: naavik.components.builtin.datasets
@@ -381,17 +383,18 @@ What to look at:
 ## 7. Run it
 
 ```bash
-naavik run dino.yaml --gpus 8
+naavik launch --session dino.yaml --gpus 8
 ```
 
-`--gpus 8` gives the experiment the eight GPUs its `nccl` world size needs
-(on a host of the builtin scheduler, the runner takes eight free ones of the
-pool). naavik gives the experiment its own session directory, so
-`session_config.sessions_dir` is set for you; `naavik run` follows the log
-until the run ends.
+This is a mission of one experiment. `--gpus 8` gives it the eight GPUs its
+`nccl` world size needs (on a host of the builtin scheduler, the runner
+takes eight free ones of the pool). naavik gives the experiment its own
+session directory, so `session_config.sessions_dir` is set for you; `naavik
+launch --session` follows the log until the experiment ends.
 
-Before a 100-epoch run, run the same file on a small scale. On a machine
-without GPUs, with a few images in `imagenet/train/<class>/`:
+Before a 100-epoch run, run the same file on a small scale, here, with
+`naavik run` (one run, in this process). On a machine without GPUs, with a
+few images in `imagenet/train/<class>/`:
 
 ```bash
 naavik run dino.yaml \
@@ -409,9 +412,7 @@ naavik run dino.yaml \
   --override checkpointer.checkpoint_every=2
 ```
 
-The data path is absolute: the experiment runs in the mission's copy of your
-code, not in your working directory. The milestone has to fit in the
-shortened run. Every rank builds the full
+The milestone has to fit in the shortened run. Every rank builds the full
 ViT-S and both heads, so this checks the whole configuration, the wiring and
 two-rank DDP in a few seconds:
 
@@ -435,7 +436,9 @@ its latest checkpoint with:
 naavik resume <mission-id>
 ```
 
-`naavik run` printed the mission id; `naavik missions` lists it again.
+`naavik launch --session` printed the mission id; `naavik missions` lists it
+again. A session run with `naavik run` continues with `naavik run
+--resume-session <session dir>` instead.
 
 To train longer than planned, extend the session
 ([checkpoints, resume, and extend](05-checkpoints-and-resume.md#extend));
@@ -447,9 +450,9 @@ hold their final values past it, rather than stretching or restarting.
 
 DINO is judged by how well a linear classifier on the frozen teacher's
 class token does. Import the teacher's ViT from the run, freeze it, and
-train one linear layer. The run's checkpoints are in its session directory
-under the mission directory; `naavik runs show <run-id>` (the id `naavik
-run` printed) lists them:
+train one linear layer. The checkpoints are in the session directory under
+the mission directory; `naavik runs show <run-id>` (the run id printed when
+it started) lists them:
 
 ```yaml
 import_components:
@@ -506,7 +509,7 @@ teacher temperature warms up per step rather than per epoch. See
 ```yaml
 session_config:
   rng_seed: 0
-  sessions_dir: ./runs/dino     # naavik run gives each experiment its own instead
+  sessions_dir: ./runs/dino     # a mission gives each experiment its own instead
   max_iterations: 125100
   device: cuda
   components_package: naavik.components.builtin.datasets

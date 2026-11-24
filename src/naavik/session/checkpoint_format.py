@@ -285,6 +285,43 @@ def read_manifest(path) -> dict[str, Any]:
     return manifest
 
 
+def is_checkpoint(path) -> bool:
+    """Whether `path` is a checkpoint: a directory holding a manifest, or a
+    single-file checkpoint written before 0.5.0."""
+    path = os.fspath(path)
+    return os.path.isfile(path) or os.path.isfile(os.path.join(path, MANIFEST_FILE))
+
+
+def latest_checkpoint(session_dir) -> tuple[str, int | None]:
+    """The newest complete checkpoint of the session in `session_dir`:
+    (its path, its iteration). Complete means holding its manifest (a save
+    still under its temporary name is not); newest means the highest
+    iteration, then the latest name. Raises `CheckpointFormatError` when the
+    directory is not a session's or holds no complete checkpoint."""
+    directory = os.fspath(session_dir)
+    if not os.path.isdir(directory):
+        raise CheckpointFormatError(f"{directory} is not a session directory: no such directory")
+    if is_checkpoint(directory):
+        raise CheckpointFormatError(
+            f"{directory} is a checkpoint, not a session directory")
+    found = []
+    for root, dirs, files in os.walk(directory):
+        dirs[:] = sorted(d for d in dirs if not d.endswith(_TEMPORARY_SUFFIX))
+        if MANIFEST_FILE in files:
+            try:
+                iteration = read_manifest(root).get("iteration")
+            except (CheckpointFormatError, ValueError, OSError):
+                continue
+            found.append((iteration if isinstance(iteration, int) else -1, root))
+            dirs[:] = []          # a checkpoint holds no checkpoints
+    if not found:
+        raise CheckpointFormatError(
+            f"{directory} holds no complete checkpoint (a checkpointer.checkpoints_dir "
+            "outside the session directory is not searched: give that checkpoint)")
+    iteration, path = max(found)
+    return path, (None if iteration < 0 else iteration)
+
+
 def read_checkpoint(
         path,
         *,

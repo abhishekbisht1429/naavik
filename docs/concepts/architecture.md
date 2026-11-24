@@ -20,12 +20,13 @@ heartbeats. One such launch is a run
 
 ## Two layers
 
-`naavik run` and `naavik launch` are the launcher: they compile a mission,
-stage it on a host, and start each experiment through the scheduler as
+`naavik launch` is the launcher: it compiles a mission, stages it on a
+host, and starts each experiment through the scheduler as
 `python -m naavik.launcher.task`, which builds a `Configurator` and a
-`TrainingEngine` for that experiment's config, as a program of your own does
+`TrainingEngine` for that experiment's config. `naavik run` builds them in
+its own process, as a program of your own does
 ([Running the engine from Python](../reference/engine.md)). Everything below
-happens inside that one engine launch, whoever started it.
+happens inside one run, whoever started it.
 
 ## Process layout
 

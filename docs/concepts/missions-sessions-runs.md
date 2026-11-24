@@ -9,25 +9,30 @@ it. The guides use these words only in these senses.
 ## How they nest
 
 ```text
-mission                one launch of `naavik run` or `naavik launch`, on one host
+mission                one `naavik launch`, on one host
  └─ job                experiments with the same resources: one scheduler job
      └─ recipe         makes experiments: overrides, vary, config files, from_mission
          └─ experiment one session file with its values: <job>/<recipe>/<NNN>
              └─ attempt   1, then 2, 3, ... with each `naavik resume`
-                 └─ run      one launch of the engine: a run id and a run record
+                 └─ run      the session in progress: a run id and a run record
                      └─ session   training or analysis, in its session directory
                           └─ checkpoints
 ```
 
-Two facts make the bottom of the tree work:
+**A session and its runs are a program and its processes.** The session is
+what exists: its directory, its state, its checkpoints, whether anything is
+running or not. A run is the session in progress, from the moment the
+engine starts or continues it until it stops, ends, or fails, just as a
+process is a program running. Two facts follow:
 
 - **A session outlives its runs.** A resume or an extension is a new run (a
   new run id) that continues the *same* session, in the same session
   directory. One session can have several runs; `naavik summarize` compares
   sessions, `naavik runs` lists runs.
-- **A run need not belong to a mission.** Running the engine from a program
-  of your own ([Running the engine from Python](../reference/engine.md)) is
-  a run, with a record, but no mission, experiment, or attempt.
+- **A run need not belong to a mission.** `naavik run CONFIG` runs a
+  session here, in its own process: a run, with a record, but no mission,
+  experiment, or attempt. So does running the engine from a program of your
+  own ([Running the engine from Python](../reference/engine.md)).
 
 ## The terms
 
@@ -50,14 +55,19 @@ are registered from your **components package** and wired by **role**
 directory; a resume or an extension starts from one. See
 [Checkpoints, resume, and extend](../guide/05-checkpoints-and-resume.md).
 
-**Run.** One launch of the engine: it builds or restores a session and runs
-it until it ends, fails, or is stopped. Every run gets a **run id** and
-leaves a **run record** (what ran, where, on which devices, how it ended) in
-the **run registry** of the machine it ran on. See
-[Every run is recorded](../guide/13-run-registry.md).
+**Run.** A session in progress: the engine builds a new session (or
+restores one from a checkpoint) and runs it until it ends, fails, or is
+stopped. `naavik run CONFIG` starts a session as a run; `naavik run
+--resume-session SESSION_DIR` continues one as another run, from its latest
+checkpoint. Every run gets a **run id** and leaves a **run record** (what
+ran, where, on which devices, how it ended) in the **run registry** of the
+machine it ran on. See [Every run is recorded](../guide/13-run-registry.md).
+(A program of your own can register several sessions with one engine; that
+launch is then one run of all of them.)
 
 **Experiment.** One session file with the values its recipe sets, run on a
-host: named `<job>/<recipe>/<NNN>` (`run/config/000` for `naavik run`).
+host: named `<job>/<recipe>/<NNN>` (`run/config/000` for `naavik launch
+--session`).
 Each experiment has its own directory, and so its own session.
 
 **Attempt.** One try at an experiment. The first launch is attempt 1;
@@ -72,9 +82,9 @@ set (`overrides`), values to sweep (`vary`: one experiment per combination),
 other session files (`config_file`, `config_files`), or another mission's
 checkpoints to analyse (`from_mission`).
 
-**Mission.** A set of experiments launched together on one host, from a
-mission file (`naavik launch`) or from one session file (`naavik run`: a
-mission of one experiment). It has a **mission id**,
+**Mission.** A set of experiments launched together on one host with
+`naavik launch`: from a mission file, or from one session file (`naavik
+launch --session`: a mission of one experiment). It has a **mission id**,
 `<name>-<UTC time>-<short commit>`; a **mission directory** on the host
 (the code that runs, the **plan**, each experiment's config, records, logs,
 and sessions); and a **receipt** on your machine (what was launched, where,
@@ -95,15 +105,44 @@ stops it at its walltime. On a cluster the scheduler is Slurm. See
 |---|---|---|---|
 | session file (`config.yaml`) | one session: `session_config` and its components | yes | [Configuration](../guide/04-configuration.md) |
 | mission file (`missions/sweep.yaml`) | the experiments of a mission: jobs, recipes, resources | yes | [mission files](../reference/mission-files.md) |
-| project file (`naavik-project.yaml`) | what a project's missions share: where the framework comes from, `PYTHONPATH`, defaults for `naavik run` | yes | [the project file](../reference/mission-files.md#the-project-file) |
+| project file (`naavik-project.yaml`) | what a project's missions share: where the framework comes from, `PYTHONPATH`, defaults for `naavik launch --session` | yes | [the project file](../reference/mission-files.md#the-project-file) |
 | hosts file (`~/.config/naavik/hosts.yaml`) | your machines: connection, scheduler, directories | no | [the hosts file](../reference/hosts-file.md) |
 
-`naavik init` writes the project file and a host for this machine.
+`naavik init` writes the project file and a host for this machine. `naavik
+run` needs neither: only the session file.
 
-## One example, end to end
+## Two examples, end to end
+
+**A run, here.**
 
 ```bash
 naavik run my_project/config.yaml
+```
+
+starts the session as one run:
+
+| Term | Here |
+|---|---|
+| run | `01M85JJPEMVQKQ75WZD31G4K78` |
+| session directory | `./runs/session_20261124_012629/` |
+| checkpoints | `./runs/session_20261124_012629/checkpoints/<time>/` |
+
+Stopped with Ctrl-C, the session is still there, with its checkpoints. Then
+
+```bash
+naavik run --resume-session ./runs/session_20261124_012629
+```
+
+is a new run, `01M85JK36DR7B0DZ54E4M4G397`, of the same session: the log
+says `resuming session ./runs/session_20261124_012629 from its latest
+checkpoint: ./runs/session_20261124_012629/checkpoints/20261124_012635_454345652
+(iteration 20000)`, and its record says it continues
+`01M85JJPEMVQKQ75WZD31G4K78`.
+
+**A mission.**
+
+```bash
+naavik launch --session my_project/config.yaml
 ```
 
 makes, in order:

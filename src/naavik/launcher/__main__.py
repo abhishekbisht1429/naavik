@@ -11,6 +11,7 @@ import shutil
 import socket
 import sys
 import time
+import warnings
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -162,7 +163,29 @@ def _parser(prog: str = "python -m naavik.hpc") -> argparse.ArgumentParser:
             ("launch", "start a mission: stage it on its host and start its jobs"),
     ):
         command = add(name, help=help_text)
-        command.add_argument("batch", metavar="MISSION_FILE", help="path to the committed mission file")
+        if name == "launch":
+            command.add_argument("batch", metavar="MISSION_FILE", nargs="?",
+                                 help="path to the committed mission file (or give --session)")
+            command.add_argument(
+                "--session", metavar="CONFIG",
+                help="launch this session file as a mission of one experiment, and follow "
+                     "it (instead of a MISSION_FILE)")
+            command.add_argument("--override", action="append", default=[],
+                                 metavar="PATH=VALUE",
+                                 help="with --session: set PATH (in the session) or "
+                                      "component:PATH to VALUE, read as YAML; repeatable")
+            command.add_argument("--note", help="with --session: why this mission runs")
+            command.add_argument("--gpus", type=int,
+                                 help="with --session: GPUs for the experiment "
+                                      "(default: quick_run_defaults)")
+            command.add_argument("--walltime",
+                                 help="with --session: walltime of the experiment, "
+                                      "[D-]HH:MM:SS (default: quick_run_defaults)")
+            command.add_argument("--detach", action="store_true",
+                                 help="with --session: return once launched; do not follow")
+        else:
+            command.add_argument("batch", metavar="MISSION_FILE",
+                                 help="path to the committed mission file")
         host_options(command)
         command.add_argument("--job", action="append", default=[], metavar="JOB",
                              help="only this job's experiments (repeatable)")
@@ -179,23 +202,35 @@ def _parser(prog: str = "python -m naavik.hpc") -> argparse.ArgumentParser:
             command.add_argument("--yes", action="store_true",
                                  help="do not ask (also accepts uploads above confirm_uploads_over)")
     run = add(
-        "run", help="run one config as a mission of one experiment, and follow it",
-        description="Run CONFIG as a mission of one experiment, built from the project file "
-                    "(naavik-project.yaml at the repository root): checked, staged, and "
-                    "recorded like any mission. Follows the experiment's log until it ends and "
-                    "exits with its status. Ctrl-C cancels it; a second Ctrl-C stops following.")
-    run.add_argument("config", help="the training config (a file in the repository)")
+        "run", help="run a session file's session with the engine, here: one run",
+        description="Run the session of CONFIG with the engine, here, in this process and "
+                    "environment: one run, recorded in the run registry (no mission). "
+                    "--resume-session continues a session from its latest checkpoint. "
+                    "To launch it as a mission (a host, status, resume by mission), use "
+                    "naavik launch --session CONFIG.")
+    run.add_argument("config", nargs="?", metavar="CONFIG",
+                     help="the session file (not with --resume-session...)")
+    resuming = run.add_mutually_exclusive_group()
+    resuming.add_argument("--resume-session", metavar="SESSION_DIR",
+                          help="continue the session in SESSION_DIR from its latest checkpoint")
+    resuming.add_argument("--resume-session-from-checkpoint", metavar="CHECKPOINT",
+                          help="continue a session from this checkpoint")
     run.add_argument("--override", action="append", default=[], metavar="PATH=VALUE",
                      help="set PATH (in the session) or component:PATH (inside that "
-                          "component's entry) to VALUE, read as YAML; repeatable")
-    run.add_argument("--note", help="why this run: kept in its receipt and run record")
-    run.add_argument("--gpus", type=int, help="GPUs for the experiment (default: quick_run_defaults)")
-    run.add_argument("--walltime", help="walltime of the experiment, [D-]HH:MM:SS (default: quick_run_defaults)")
-    run.add_argument("--detach", action="store_true", help="return once launched; do not follow")
-    run.add_argument("--fresh-env", action="store_true",
-                     help="build a managed environment for this run only")
-    run.add_argument("--yes", action="store_true", help="do not ask, even above confirm_uploads_over")
-    host_options(run)
+                          "component's entry) to VALUE, read as YAML; repeatable (with "
+                          "--resume-session...: only ddp.world_size, ddp.master_addr, "
+                          "ddp.master_port)")
+    run.add_argument("--note", help="why this run: kept in its run record")
+    run.add_argument("--debug", action="store_true",
+                     help="wait for the worker processes with plain joins (for a debugger)")
+    for flag, takes_value in (("--gpus", True), ("--walltime", True), ("--detach", False),
+                              ("--host", True), ("--hosts-file", True), ("--yes", False),
+                              ("--fresh-env", False)):
+        # Mission options: refused with the command that takes them.
+        run.add_argument(flag, dest=f"mission_{flag[2:].replace('-', '_')}", default=None,
+                         **({"action": "store"} if takes_value
+                            else {"action": "store_const", "const": True}),
+                         help=argparse.SUPPRESS)
     init = add(
         "init", help="write the project file and a host for this machine, for naavik run",
         description="Write naavik-project.yaml at the repository root and a host for this "
@@ -1007,22 +1042,23 @@ def _write_new(path: Path, text: str, *, replace: bool = False) -> None:
     os.replace(temporary, path)
 
 
-def _run(args) -> int:
-    """`naavik run`: see the `run` parser's description."""
+def _launch_session(args) -> int:
+    """`naavik launch --session CONFIG`: CONFIG as a mission of one
+    experiment, followed (see the `launch` parser)."""
     from naavik.launcher.compile.compiler import compile_plan
     from naavik.launcher.config.schema import PROJECT_FILE, parse_project
     from naavik.launcher.ports.targets import target_of_profile
     from naavik.launcher.services import quick_run
 
-    config = Path(args.config).resolve()
+    config = Path(args.session).resolve()
     if not config.is_file():
-        raise HpcError(f"{args.config} does not exist")
+        raise HpcError(f"{args.session} does not exist")
     # The project is the repository holding the config.
     repository = GitRepository(config.parent)
     root = repository.root.resolve()
     project_file = root / PROJECT_FILE
     if not project_file.is_file():
-        raise HpcError(f"naavik run needs a project file: {project_file} does not exist "
+        raise HpcError(f"naavik launch --session needs a project file: {project_file} does not exist "
                        "(it holds the code, python_packages, and quick_run_defaults of the project)")
     try:
         project = parse_project(yaml.safe_load(project_file.read_text()), PROJECT_FILE)
@@ -1036,7 +1072,7 @@ def _run(args) -> int:
     manifest = quick_run.run_manifest(
         config=relative, project=PROJECT_FILE, run_defaults=project.run_defaults,
         overrides=args.override, note=args.note, gpus=args.gpus, walltime=args.walltime)
-    label = f"naavik run {relative}"
+    label = f"naavik launch --session {relative}"
     compiled = compile_plan(
         manifest_path=label, repository=repository, profile=profile,
         facts=WorkstationFacts(repository.root), clock=datetime.now(timezone.utc),
@@ -1052,6 +1088,89 @@ def _run(args) -> int:
                   f"{compiled.plan.tasks[0].name} --follow")
         return status
     return _follow(receipt.path, receipt.data, compiled.plan.tasks[0].name)
+
+
+#: `naavik run`'s mission-only options: the attribute each lands in.
+_MISSION_ONLY = ("gpus", "walltime", "detach", "host", "hosts_file", "yes", "fresh_env")
+
+
+def _run(args) -> int:
+    """`naavik run`: the session of a session file, run by the engine here,
+    in this process: one run, recorded in the run registry; no mission."""
+    import json
+
+    from naavik.config_files import (
+        ConfigFileError,
+        SessionsListWarning,
+        check_no_interpolation,
+        load_session,
+        unescape,
+    )
+    from naavik.engine import Configurator, TrainingEngine
+    from naavik.launcher.config import address as addresses
+    from naavik.launcher.services import quick_run
+
+    given = [f"--{name.replace('_', '-')}" for name in _MISSION_ONLY
+             if getattr(args, f"mission_{name}") is not None]
+    if given:
+        raise HpcError(f"naavik run runs the session here, as one run; {', '.join(given)} "
+                       "belong to a mission: use naavik launch --session CONFIG")
+    resuming = args.resume_session or args.resume_session_from_checkpoint
+    if resuming and args.config:
+        raise HpcError("naavik run takes CONFIG or --resume-session / "
+                       "--resume-session-from-checkpoint, not both: a session's "
+                       "checkpoint holds its config")
+    if not resuming and not args.config:
+        raise HpcError("naavik run needs CONFIG, --resume-session SESSION_DIR, or "
+                       "--resume-session-from-checkpoint CHECKPOINT")
+    # As `python -m` does: your packages import from the current directory
+    # (spawned workers inherit the path).
+    here = os.getcwd()
+    if here not in sys.path:
+        sys.path.insert(0, here)
+    print(f"python path: {here} first (the current directory, as python -m)", flush=True)
+    options = ["--debug"] if args.debug else []
+    if args.note:
+        os.environ["NAAVIK_RUN_CONTEXT"] = json.dumps({"note": args.note})
+    if resuming:
+        flag = ("--resume-session" if args.resume_session
+                else "--resume-session-from-checkpoint")
+        argv = [flag, resuming, *options]
+        if args.override:
+            argv += ["--override", *args.override]
+        configurator = Configurator(argv)
+    else:
+        path = args.config
+        try:
+            loaded = load_session(path)
+        except ConfigFileError as error:
+            raise HpcError(str(error)) from None
+        if loaded.wrapped:
+            warnings.warn(SessionsListWarning(loaded.unwrap_advice(path)), stacklevel=1)
+        session = loaded.session
+        for text in args.override:
+            item = quick_run.parse_override(text)
+            address, problems = addresses.parse_address(item, f"--override {text!r}")
+            problem = (problems[0] if problems else
+                       addresses.check_target(address, session, owned=()))
+            if problem:
+                raise HpcError(f"--override {text!r}: {problem}")
+            session = addresses.write(session, address, item["value"])
+        try:
+            check_no_interpolation(session, f"{path} with --override")
+        except ConfigFileError as error:
+            raise HpcError(str(error)) from None
+        configurator = Configurator(options, session=(unescape(session), loaded.sources))
+    with TrainingEngine(configurator) as engine:
+        sessions = ", ".join(engine.session_dirs)
+        print(f"session: {sessions}", flush=True)
+        try:
+            engine.start_session()
+        finally:
+            # Again at the end, where it is easy to find: what to resume.
+            print(f"session: {sessions} (to continue it: naavik run --resume-session "
+                  f"{sessions})", flush=True)
+    return 0
 
 
 def _follow(receipt_path, receipt: dict, task: str) -> int:
@@ -1297,6 +1416,15 @@ def main(argv: list[str] | None = None, prog: str | None = None) -> int:
             return _logs(args)
         if args.command == "run":
             return _run(args)
+        if args.command == "launch" and args.session is not None:
+            if args.batch is not None:
+                raise HpcError("naavik launch takes MISSION_FILE or --session CONFIG, not both")
+            if args.job or args.recipe:
+                raise HpcError("--job and --recipe choose from a mission file; --session "
+                               "launches one experiment")
+            return _launch_session(args)
+        if args.command == "launch" and args.batch is None:
+            raise HpcError("naavik launch needs MISSION_FILE or --session CONFIG")
         if args.command == "init":
             return _init(args)
         profile = _profile(args)

@@ -111,13 +111,13 @@ def test_a_direct_runs_note_comes_from_its_run_record(tmp_path, monkeypatch):
 
 from tests.hpc.test_end_to_end import environment, session  # noqa: E402,F401 (fixture)
 from tests.launcher.test_host_end_to_end import here, record, wait_for  # noqa: E402,F401
-from tests.launcher.test_naavik_run import project  # noqa: E402
+from tests.launcher.test_launch_session import project  # noqa: E402
 from naavik.cli import main as naavik_cli  # noqa: E402
 
 
 def test_a_note_is_seen_everywhere(tmp_path, here, capsys):
     root = project(tmp_path)
-    assert naavik_cli(["run", str(root / "configs" / "model" / "base.yaml"), "--targets", str(here),
+    assert naavik_cli(["launch", "--session", str(root / "configs" / "model" / "base.yaml"), "--targets", str(here),
                    "--yes", "--detach", "--note", "attention pooling"]) == 0
     output = capsys.readouterr().out
     batch_dir = Path(output.split("submitted: ")[1].splitlines()[0])

@@ -150,8 +150,8 @@ project.
   read and write.
 - The configuration is stored as written: `config.yaml` in the session
   directory and every checkpoint keep the grouped layout.
-- An override addresses a component by its name with `naavik run`
-  (`--override forward:args=[x]`, wherever `forward` is listed; a path
+- An override addresses a component by its name with `naavik run` and
+  `naavik launch --session` (`--override forward:args=[x]`, wherever `forward` is listed; a path
   through a group, `steps.forward.args`, is refused with that advice). The
   engine's `--config` and `--extend-session` take the path where it is
   listed: `steps.forward.args=[x]`; there, `forward.args` for a `forward`
@@ -237,11 +237,20 @@ a literal `${`.
 naavik run my_project/config.yaml
 ```
 
-`naavik run` checks the config with your code and runs it as an experiment
-on this machine (set up once with `naavik init`; see
-[your first run](00-naavik-first-run.md)). Each experiment gets its own
-session directory, so naavik sets `session_config.sessions_dir` itself and
-an override of it is refused.
+`naavik run` runs the session of the file with the engine, here, in this
+process: one run, recorded in the [run registry](13-run-registry.md). It
+needs no project file and no host; your package imports from the current
+directory, as with `python -m`. It prints the run id and the session
+directory (`<sessions_dir>/session_<time>/`); resume that session with
+`naavik run --resume-session <session dir>`
+([Resume](05-checkpoints-and-resume.md#resume)).
+
+To run it as a mission instead (on another host, followed with `naavik
+status`, resumed with `naavik resume`), use `naavik launch --session
+my_project/config.yaml` ([Running missions](08-missions.md#one-session-file-followed-naavik-launch---session)).
+A mission gives each experiment its own session directory, so there
+`session_config.sessions_dir` is set by naavik and an override of it is
+refused.
 
 ## Overrides
 

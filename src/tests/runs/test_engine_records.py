@@ -148,9 +148,9 @@ def test_a_resume_and_an_extension_continue_their_run(tmp_path, registry, monkey
     first = only_run(registry)
     checkpoints = sorted(Path(first.session_dirs[0]).rglob("manifest.json"))
     middle = str(checkpoints[0].parent)                      # iteration 2
-    launch(monkeypatch, "--resume-session", middle)
+    launch(monkeypatch, "--resume-session-from-checkpoint", middle)
     final = str(sorted(Path(first.session_dirs[0]).rglob("manifest.json"))[-1].parent)
-    launch(monkeypatch, "--extend-session", final, "--override", "session_config.max_iterations=6")
+    launch(monkeypatch, "--extend-session-from-checkpoint", final, "--override", "session_config.max_iterations=6")
     runs, _ = list_runs(registry)
     extension, resumed, original = runs                      # newest first
     assert resumed.record["launch"]["operation"] == "resume"

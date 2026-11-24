@@ -148,7 +148,7 @@ def test_extension_rejects_non_opted_in_configuration(tmp_path, override):
 def test_configurator_accepts_extension_overrides(monkeypatch):
     monkeypatch.setattr(sys, "argv", [
         "pytest",
-        "--extend-session",
+        "--extend-session-from-checkpoint",
         "checkpoint.pt",
         "--override",
         "session_config.max_iterations=20",
@@ -169,7 +169,7 @@ def test_configurator_keeps_deprecated_positional_extension(monkeypatch):
     monkeypatch.setattr(
         sys,
         "argv",
-        ["pytest", "--extend-session", "checkpoint.pt", "20"],
+        ["pytest", "--extend-session-from-checkpoint", "checkpoint.pt", "20"],
     )
 
     with pytest.warns(DeprecationWarning, match="positional"):
@@ -184,10 +184,10 @@ def test_configurator_keeps_deprecated_positional_extension(monkeypatch):
 @pytest.mark.parametrize(
     "argv",
     [
-        ["pytest", "--extend-session", "checkpoint.pt"],
+        ["pytest", "--extend-session-from-checkpoint", "checkpoint.pt"],
         [
             "pytest",
-            "--extend-session",
+            "--extend-session-from-checkpoint",
             "checkpoint.pt",
             "20",
             "--override",

@@ -2,10 +2,11 @@
 
 [← Docs](../README.md) · [Project README](../../README.md)
 
-Every launch of the engine leaves a record: `naavik run` and a mission's
-experiment on any host, a resume, an extension, a run of the engine from a
-program of your own or your IDE, and a launch that fails while its config is
-being built. The record says what ran
+A run is a session in progress, as a process is a program running
+([the terms](../concepts/missions-sessions-runs.md)). Every run leaves a
+record: `naavik run`, a mission's experiment on any host, a resume, an
+extension, the engine run from a program of your own or your IDE, and a
+launch that fails while its config is being built. The record says what ran
 (the config, the code, the environment), where (the host, every rank's
 device), and how it ended. `naavik runs` lists, shows, and compares them.
 
@@ -135,7 +136,8 @@ A mission's experiment records its mission's commit (and snapshot base) instead.
 
 `naavik summarize` uses these records to tell sessions on different code apart
 (see [Comparing sessions](12-comparing-sessions.md#which-settings-are-compared)).
-A mission launched with a note (`naavik run --note TEXT`, or the mission
+A run or mission launched with a note (`naavik run --note TEXT`, `naavik launch
+--session --note TEXT`, or the mission
 file's `note`) keeps it in each experiment's record; `naavik runs
 show` prints it as `note`.
 

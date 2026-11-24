@@ -80,7 +80,7 @@ def test_an_interpolation_given_as_an_override_is_refused(tmp_path, monkeypatch,
 
 def test_an_interpolation_in_an_extension_override_is_refused(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", [
-        "train", "--extend-session", str(tmp_path / "ckpt"), "--override", "model.lr=${x}",
+        "train", "--extend-session-from-checkpoint", str(tmp_path / "ckpt"), "--override", "model.lr=${x}",
     ])
 
     with pytest.raises(SystemExit):

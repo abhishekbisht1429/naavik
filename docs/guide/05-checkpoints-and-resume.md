@@ -6,9 +6,9 @@ A checkpoint captures a running session so it can be continued later — on the
 same machine or a different one, with the same hyperparameters or changed ones.
 This page covers what a checkpoint holds, how it is laid out on disk, reading
 part of one, what happens when a component changes between saving and
-loading, the two ways to continue from one (resume: `naavik resume`, or the
-engine's `--resume-session`; extend: the engine's `--extend-session`), and what
-may safely change in each.
+loading, the two ways to continue a session (resume: `naavik run
+--resume-session`, or `naavik resume` for a mission; extend: the engine's
+`--extend-session`), and what may safely change in each.
 
 To turn checkpointing on, configure the built-in `checkpointer` hook; its
 options are in the
@@ -203,43 +203,55 @@ resuming launch resolved.
 
 ## Resume
 
-A run started with `naavik run` or `naavik launch` is a mission; continue
-its unfinished experiments from their latest complete checkpoints with:
+A resume continues a session, unchanged, as a new run. Name the session
+(its directory) and it continues from its latest complete checkpoint, or
+name the checkpoint:
+
+```bash
+naavik run --resume-session ./runs/session_20261124_012629
+naavik run --resume-session-from-checkpoint ./runs/session_20261124_012629/checkpoints/<checkpoint-name>
+```
+
+The log says which checkpoint it took, before anything is built:
+
+```text
+resuming session ./runs/session_20261124_012629 from its latest checkpoint: ./runs/session_20261124_012629/checkpoints/20261124_012635_454345652 (iteration 20000)
+```
+
+`naavik run` prints the session directory when it starts and when it ends,
+so the one to resume is on screen. The engine loads the session in the
+parent, resolves the launch topology, sends session state to workers, and
+continues from the saved iteration, in the same session directory.
+
+A session launched as a mission (`naavik launch`) is resumed through its
+mission, which finds each unfinished experiment's latest checkpoint itself:
 
 ```bash
 naavik resume <mission-id>                          # every unfinished experiment
 naavik resume <mission-id> --experiment run/config/000
 ```
 
-Each continues as a new attempt in the same session directory, with the
-same config, code, and environment; which experiments it picks, and the
-options it takes, are in
+Each continues as a new attempt; see
 [Resuming unfinished experiments](08-missions.md#10-resuming-unfinished-experiments).
-The engine loads the session in the parent, resolves the launch topology,
-sends session state to workers, and continues from the saved iteration.
 
-Nothing but the launch topology may change in a resume. To continue with
-changed settings, extend the checkpoint instead ([Extend](#extend)); to
-resume a checkpoint by its path (one not made by a mission) or on a
-different number of GPUs, run the engine yourself:
+Nothing but the launch topology may change in a resume, which is how a
+session continues on a different number of GPUs:
 
 ```bash
-python -m my_project.train \
-  --resume-session ./runs/session_.../checkpoints/<checkpoint-name> \
-  --override ddp.world_size=4
+naavik run --resume-session ./runs/session_20261124_012629 --override ddp.world_size=4
 ```
 
 The only overrides `--resume-session` accepts are the launch topology —
 `ddp.world_size`, `ddp.master_addr` and `ddp.master_port` — because those
 describe the machine rather than the session. Any other override is
-rejected with a pointer to `--extend-session`, rather than being silently
+rejected with a pointer to extending the session, rather than being silently
 ignored. See [Running the engine from Python](../reference/engine.md) for
 the entry point and its options.
 
 ## Resuming on a different number of GPUs
 
-A run trained on eight GPUs resumes on four with `--resume-session` (a
-mission's `naavik resume` keeps its experiments' GPUs). If the
+A run trained on eight GPUs resumes on four with `naavik run --resume-session`
+(a mission's `naavik resume` keeps its experiments' GPUs). If the
 stored world size no longer fits the visible CUDA devices of an `nccl` run,
 the launch warns and falls back to the device count. Choose a size explicitly with
 `--override ddp.world_size=N`, which is the one kind of override
@@ -269,17 +281,20 @@ position is converted to the topology-independent form.
 
 ## Extend
 
-To restore one training checkpoint and change extension-safe hyperparameters,
-run the engine yourself (naavik has no `extend` yet; see
-[Running the engine from Python](../reference/engine.md)), with overrides
-relative to the session. A checkpoint of a mission's experiment is under its
-mission directory, `tasks/<experiment>/sessions/session_<time>/checkpoints/`;
-the extension runs outside the mission, so `naavik status` does not show it
-(the [run registry](13-run-registry.md) records it):
+To continue a training session from its latest checkpoint with changed,
+extension-safe hyperparameters, extend it. naavik has no `extend` yet: run
+the engine yourself (see [Running the engine from Python](../reference/engine.md)),
+naming the session directory (`--extend-session`, from its latest
+checkpoint, said in the log) or a checkpoint
+(`--extend-session-from-checkpoint`), with overrides relative to the
+session. A mission's experiment's session is under its mission directory,
+`tasks/<experiment>/sessions/session_<time>/`; the extension runs outside the
+mission, so `naavik status` does not show it (the
+[run registry](13-run-registry.md) records it):
 
 ```bash
 python -m my_project.train \
-  --extend-session ./runs/session_.../checkpoints/<checkpoint-name> \
+  --extend-session ./runs/session_20261124_012629 \
   --override \
   session_config.max_iterations=5000 \
   optimizer.optimizer.kwargs.lr=0.0001 \
@@ -325,7 +340,7 @@ learning rate, set it to `null`:
 
 ```bash
 python -m my_project.train \
-  --extend-session ./runs/session_.../checkpoints/<checkpoint-name> \
+  --extend-session ./runs/session_20261124_012629 \
   --override \
   session_config.max_iterations=5000 \
   optimizer.lr_scheduler=null
@@ -336,7 +351,7 @@ checkpoint (the last value the scheduler set) and it stays fixed. Add
 `optimizer.optimizer.kwargs.lr=<value>` to pin a different fixed rate. Keys
 must be removed with `=null`; the `~key` deletion syntax is not supported.
 
-The positional form `--extend-session CHECKPOINT NEW_MAX_ITERATIONS` remains
+The positional form `--extend-session-from-checkpoint CHECKPOINT NEW_MAX_ITERATIONS` remains
 available with a deprecation warning.
 
 Rank zero rewrites `config.yaml` with the effective configuration and also

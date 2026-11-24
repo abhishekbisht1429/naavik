@@ -17,7 +17,7 @@ pip install naavik
 naavik validate missions/sweep.yaml
 naavik render   missions/sweep.yaml --output /tmp/preview
 naavik launch   missions/sweep.yaml
-naavik run      configs/model/base.yaml   # one config as a mission of one experiment, followed
+naavik launch --session configs/model/base.yaml   # one session file as a mission of one experiment, followed
 naavik missions --live        # all your missions and what they are doing
 naavik status   <mission-id>  # one mission, experiment by experiment
 naavik resume   <mission-id>  # continue unfinished experiments from their checkpoints
@@ -53,7 +53,7 @@ For a first run on Big Red 200, follow the staged checklist in
 `~/.config/naavik/hosts.yaml` (or `--hosts-file PATH`) holds
 everything specific to the machines you run on, so the committed mission
 file runs unchanged on any host whose scheduler its jobs accept. Pick a host
-with `--host NAME`, else `default_host`. The same file tells `naavik run`
+with `--host NAME`, else `default_host`. The same file tells `naavik launch --session`
 and `naavik runs sync` where your hosts are. Every key is described in the
 [hosts file reference](../reference/hosts-file.md).
 
@@ -126,7 +126,7 @@ cluster host.
   of indices (only those). It is also the limit on GPUs in use at once by
   all your experiments on the machine. A job asking for more than the pool
   allows is refused before staging. While an experiment waits for GPUs,
-  `naavik status` and `naavik run` say why: `waiting for GPUs: needs 4; 2
+  `naavik status` and `naavik launch --session` (following it) say why: `waiting for GPUs: needs 4; 2
   free now (limit 4; 2 held by your experiments)`.
 - **GPUs on a builtin host:** an experiment sees only its own GPUs
   (`CUDA_VISIBLE_DEVICES` holds their UUIDs, numbered from 0 inside the
@@ -310,7 +310,7 @@ mission file:
 code: {framework_from: installed, python_paths: ["."]}
 python_packages: {requirements_file: requirements/missions.txt, python_version: "3.12"}
 data_sources: [...]
-quick_run_defaults:           # what `naavik run` uses (see below)
+quick_run_defaults:           # what `naavik launch --session` uses (see below)
   per_experiment: {walltime: "04:00:00", gpus: 1, cpus: 8, memory: 64G}
   max_parallel_experiments: 1
   host: workstation
@@ -331,7 +331,7 @@ an error (each setting has one place). The staged `mission.yaml` is the two
 merged, in the current names (missions before this release staged
 `experiments.yaml` or `manifest.yaml`), and the mission's hash of its
 mission file (`manifest_hash`) covers both. `quick_run_defaults` is only
-read by `naavik run`.
+read by `naavik launch --session`.
 
 ## 3. Data
 
@@ -365,7 +365,7 @@ hosts:
   `already_on_host`.
 - `copy_from_here`: the content-keyed copy below, of the config's path on
   this machine. When the data is not here yet, `validate` says so and
-  `launch` (or `naavik run`) downloads it here first.
+  `launch` downloads it here first.
 - `already_on_host`: already on the host at the config's path (mapped
   through `local_to_host_paths`); `launch` checks that it exists.
 
@@ -580,16 +580,19 @@ submitted. If a submission's outcome is uncertain (a dropped connection),
 nothing is retried; the receipt says `needs reconciliation` and prints the
 `squeue --name=...` query that finds the job.
 
-### One config, followed: `naavik run`
+### One session file, followed: `naavik launch --session`
+
+(To run a session here without a mission, as one run, use
+[`naavik run CONFIG`](04-configuration.md#running-a-config).)
 
 ```bash
-naavik run configs/model/vit-attnpool.yaml \
+naavik launch --session configs/model/vit-attnpool.yaml \
     --override optimizer:optimizer.kwargs.lr=3.0e-4 --note "attention pooling"
 ```
 
-`naavik run CONFIG` runs one config as a mission of one experiment, built
+`naavik launch --session CONFIG` runs one session file as a mission of one experiment, built
 from the project file at the root of the repository holding `CONFIG` (it is
-required; [`naavik init`](00-naavik-first-run.md#describe-the-project-and-this-machine)
+required; [`naavik init`](00-naavik-first-run.md#launch-it-as-a-mission)
 writes one, and a host for this machine): job `run`, one recipe named after the file
 (`run/vit-attnpool/000`), with `quick_run_defaults.per_experiment` (`--gpus`
 and `--walltime` override them). The host is `--host`, else
@@ -615,7 +618,7 @@ ends `interrupted`); a **second Ctrl-C** stops following, and prints the
 `naavik logs <mission-id> <experiment> --follow` command to resume.
 `--detach` returns once the experiment is launched.
 
-With `run_code_from: working_tree` on the host, `naavik run` runs your
+With `run_code_from: working_tree` on the host, `naavik launch --session` runs your
 working tree as it is: no commit is needed for a quick try, and the snapshot
 keeps exactly what ran.
 
@@ -785,7 +788,7 @@ line; the others are listed all the same, and the exit status is 1. It
 combines with `--live`, `--experiments`, and `--json`, not with `--host` or
 `--remote`.
 
-The `note` column shows a mission's note (`naavik run --note`, a mission
+The `note` column shows a mission's note (`naavik launch --session --note`, a mission
 file's `note`) when some mission has one; `status` prints it as a `note:`
 line.
 

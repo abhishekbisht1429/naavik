@@ -16,9 +16,11 @@ You can also use `navik` or `python -m naavik.cli`:
 
 | Command | Does | Guide |
 |---|---|---|
-| `naavik init [--host NAME] [--hosts-file PATH] [--gpus all\|none\|N\|0,1] [--python-paths P] [--dry-run] [--yes]` | write the project file and a host for this machine, for `naavik run` (never overwrites; asks before adding to an existing hosts file) | [Your first run](../guide/00-naavik-first-run.md#describe-the-project-and-this-machine) |
+| `naavik init [--host NAME] [--hosts-file PATH] [--gpus all\|none\|N\|0,1] [--python-paths P] [--dry-run] [--yes]` | write the project file and a host for this machine, for `naavik launch` (never overwrites; asks before adding to an existing hosts file) | [Your first run](../guide/00-naavik-first-run.md#launch-it-as-a-mission) |
 | `naavik validate / render / launch MISSION_FILE` | check, preview, or launch a mission | [Running missions](../guide/08-missions.md) |
-| `naavik run CONFIG [--override PATH=VALUE] [--note TEXT] [--gpus N] [--walltime T] [--detach]` | one config as a mission of one experiment, followed to its end | [`naavik run`](../guide/08-missions.md#one-config-followed-naavik-run) |
+| `naavik run CONFIG [--override PATH=VALUE] [--note TEXT] [--debug]` | run the session of CONFIG here, in this process: one run, no mission | [Running a config](../guide/04-configuration.md#running-a-config) |
+| `naavik run --resume-session SESSION_DIR` / `--resume-session-from-checkpoint CHECKPOINT` | continue a session from its latest checkpoint (said in the log), or from the checkpoint given | [Resume](../guide/05-checkpoints-and-resume.md#resume) |
+| `naavik launch --session CONFIG [--override PATH=VALUE] [--note TEXT] [--gpus N] [--walltime T] [--detach]` | CONFIG as a mission of one experiment on a host, followed to its end | [`naavik launch --session`](../guide/08-missions.md#one-session-file-followed-naavik-launch---session) |
 | `naavik validate / render / launch MISSION_FILE --job J --recipe J/R` | only part of a mission file | [Running missions](../guide/08-missions.md#5-checking-a-mission-validate-and-render) |
 | `naavik missions / status / logs / cancel / resume / fetch` | follow, stop, continue, and collect missions | [Running missions](../guide/08-missions.md#7-keeping-track-of-your-missions) |
 | `naavik missions --all-hosts` | the missions on every host | [Every host at once](../guide/08-missions.md#every-host-at-once---all-hosts) |
@@ -37,11 +39,15 @@ as aliases: `submit` (`launch`), `batches` (`missions`), `probe-python`
 (`--experiments`). Flags are spelled out in full: an abbreviation is
 refused.
 
-`validate`, `render`, `launch`, and `run` check every experiment's config with the
+`validate`, `render`, and `launch` check every experiment's config with the
 mission's own code ([step 9](../guide/08-missions.md#5-checking-a-mission-validate-and-render));
 `NAAVIK_CODE_CHECK=0` skips it, with a warning, recorded in the
-receipt. `naavik run` exits with the experiment's exit status (`130` when Ctrl-C
-stopped following).
+receipt. `naavik launch --session` exits with the experiment's exit status (`130`
+when Ctrl-C stopped following). `naavik run` takes no project file and no host:
+it puts the current directory first on the import path (as `python -m`
+does), prints the run id and the session directory, and refuses the mission
+options (`--gpus`, `--walltime`, `--detach`, `--host`, ...), naming `naavik
+launch --session`.
 
 ## `naavik runs`
 

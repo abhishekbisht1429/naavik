@@ -197,7 +197,8 @@ each experiment was made from, under the same rules (`unknown` when not
 recorded, `--ignore-key config` to leave it out).
 
 **Notes are shown, not compared.** A session whose mission has a note
-(`naavik run --note`, a mission file's `note`), or whose run record has one,
+(`naavik launch --session --note`, a mission file's `note`), or whose run record has one
+(`naavik run --note`),
 gets it in a `note` column of the sessions table (and `note` in JSON), only
 when some session has one. Sessions with different notes still share a seed
 group.

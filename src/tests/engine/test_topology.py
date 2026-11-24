@@ -505,7 +505,7 @@ def test_without_a_topology_only_the_rank_is_settled(tmp_path):
 def test_resuming_accepts_topology_overrides(monkeypatch):
     monkeypatch.setattr(sys, "argv", [
         "pytest",
-        "--resume-session", "checkpoint",
+        "--resume-session-from-checkpoint", "checkpoint",
         "--override", "ddp.world_size=4", "ddp.master_port=29777",
     ])
 
@@ -521,7 +521,7 @@ def test_resuming_accepts_topology_overrides(monkeypatch):
 def test_resuming_rejects_session_configuration_overrides(monkeypatch):
     monkeypatch.setattr(sys, "argv", [
         "pytest",
-        "--resume-session", "checkpoint",
+        "--resume-session-from-checkpoint", "checkpoint",
         "--override", "optimizer.kwargs.lr=0.1",
     ])
 
@@ -532,7 +532,7 @@ def test_resuming_rejects_session_configuration_overrides(monkeypatch):
 def test_extending_separates_topology_from_session_overrides(monkeypatch):
     monkeypatch.setattr(sys, "argv", [
         "pytest",
-        "--extend-session", "checkpoint",
+        "--extend-session-from-checkpoint", "checkpoint",
         "--override",
         "ddp.world_size=4",
         "session_config.max_iterations=10",
@@ -549,7 +549,7 @@ def test_extending_separates_topology_from_session_overrides(monkeypatch):
 def test_extending_with_only_a_topology_override_is_allowed(monkeypatch):
     monkeypatch.setattr(sys, "argv", [
         "pytest",
-        "--extend-session", "checkpoint",
+        "--extend-session-from-checkpoint", "checkpoint",
         "--override", "ddp.world_size=4",
     ])
 
